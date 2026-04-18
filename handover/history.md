@@ -1,5 +1,20 @@
 # Handover History
 
+## 2026-04-19 - Generator4 Role Consistency Remediation (Scoped)
+- Type: public handover update (scoped)
+- Scope: generator4 `T-004` follow-up audit blocker fix (`profiles` role consistency)
+- Source docs:
+  - `handover/local/evaluator.md`
+  - `handover/public.md`
+- Key outcomes:
+  - Closed role data-source split between auth enforcement (`profiles.role`) and role mutation (`app_metadata.role`).
+  - Updated bootstrap claim and admin role assignment endpoints to upsert role into `profiles`.
+  - Updated admin user list role projection to read role from `profiles` for UI and API consistency.
+  - Added backend regression tests verifying role updates are reflected in effective permission chain.
+  - Validation passed: backend `33/33`, frontend CI tests pass (`28/28`), frontend build pass.
+- Decision: continue
+- Next owner: release-owner
+
 ## 2026-04-18 - Runtime Supabase Fallback Safety Fix (Scoped)
 - Type: public handover update (scoped)
 - Scope: frontend runtime-config safety remediation after evaluator follow-up

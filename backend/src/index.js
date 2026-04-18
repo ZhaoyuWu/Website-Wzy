@@ -13,6 +13,7 @@ const VIDEO_MIME_TYPES = new Set(["video/mp4", "video/webm", "video/quicktime"])
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
 const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
 const UNSAFE_CONTROL_CHARS_REGEX = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/;
+const VALID_ROLES = new Set(["Admin", "Publisher", "Viewer"]);
 const DEFAULT_SITE_SETTINGS = Object.freeze({
   profileName: "Nanami",
   heroTagline: "Nanami, the sunshine of every walk.",
@@ -158,6 +159,11 @@ function buildSupabaseObjectPath(bucketName, objectPath) {
   return `${encodedBucket}/${encodedPath}`;
 }
 
+function normalizeRole(rawRole) {
+  const role = typeof rawRole === "string" ? rawRole.trim() : "";
+  return VALID_ROLES.has(role) ? role : "Viewer";
+}
+
 function createApp(options = {}) {
   const dbPool = options.dbPool || defaultPool;
   const sessionTtlMs = Number(process.env.SESSION_TTL_MS || 1000 * 60 * 60 * 8);
@@ -226,15 +232,34 @@ function createApp(options = {}) {
         });
         if (userResponse.ok) {
           const userData = await userResponse.json();
-          const appMeta =
-            userData?.app_metadata && typeof userData.app_metadata === "object"
-              ? userData.app_metadata
-              : {};
+          const userId = userData?.id || null;
+          let role = "Viewer";
+          if (userId && mediaConfig.supabaseUrl && mediaConfig.serviceRoleKey) {
+            try {
+              const profileResponse = await fetchImpl(
+                `${mediaConfig.supabaseUrl}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=role&limit=1`,
+                {
+                  headers: {
+                    apikey: mediaConfig.serviceRoleKey,
+                    Authorization: `Bearer ${mediaConfig.serviceRoleKey}`,
+                  },
+                }
+              );
+              if (profileResponse.ok) {
+                const profileData = await profileResponse.json();
+                if (Array.isArray(profileData) && profileData[0]?.role) {
+                  role = normalizeRole(profileData[0].role);
+                }
+              }
+            } catch {
+              // Fall back to Viewer if profiles query fails
+            }
+          }
           req.auth = {
             token,
             username: userData?.email || userData?.id || "unknown",
-            userId: userData?.id || null,
-            role: typeof appMeta.role === "string" && appMeta.role ? appMeta.role : "Viewer",
+            userId,
+            role,
             expiresAt: new Date(Date.now() + sessionTtlMs).toISOString(),
           };
           return next();
@@ -560,6 +585,7 @@ function createApp(options = {}) {
       ok: true,
       message: "Admin area access granted",
       username: req.auth.username,
+      role: req.auth.role,
       expiresAt: new Date(req.auth.expiresAt).toISOString(),
     });
   });
@@ -839,16 +865,78 @@ function createApp(options = {}) {
     }
   });
 
-  const VALID_ROLES = new Set(["Admin", "Publisher", "Viewer"]);
-
-  function mapSupabaseUser(raw) {
+  function mapSupabaseUser(raw, profileRole) {
     if (!raw || typeof raw !== "object") return null;
-    const appMeta = raw.app_metadata && typeof raw.app_metadata === "object" ? raw.app_metadata : {};
     return {
       id: String(raw.id || ""),
       email: String(raw.email || ""),
-      role: typeof appMeta.role === "string" && appMeta.role ? appMeta.role : "Viewer",
+      role: normalizeRole(profileRole),
       created_at: raw.created_at || null,
+    };
+  }
+
+  async function readProfilesByUserIds(userIds) {
+    const uniqueIds = Array.from(
+      new Set((Array.isArray(userIds) ? userIds : []).map((id) => String(id || "").trim()).filter(Boolean))
+    );
+
+    if (uniqueIds.length === 0) {
+      return new Map();
+    }
+
+    const inFilter = `(${uniqueIds.map((id) => `"${id.replace(/"/g, "")}"`).join(",")})`;
+    const endpoint =
+      `/rest/v1/profiles?id=in.${encodeURIComponent(inFilter)}` +
+      `&select=${encodeURIComponent("id,role")}&limit=${uniqueIds.length}`;
+    const response = await callSupabase(endpoint, { method: "GET" });
+    if (!response.ok) {
+      return new Map();
+    }
+
+    const payload = await response.json();
+    const roleMap = new Map();
+    for (const row of Array.isArray(payload) ? payload : []) {
+      const id = String(row?.id || "").trim();
+      if (!id) {
+        continue;
+      }
+      roleMap.set(id, normalizeRole(row?.role));
+    }
+    return roleMap;
+  }
+
+  async function upsertProfileRole(userId, role) {
+    const cleanUserId = String(userId || "").trim();
+    const normalizedRole = normalizeRole(role);
+    const response = await callSupabase("/rest/v1/profiles?on_conflict=id", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Prefer: "resolution=merge-duplicates,return=representation",
+      },
+      body: JSON.stringify([{ id: cleanUserId, role: normalizedRole }]),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        message: "Failed to update role in profiles.",
+        details: payload,
+      };
+    }
+
+    const row = Array.isArray(payload) ? payload[0] : null;
+    if (!row || !String(row.id || "").trim()) {
+      return { ok: false, status: 500, message: "Role update completed with empty profile response." };
+    }
+
+    return {
+      ok: true,
+      profile: {
+        id: String(row.id).trim(),
+        role: normalizeRole(row.role),
+      },
     };
   }
 
@@ -864,7 +952,12 @@ function createApp(options = {}) {
     }
 
     const rawUsers = Array.isArray(payload?.users) ? payload.users : Array.isArray(payload) ? payload : [];
-    return { ok: true, users: rawUsers.map(mapSupabaseUser).filter(Boolean) };
+    const userIds = rawUsers.map((user) => String(user?.id || "").trim()).filter(Boolean);
+    const profileRoles = await readProfilesByUserIds(userIds);
+    const users = rawUsers
+      .map((user) => mapSupabaseUser(user, profileRoles.get(String(user?.id || "").trim())))
+      .filter(Boolean);
+    return { ok: true, users };
   }
 
   function hasAdminUser(users) {
@@ -918,26 +1011,22 @@ function createApp(options = {}) {
         });
       }
 
-      const response = await callSupabase(`/auth/v1/admin/users/${encodeURIComponent(authUserId)}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ app_metadata: { role: "Admin" } }),
-      });
-      const payload = await response.json();
-
-      if (!response.ok) {
-        return res.status(response.status).json({ ok: false, message: "Failed to claim admin role." });
-      }
-
-      const user = mapSupabaseUser(payload);
-      if (!user) {
-        return res.status(500).json({ ok: false, message: "Unexpected Supabase response." });
+      const updateResult = await upsertProfileRole(authUserId, "Admin");
+      if (!updateResult.ok) {
+        return res
+          .status(updateResult.status)
+          .json({ ok: false, message: updateResult.message, details: updateResult.details });
       }
 
       return res.json({
         ok: true,
-        user,
-        message: "Admin role granted. Re-login may be required for UI role refresh.",
+        user: {
+          id: updateResult.profile.id,
+          email: req.auth.username || "",
+          role: updateResult.profile.role,
+          created_at: null,
+        },
+        message: "Admin role granted.",
       });
     } catch (error) {
       return res.status(500).json({ ok: false, message: error.message || "Failed to claim admin role." });
@@ -973,23 +1062,26 @@ function createApp(options = {}) {
 
     try {
       ensureSupabaseConfig();
-      const response = await callSupabase(`/auth/v1/admin/users/${encodeURIComponent(id)}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ app_metadata: { role } }),
+      const updateResult = await upsertProfileRole(id, role);
+      if (!updateResult.ok) {
+        return res
+          .status(updateResult.status)
+          .json({ ok: false, message: updateResult.message, details: updateResult.details });
+      }
+
+      const usersResult = await readSupabaseUsers();
+      if (!usersResult.ok) {
+        return res.status(usersResult.status).json({
+          ok: false,
+          message: usersResult.message || "Role updated, but failed to load user snapshot.",
+        });
+      }
+      const user = usersResult.users.find((item) => item.id === id);
+
+      return res.json({
+        ok: true,
+        user: user || { id, email: "", role: updateResult.profile.role, created_at: null },
       });
-      const payload = await response.json();
-
-      if (!response.ok) {
-        return res.status(response.status).json({ ok: false, message: "Failed to update role in Supabase." });
-      }
-
-      const user = mapSupabaseUser(payload);
-      if (!user) {
-        return res.status(500).json({ ok: false, message: "Unexpected Supabase response." });
-      }
-
-      return res.json({ ok: true, user });
     } catch (error) {
       return res.status(500).json({ ok: false, message: error.message || "Failed to update role" });
     }
@@ -1035,6 +1127,6 @@ module.exports = {
   parseBearerToken,
   sanitizeObjectName,
   startServer,
-  VALID_ROLES: new Set(["Admin", "Publisher", "Viewer"]),
+  VALID_ROLES: new Set(VALID_ROLES),
   ASSIGNABLE_ROLES: ["Admin", "Publisher", "Viewer"],
 };

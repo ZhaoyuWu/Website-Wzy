@@ -337,13 +337,19 @@ test("bootstrap status allows claim when there is no admin user", async () => {
       return createJsonResponse({
         id: "user-viewer-1",
         email: "viewer@example.com",
-        app_metadata: { role: "Viewer" },
+        app_metadata: {},
       });
+    }
+    if (String(url).includes("/rest/v1/profiles?id=eq.user-viewer-1")) {
+      return createJsonResponse([{ id: "user-viewer-1", role: "Viewer" }]);
     }
     if (String(url).includes("/auth/v1/admin/users?per_page=200")) {
       return createJsonResponse({
-        users: [{ id: "user-viewer-1", email: "viewer@example.com", app_metadata: { role: "Viewer" } }],
+        users: [{ id: "user-viewer-1", email: "viewer@example.com", app_metadata: {} }],
       });
+    }
+    if (String(url).includes("/rest/v1/profiles?id=in.")) {
+      return createJsonResponse([{ id: "user-viewer-1", role: "Viewer" }]);
     }
     throw new Error(`Unexpected URL in bootstrap status test: ${url}`);
   };
@@ -368,27 +374,34 @@ test("bootstrap status allows claim when there is no admin user", async () => {
 test("bootstrap claim promotes current user when there is no admin", async () => {
   process.env.SUPABASE_URL = "https://example.supabase.co";
   process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role";
+  const profileRoles = new Map([["user-viewer-2", "Viewer"]]);
 
   const fetchImpl = async (url, init = {}) => {
     if (String(url).includes("/auth/v1/user")) {
       return createJsonResponse({
         id: "user-viewer-2",
         email: "viewer2@example.com",
-        app_metadata: { role: "Viewer" },
+        app_metadata: {},
       });
+    }
+    if (String(url).includes("/rest/v1/profiles?id=eq.user-viewer-2")) {
+      return createJsonResponse([{ id: "user-viewer-2", role: profileRoles.get("user-viewer-2") }]);
     }
     if (String(url).includes("/auth/v1/admin/users?per_page=200")) {
       return createJsonResponse({
-        users: [{ id: "user-viewer-2", email: "viewer2@example.com", app_metadata: { role: "Viewer" } }],
+        users: [{ id: "user-viewer-2", email: "viewer2@example.com", app_metadata: {} }],
       });
     }
-    if (String(url).includes("/auth/v1/admin/users/user-viewer-2")) {
-      assert.equal(init.method, "PUT");
-      return createJsonResponse({
-        id: "user-viewer-2",
-        email: "viewer2@example.com",
-        app_metadata: { role: "Admin" },
-      });
+    if (String(url).includes("/rest/v1/profiles?id=in.")) {
+      return createJsonResponse([{ id: "user-viewer-2", role: profileRoles.get("user-viewer-2") }]);
+    }
+    if (String(url).includes("/rest/v1/profiles?on_conflict=id")) {
+      assert.equal(init.method, "POST");
+      const body = JSON.parse(String(init.body || "[]"));
+      assert.equal(body[0].id, "user-viewer-2");
+      assert.equal(body[0].role, "Admin");
+      profileRoles.set("user-viewer-2", "Admin");
+      return createJsonResponse([{ id: "user-viewer-2", role: "Admin" }], 201);
     }
     throw new Error(`Unexpected URL in bootstrap claim test: ${url}`);
   };
@@ -403,6 +416,13 @@ test("bootstrap claim promotes current user when there is no admin", async () =>
     assert.equal(response.status, 200);
     assert.equal(payload.ok, true);
     assert.equal(payload.user.role, "Admin");
+
+    const afterClaim = await fetch(`${ctx.baseUrl}/api/admin/overview`, {
+      headers: { Authorization: "Bearer supabase-token" },
+    });
+    const afterClaimPayload = await afterClaim.json();
+    assert.equal(afterClaim.status, 200);
+    assert.equal(afterClaimPayload.role, "Admin");
   } finally {
     delete process.env.SUPABASE_URL;
     delete process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -419,13 +439,19 @@ test("bootstrap claim is rejected when an admin already exists", async () => {
       return createJsonResponse({
         id: "user-viewer-3",
         email: "viewer3@example.com",
-        app_metadata: { role: "Viewer" },
+        app_metadata: {},
       });
     }
     if (String(url).includes("/auth/v1/admin/users?per_page=200")) {
       return createJsonResponse({
-        users: [{ id: "user-admin-1", email: "admin@example.com", app_metadata: { role: "Admin" } }],
+        users: [{ id: "user-admin-1", email: "admin@example.com", app_metadata: {} }],
       });
+    }
+    if (String(url).includes("/rest/v1/profiles?id=eq.user-viewer-3")) {
+      return createJsonResponse([{ id: "user-viewer-3", role: "Viewer" }]);
+    }
+    if (String(url).includes("/rest/v1/profiles?id=in.")) {
+      return createJsonResponse([{ id: "user-admin-1", role: "Admin" }]);
     }
     throw new Error(`Unexpected URL in bootstrap reject test: ${url}`);
   };
@@ -439,6 +465,69 @@ test("bootstrap claim is rejected when an admin already exists", async () => {
     const payload = await response.json();
     assert.equal(response.status, 409);
     assert.equal(payload.ok, false);
+  } finally {
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    ctx.server.close();
+  }
+});
+
+test("admin role update writes profiles role and response reflects updated role", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role";
+  const profileRoles = new Map([
+    ["admin-1", "Admin"],
+    ["user-pub-1", "Viewer"],
+  ]);
+
+  const fetchImpl = async (url, init = {}) => {
+    const asText = String(url);
+    if (asText.includes("/auth/v1/user")) {
+      return createJsonResponse({ id: "admin-1", email: "admin@example.com", app_metadata: {} });
+    }
+    if (asText.includes("/rest/v1/profiles?id=eq.admin-1")) {
+      return createJsonResponse([{ id: "admin-1", role: profileRoles.get("admin-1") }]);
+    }
+    if (asText.includes("/rest/v1/profiles?on_conflict=id")) {
+      assert.equal(init.method, "POST");
+      const body = JSON.parse(String(init.body || "[]"));
+      profileRoles.set(body[0].id, body[0].role);
+      return createJsonResponse([{ id: body[0].id, role: body[0].role }], 201);
+    }
+    if (asText.includes("/auth/v1/admin/users?per_page=200")) {
+      return createJsonResponse({
+        users: [
+          { id: "admin-1", email: "admin@example.com", app_metadata: {} },
+          { id: "user-pub-1", email: "publisher@example.com", app_metadata: {} },
+        ],
+      });
+    }
+    if (asText.includes("/rest/v1/profiles?id=in.")) {
+      return createJsonResponse([
+        { id: "admin-1", role: profileRoles.get("admin-1") },
+        { id: "user-pub-1", role: profileRoles.get("user-pub-1") },
+      ]);
+    }
+    throw new Error(`Unexpected URL in role update test: ${url}`);
+  };
+
+  const ctx = await startTestServer({ fetchImpl });
+  try {
+    const response = await fetch(`${ctx.baseUrl}/api/admin/users/user-pub-1/role`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer supabase-token",
+      },
+      body: JSON.stringify({ role: "Publisher" }),
+    });
+    const payload = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.user.id, "user-pub-1");
+    assert.equal(payload.user.role, "Publisher");
+    assert.equal(profileRoles.get("user-pub-1"), "Publisher");
   } finally {
     delete process.env.SUPABASE_URL;
     delete process.env.SUPABASE_SERVICE_ROLE_KEY;

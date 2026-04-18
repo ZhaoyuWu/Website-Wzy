@@ -28,6 +28,35 @@ release-owner
 
 ---
 
+## 2026-04-19 Scoped Update - Generator4 Role Consistency Remediation
+
+## Source Files
+- backend/src/index.js
+- backend/test/auth.test.js
+- handover/local/evaluator.md
+
+## Preconditions Check
+pass (scoped): generator4 audit identified role-consistency blocker requiring immediate backend remediation.
+
+## Shared Summary
+- Resolved a blocking role consistency issue in generator4 scope:
+  - role authentication already read from `profiles.role`,
+  - but bootstrap/admin role updates were still writing `app_metadata.role`.
+- Unified role write/read behavior to `profiles.role` across role claim, role assignment, and admin user list role projection.
+- Added regression tests that verify role updates affect effective permission outcomes rather than only response payload shape.
+- Validation passed:
+  - `backend npm test`: `33/33` pass
+  - `frontend npm run test:ci`: pass (`runtime-config + 28 Angular tests`)
+  - `frontend npm run build`: pass
+
+## Final Status
+done (scoped)
+
+## Next Owner
+release-owner
+
+---
+
 ## 2026-04-18 Scoped Update - Runtime Supabase Config Safety
 
 ## Source Files

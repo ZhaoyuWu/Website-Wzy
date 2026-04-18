@@ -27,6 +27,27 @@ handover/local/evaluator.md
 ## Decision
 continue
 
+## 2026-04-19 Addendum - Generator4 Role Source-of-Truth Fix (Scoped)
+
+## Summary Written
+- Completed follow-up audit/remediation for generator4 `T-004` role management chain.
+- Closed blocker where role write path and role auth path used different stores:
+  - auth check path already used `profiles.role`,
+  - role mutation path still wrote `app_metadata.role`.
+- Backend was updated to unify role source-of-truth to `profiles.role` for:
+  - bootstrap claim (`POST /api/admin/bootstrap/claim`),
+  - admin role assignment (`PATCH /api/admin/users/:id/role`),
+  - admin user list role rendering (`GET /api/admin/users` merged with `profiles` roles).
+- Added regression tests to prevent future divergence between role update and effective permissions.
+
+## Validation Evidence
+- `npm.cmd test` (backend): passed (`33 passed, 0 failed`).
+- `npm.cmd run test:ci` (frontend): passed (`runtime-config tests + 28 Angular tests`).
+- `npm.cmd run build` (frontend): passed.
+
+## Decision
+continue
+
 ## Follow-up Actions
 - Publish generator5 scoped public handover and history entry.
 - Run post-deploy smoke on role matrix: Viewer, Publisher, Admin.
