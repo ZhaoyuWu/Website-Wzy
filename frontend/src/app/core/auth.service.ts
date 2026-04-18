@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { resolveApiBaseUrl } from './runtime-config';
 
 type SessionSnapshot = {
   token: string;
@@ -8,7 +9,7 @@ type SessionSnapshot = {
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  private readonly apiBaseUrl = 'http://localhost:4000';
+  private readonly apiBaseUrl = resolveApiBaseUrl();
   private readonly storageKey = 'nanami_admin_session';
 
   loginPayload: SessionSnapshot | null = null;

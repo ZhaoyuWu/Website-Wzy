@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { resolveApiBaseUrl } from '../core/runtime-config';
 
 type SiteSettings = {
   profileName: string;
@@ -219,6 +220,8 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
       border: 1px solid #d9e8f5;
       background: #ffffff;
       padding: 20px;
+      content-visibility: auto;
+      contain-intrinsic-size: 220px;
     }
 
     h2 {
@@ -257,15 +260,38 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
         grid-template-columns: 1fr;
       }
     }
+
+    @media (max-width: 390px) {
+      nav a {
+        padding: 7px 10px;
+        font-size: 13px;
+      }
+
+      .hero-actions a {
+        width: 100%;
+        text-align: center;
+      }
+    }
+
+    @media (min-width: 1280px) {
+      .home {
+        padding: 28px 32px;
+      }
+
+      .moments {
+        gap: 18px;
+      }
+    }
   `
 })
 export class HomePageComponent implements OnInit {
+  private readonly apiBaseUrl = resolveApiBaseUrl();
   settings: SiteSettings = { ...DEFAULT_SITE_SETTINGS };
   settingsMessage = '';
 
   async ngOnInit(): Promise<void> {
     try {
-      const response = await fetch('http://localhost:4000/api/settings');
+      const response = await fetch(`${this.apiBaseUrl}/api/settings`);
       const payload = (await response.json()) as {
         ok?: boolean;
         message?: string;

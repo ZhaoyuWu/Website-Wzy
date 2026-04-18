@@ -164,6 +164,50 @@ test("admin settings patch validates malformed input", async () => {
   }
 });
 
+test("admin settings patch rejects unsafe control chars and non-boolean visibility flag", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role";
+
+  const dbPool = {
+    query: async () => ({
+      rowCount: 1,
+      rows: [{ username: "admin", password_hash: hashPassword("admin123456") }],
+    }),
+  };
+  const ctx = await startTestServer({
+    dbPool,
+    fetchImpl: async () =>
+      new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+  });
+
+  try {
+    const token = await loginAndGetToken(ctx.baseUrl);
+
+    const withControlChar = await patchJson(
+      ctx.baseUrl,
+      "/api/admin/settings",
+      { profileName: "Bad\u0007Name" },
+      { Authorization: `Bearer ${token}` }
+    );
+    assert.equal(withControlChar.response.status, 400);
+    assert.match(String(withControlChar.payload.message || ""), /readable characters/i);
+
+    const withInvalidBool = await patchJson(
+      ctx.baseUrl,
+      "/api/admin/settings",
+      { showContactEmail: "yes" },
+      { Authorization: `Bearer ${token}` }
+    );
+    assert.equal(withInvalidBool.response.status, 400);
+    assert.match(String(withInvalidBool.payload.message || ""), /true or false/i);
+  } finally {
+    ctx.server.close();
+  }
+});
+
 test("admin settings patch persists and public settings reflect updated values", async () => {
   process.env.SUPABASE_URL = "https://example.supabase.co";
   process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role";

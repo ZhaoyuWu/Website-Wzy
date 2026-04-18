@@ -3,15 +3,33 @@ import { AuthService } from './auth.service';
 describe('AuthService (logic)', () => {
   const storageKey = 'nanami_admin_session';
   let originalFetch: typeof fetch;
+  let originalRuntimeConfig: Window['__NANAMI_APP_CONFIG__'];
+  let originalApiBaseUrl: Window['API_BASE_URL'];
+  let originalNanamiApiBaseUrl: string | undefined;
 
   beforeEach(() => {
     localStorage.clear();
     originalFetch = globalThis.fetch;
+    originalRuntimeConfig = window.__NANAMI_APP_CONFIG__;
+    originalApiBaseUrl = window.API_BASE_URL;
+    originalNanamiApiBaseUrl = (window as unknown as Record<string, unknown>)['NANAMI_API_BASE_URL'] as
+      | string
+      | undefined;
+    window.__NANAMI_APP_CONFIG__ = undefined;
+    window.API_BASE_URL = undefined;
+    delete (window as unknown as Record<string, unknown>)['NANAMI_API_BASE_URL'];
   });
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
     localStorage.clear();
+    window.__NANAMI_APP_CONFIG__ = originalRuntimeConfig;
+    window.API_BASE_URL = originalApiBaseUrl;
+    if (originalNanamiApiBaseUrl) {
+      (window as unknown as Record<string, unknown>)['NANAMI_API_BASE_URL'] = originalNanamiApiBaseUrl;
+    } else {
+      delete (window as unknown as Record<string, unknown>)['NANAMI_API_BASE_URL'];
+    }
   });
 
   it('returns false when no session exists', () => {
@@ -120,5 +138,12 @@ describe('AuthService (logic)', () => {
     await expect(
       service.register('existing-user', 'existing@example.com', 'superpass123')
     ).rejects.toThrow('Username or email already exists.');
+  });
+
+  it('uses runtime API base URL when available', () => {
+    window.__NANAMI_APP_CONFIG__ = { apiBaseUrl: 'https://api.nanami.test/' };
+
+    const service = new AuthService();
+    expect(service.apiUrl('/api/health')).toBe('https://api.nanami.test/api/health');
   });
 });

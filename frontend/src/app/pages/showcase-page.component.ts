@@ -229,6 +229,8 @@ declare global {
       border: 1px solid #d9e8f5;
       background: #ffffff;
       box-shadow: 0 12px 28px rgba(24, 55, 82, 0.08);
+      content-visibility: auto;
+      contain-intrinsic-size: 360px;
     }
 
     .media-frame {
@@ -289,6 +291,23 @@ declare global {
 
       nav {
         justify-content: flex-start;
+      }
+    }
+
+    @media (max-width: 390px) {
+      nav a {
+        padding: 7px 10px;
+        font-size: 13px;
+      }
+    }
+
+    @media (min-width: 1280px) {
+      .showcase-page {
+        padding: 28px 32px;
+      }
+
+      .grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
       }
     }
   `

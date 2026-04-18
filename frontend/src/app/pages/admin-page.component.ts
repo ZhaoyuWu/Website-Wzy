@@ -380,6 +380,8 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
       gap: 12px;
       margin-top: 10px;
       background: #fbfefc;
+      content-visibility: auto;
+      contain-intrinsic-size: 260px;
     }
 
     .thumb {
@@ -451,6 +453,26 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
 
       .media-row {
         grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 390px) {
+      .admin-card {
+        padding: 16px;
+      }
+
+      button {
+        min-width: 100%;
+      }
+    }
+
+    @media (min-width: 1280px) {
+      .admin-layout {
+        padding: 28px 32px;
+      }
+
+      .admin-card {
+        width: min(1120px, 100%);
       }
     }
   `
