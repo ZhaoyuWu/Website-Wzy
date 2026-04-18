@@ -1,0 +1,24 @@
+{
+  "name": "website-1st-harness-commands",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local command runner for Harness slash-command templates",
+  "scripts": {
+    "harness:help": "node scripts/harness-command.js --list",
+    "generator": "node scripts/harness-command.js generator",
+    "evaluator": "node scripts/harness-command.js evaluator",
+    "verify-thorough": "node scripts/harness-command.js verify-thorough",
+    "read-task": "node scripts/harness-command.js read-task",
+    "read-handover": "node scripts/harness-command.js read-handover",
+    "local-handover": "node scripts/harness-command.js local-handover",
+    "public-handover": "node scripts/harness-command.js public-handover",
+    "strategic-next": "node scripts/harness-command.js strategic-next",
+    "pr-description": "node scripts/harness-command.js pr-description",
+    "feature-build": "node scripts/harness-command.js feature-build",
+    "principles-check": "node scripts/harness-command.js principles-check",
+    "security-audit": "node scripts/harness-command.js security-audit",
+    "test-audit": "node scripts/harness-command.js test-audit",
+    "handover": "node scripts/harness-command.js handover",
+    "kickoff": "node scripts/harness-command.js kickoff"
+  }
+}
