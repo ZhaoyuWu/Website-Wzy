@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { authGuard } from './core/auth.guard';
+import { roleGuard } from './core/auth.guard';
 import { AdminPageComponent } from './pages/admin-page.component';
 import { HomePageComponent } from './pages/home-page.component';
 import { LoginPageComponent } from './pages/login-page.component';
@@ -11,6 +11,6 @@ export const routes: Routes = [
   { path: 'showcase', component: ShowcasePageComponent },
   { path: 'login', component: LoginPageComponent },
   { path: 'register', component: RegisterPageComponent },
-  { path: 'admin', component: AdminPageComponent, canActivate: [authGuard] },
+  { path: 'admin', component: AdminPageComponent, canActivate: [roleGuard('Admin', 'Publisher')] },
   { path: '**', redirectTo: '' }
 ];

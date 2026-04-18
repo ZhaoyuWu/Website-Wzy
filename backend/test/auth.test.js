@@ -445,3 +445,62 @@ test("bootstrap claim is rejected when an admin already exists", async () => {
     ctx.server.close();
   }
 });
+
+test("viewer role is forbidden from admin-restricted endpoints", async () => {
+  const dbPool = {
+    query: async () => ({
+      rowCount: 1,
+      rows: [{ username: "viewer", password_hash: hashPassword("viewer-pass-123"), role: "Viewer" }],
+    }),
+  };
+
+  const ctx = await startTestServer({ dbPool });
+  try {
+    const login = await postJson(ctx.baseUrl, "/api/auth/login", {
+      username: "viewer",
+      password: "viewer-pass-123",
+    });
+    assert.equal(login.response.status, 200);
+    assert.equal(login.payload.role, "Viewer");
+    const token = login.payload.token;
+
+    const settingsRes = await fetch(`${ctx.baseUrl}/api/admin/settings`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    assert.equal(settingsRes.status, 403);
+
+    const usersRes = await fetch(`${ctx.baseUrl}/api/admin/users`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    assert.equal(usersRes.status, 403);
+  } finally {
+    ctx.server.close();
+  }
+});
+
+test("admin role passes role-gate for admin settings path", async () => {
+  const dbPool = {
+    query: async () => ({
+      rowCount: 1,
+      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
+    }),
+  };
+
+  const ctx = await startTestServer({ dbPool });
+  try {
+    const login = await postJson(ctx.baseUrl, "/api/auth/login", {
+      username: "admin",
+      password: "admin123456",
+    });
+    assert.equal(login.response.status, 200);
+    assert.equal(login.payload.role, "Admin");
+    const token = login.payload.token;
+
+    const settingsRes = await fetch(`${ctx.baseUrl}/api/admin/settings`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    assert.notEqual(settingsRes.status, 403);
+  } finally {
+    ctx.server.close();
+  }
+});
