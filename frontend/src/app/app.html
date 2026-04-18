@@ -1,0 +1,24 @@
+<main class="page">
+  <section class="card">
+    <p class="tag">Angular + Node.js + PostgreSQL</p>
+    <h1>{{ title }}</h1>
+    <p class="desc">Full-stack project scaffold is ready.</p>
+
+    <div class="item">
+      <span>Frontend</span>
+      <strong>http://localhost:4200</strong>
+    </div>
+
+    <div class="item">
+      <span>Backend</span>
+      <strong>{{ backendUrl }}</strong>
+    </div>
+
+    <div class="item">
+      <span>Backend Health</span>
+      <strong>{{ healthStatus }}</strong>
+    </div>
+  </section>
+</main>
+
+<router-outlet />
