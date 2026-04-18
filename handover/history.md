@@ -1,5 +1,36 @@
 # Handover History
 
+## 2026-04-18 - Task5 Settings Public Handover (Evaluator Scoped)
+- Type: public handover update (scoped)
+- Scope: `T-005` info/settings audit + validation hardening
+- Source docs:
+  - `handover/local/generator.md`
+  - `handover/local/evaluator.md`
+  - `handover/public.md`
+- Key outcomes:
+  - Scoped evaluator audit completed for settings APIs and homepage reflection path.
+  - Added settings edge-case validation coverage (control chars + boolean type boundary).
+  - Added frontend runtime API base resolution tests.
+  - Verification passed: backend `27/27`, frontend tests `24/24`, frontend build pass.
+- Decision: continue
+- Next owner: producer (`T-006`)
+
+## 2026-04-18 - Task6 Hardening and Release Readiness (Producer Scoped)
+- Type: public handover update (scoped)
+- Scope: `T-006` responsive/performance/deployment hardening (producer implementation)
+- Source docs:
+  - `handover/local/generator.md`
+  - `handover/public.md`
+- Key outcomes:
+  - Removed frontend localhost API-base hardcoding via runtime-config resolver and bootstrap file.
+  - Added responsive fixes for `<=390px` and `>=1280px` across home/showcase/admin.
+  - Added render-cost optimization (`content-visibility`) for media-heavy repeated cards.
+  - Added `frontend/vercel.json` (SPA route rewrite + no-store policy for runtime config).
+  - Updated release/env checklist in `README.md`.
+  - Verification passed: backend `27/27`, frontend tests `24/24`, frontend build pass.
+- Decision: continue
+- Next owner: evaluator (`A-006`)
+
 ## 2026-04-18 - Task4 Upload/Edit Public Handover (Scoped)
 - Type: public handover update (scoped)
 - Scope: `T-004` upload/edit interface delivery + evaluator audit hardening
