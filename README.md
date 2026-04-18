@@ -23,66 +23,82 @@ npm run verify-thorough -- "Verify backend auth flow"
 
 These commands read from `.claude/commands/*.md` and render the template locally.
 
-## Use PostgreSQL Without Docker
+## Environment Strategy
 
-If you want native PostgreSQL:
-1. Install PostgreSQL on Windows (include command-line tools).
-2. Make sure service is running and port is `5432`.
-3. Update [backend/.env](/D:/Project/Website%201st/backend/.env) with your local username/password.
-4. Run:
+Use two environments:
+1. `development` (local full-stack testing)
+2. `production` (Vercel frontend + hosted backend + hosted DB/Supabase)
+
+## Development (Local)
+
+### 1) Backend env
+1. Copy `backend/.env.example` to `backend/.env`.
+2. Fill local DB and optional Supabase values.
+
+### 2) Start PostgreSQL
+Use Docker:
+
+```bash
+docker compose up -d
+```
+
+Or native PostgreSQL:
+1. Install PostgreSQL and keep it running on `5432`.
+2. Update `backend/.env` DB fields.
+3. Initialize schema:
 
 ```bash
 cd backend
 npm run db:init
 ```
 
-This will create database `website1st` and table `users`.
-
-## 1) Start PostgreSQL
-
-```bash
-docker compose up -d
-```
-
-## 2) Start backend API
+### 3) Start backend
 
 ```bash
 cd backend
 npm run dev
 ```
 
-Backend endpoints:
-- `GET http://localhost:4000/api/health`
-- `GET http://localhost:4000/api/db-check`
+Backend checks:
+1. `GET http://localhost:4000/api/health`
+2. `GET http://localhost:4000/api/db-check`
 
-## 3) Start frontend
+### 4) Start frontend
 
 ```bash
 cd frontend
 npm start
 ```
 
-Frontend:
-- `http://localhost:4200`
+`npm start` auto-writes `frontend/public/runtime-config.js` with:
+- `apiBaseUrl = http://localhost:4000`
 
-## Vercel Release Notes (`T-006`)
+Frontend URL:
+1. `http://localhost:4200`
 
-Frontend runtime config is read from `frontend/public/runtime-config.js`:
+## Production (Vercel + Hosted Backend)
 
-```js
-window.__NANAMI_APP_CONFIG__ = {
-  apiBaseUrl: 'https://your-backend.example.com'
-};
-```
+### 1) Backend production env
+1. Use `backend/.env.production.example` as template.
+2. Set all secrets in your backend host environment UI (do not commit real values).
+3. Ensure `CORS_ORIGIN_ALLOWLIST` includes your Vercel frontend domain.
+4. Ensure `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are set.
 
-Deployment checks:
-1. Frontend project root on Vercel points to `frontend/`.
-2. `frontend/vercel.json` is active (SPA rewrite + no-store for `runtime-config.js`).
-3. Backend env has `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
-4. Backend `CORS_ORIGIN_ALLOWLIST` includes your deployed frontend origin.
-5. `runtime-config.js` points to the deployed backend base URL (no trailing slash needed).
+### 2) Frontend on Vercel
+1. Set project root to `frontend/`.
+2. Keep `frontend/vercel.json` enabled (SPA rewrite + runtime config no-store).
+3. In Vercel env vars, set:
+   - `NANAMI_API_BASE_URL=https://your-backend.example.com`
+4. Build command stays `npm run build` (it auto-generates runtime-config using env var, and fails fast in production if the API URL is missing/invalid).
 
-Smoke checks after deploy:
-1. Open `/`, `/showcase`, `/login`, `/admin` directly (hard refresh) and confirm route render.
-2. Confirm homepage settings load from `/api/settings` (not localhost).
-3. Login and upload a sample image/video from admin page.
+### 3) Runtime config behavior
+Frontend API base priority:
+1. `window.__NANAMI_APP_CONFIG__.apiBaseUrl`
+2. `window.API_BASE_URL` / `window.NANAMI_API_BASE_URL`
+3. `localStorage.API_BASE_URL`
+4. fallback `http://localhost:4000`
+
+## Deploy Smoke Checklist
+1. Open `/`, `/showcase`, `/login`, `/admin` directly with hard refresh.
+2. Confirm homepage `/api/settings` call goes to production backend domain.
+3. Confirm admin login, upload, metadata edit, and settings save all work.

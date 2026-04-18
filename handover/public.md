@@ -3,25 +3,25 @@
 - handover/local/evaluator.md
 
 ## Preconditions Check
-pass (for scoped `T-005` gate): no open P0/P1 findings for settings/info delivery; security/functionality/tests/performance evidence attached.
+pass (for scoped `T-006` gate): evaluator blockers found and remediated; no unresolved P0/P1 in current scope.
 
 ## Shared Summary
-- Task focus: `T-005` Information and settings page with public reflection.
-- Generator delivered settings APIs and admin/public integration paths:
-  - public read: `/api/settings`,
-  - admin read/update: `/api/admin/settings`.
-- Evaluator completed scoped audit and applied validation/test hardening:
-  - settings payload boundary checks verified (including control chars and boolean type),
-  - homepage reflection and fallback behavior verified,
-  - runtime API base resolution behavior verified by tests.
+- Task focus: `T-006` hardening and deployment readiness.
+- Generator provided env split/runtime-config/deploy checklist baseline.
+- Evaluator completed scoped audit and fixed release-critical gaps in runtime-config generation:
+  - enforce absolute `http/https` API URL validation,
+  - fail production config generation when API base env is missing,
+  - serialize generated runtime value safely (`JSON.stringify`),
+  - add dedicated runtime-config tests and include them in frontend CI test chain.
 - Verified evidence:
   - `backend npm test`: `27/27` pass
-  - `frontend npm run test:ci`: `24/24` pass
-  - `frontend npm run build`: pass
-- Scope note: this public handover is scoped to `T-005` and does not represent final project-wide release gate completion.
+  - `frontend npm run test:runtime-config`: `5/5` pass
+  - `frontend npm run test:ci`: pass (`runtime-config + 24 Angular tests`)
+  - production config behavior manually verified for both fail/success paths.
+- Scope note: this handover is scoped to `T-006` evaluator audit/remediation and does not replace post-deploy production smoke verification.
 
 ## Final Status
 done (scoped)
 
 ## Next Owner
-producer (T-006)
+evaluator/release-owner (final go-no-go in target deploy env)

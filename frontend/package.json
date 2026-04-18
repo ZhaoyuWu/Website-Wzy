@@ -3,11 +3,14 @@
   "version": "0.0.0",
   "scripts": {
     "ng": "ng",
-    "start": "ng serve",
-    "build": "ng build",
+    "config:runtime": "node ./scripts/write-runtime-config.mjs",
+    "config:runtime:dev": "node ./scripts/write-runtime-config.mjs --api-base-url=http://localhost:4000",
+    "start": "npm run config:runtime:dev && ng serve",
+    "build": "npm run config:runtime && ng build",
     "watch": "ng build --watch --configuration development",
+    "test:runtime-config": "node ./scripts/write-runtime-config.test.mjs",
     "test": "ng test",
-    "test:ci": "ng test --watch=false"
+    "test:ci": "npm run test:runtime-config && ng test --watch=false"
   },
   "private": true,
   "packageManager": "npm@10.9.2",

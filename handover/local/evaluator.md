@@ -5,34 +5,32 @@ auditor
 handover/local/evaluator.md
 
 ## Summary Written
-- Completed scoped evaluator audit for `T-005` information/settings delivery.
-- Verified public settings read path (`/api/settings`) and admin settings read/update paths (`/api/admin/settings`, auth required).
-- Confirmed `T-005` acceptance behavior:
-  - settings fields can be edited in admin and persisted to Supabase-backed data path,
-  - public homepage reflects persisted settings payload,
-  - malformed settings payloads are rejected with readable validation feedback.
-- During audit, added coverage hardening for:
-  - settings control-character rejection,
-  - non-boolean preference flag rejection,
-  - runtime API base resolution fallback chain on frontend.
+- Completed scoped evaluator audit for `T-006` hardening and deployment readiness.
+- Audited runtime-config/deployment path and found two release blockers, then fixed:
+  - Runtime config script accepted unvalidated API URL and wrote via raw string concat.
+  - Production build could silently fall back to localhost API base when env was missing.
+- Implemented evaluator remediation:
+  - Added strict `http/https` URL validation in runtime-config generator.
+  - Added production fail-fast behavior when API base env is missing.
+  - Switched generated JS value serialization to `JSON.stringify` for safer output.
+  - Added dedicated runtime-config logic tests and wired them into frontend `test:ci`.
 
 ## Validation Evidence
 - `npm.cmd test` (backend): passed (`27 passed, 0 failed`).
-- `npm.cmd run test:ci` (frontend): passed (`24 passed, 0 failed`).
-- `npm.cmd run build` (frontend): passed (Angular production build completed).
-- Added/verified `T-005`-focused tests:
-  - `backend/test/settings.test.js` (validation + persistence reflection)
-  - `frontend/src/app/pages/home-page.component.spec.ts` (public settings reflection/fallback)
-  - `frontend/src/app/core/runtime-config.spec.ts` (runtime API base resolution order)
+- `npm.cmd run test:runtime-config` (frontend): passed (`5 passed, 0 failed`).
+- `npm.cmd run test:ci` (frontend): passed (`runtime-config tests + 24 Angular tests`).
+- Production runtime-config behavior check:
+  - `NODE_ENV=production` + missing `NANAMI_API_BASE_URL` => command fails with explicit error.
+  - `NODE_ENV=production` + valid `NANAMI_API_BASE_URL` => runtime config generated correctly.
 
 ## Unresolved Risks
-- Backend admin/data paths depend on valid Supabase service credentials at runtime | missing/invalid keys break settings/media admin operations | ensure deployment secrets are configured and rotated safely.
-- Admin page currently contains both `T-004` media management and `T-005` settings concerns | larger regression surface in one component | consider split/refactor in `T-006`.
-- This gate is scoped to `T-005` only | overall project release gate (`T-001`~`T-006`) remains pending | continue per-task evaluator gates.
+- Backend still relies on `SUPABASE_SERVICE_ROLE_KEY`; missing/invalid secret breaks admin media/settings operations.
+- Session storage remains in-memory (`Map`), so sessions are not shared across instances and reset on restart.
+- This gate is scoped to `T-006` implementation hardening; final release decision still depends on deployment secret correctness in target environment.
 
 ## Decision
 continue
 
 ## Follow-up Actions
-- Producer proceeds to `T-006` hardening/deployment checklist with runtime config and responsive/perf verification.
-- Perform final evaluator release gate after `T-006` completion.
+- Publish Task6 evaluator public handover and history record.
+- Deploy with verified env secrets and run smoke checks on `/`, `/showcase`, `/login`, `/admin`.

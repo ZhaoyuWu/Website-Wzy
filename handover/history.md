@@ -1,5 +1,22 @@
 # Handover History
 
+## 2026-04-18 - Task6 Hardening Public Handover (Evaluator Scoped)
+- Type: public handover update (scoped)
+- Scope: `T-006` runtime-config/deployment hardening audit + remediation
+- Source docs:
+  - `handover/local/generator.md`
+  - `handover/local/evaluator.md`
+  - `handover/public.md`
+- Key outcomes:
+  - Found and fixed runtime-config security/release risks:
+    - URL validation enforced (`http/https` only),
+    - production build now fails fast when API base env is missing,
+    - generated config value now safely serialized.
+  - Added dedicated runtime-config logic tests and included them in frontend CI test flow.
+  - Verification passed: backend `27/27`, runtime-config tests `5/5`, frontend CI tests pass.
+- Decision: continue
+- Next owner: release-owner (deploy env verification + final go/no-go)
+
 ## 2026-04-18 - Task5 Settings Public Handover (Evaluator Scoped)
 - Type: public handover update (scoped)
 - Scope: `T-005` info/settings audit + validation hardening
