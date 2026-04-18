@@ -12,6 +12,7 @@ import { RouterLink } from '@angular/router';
         <a class="brand" [routerLink]="['/']">Nanami Journal</a>
         <nav>
           <a [routerLink]="['/']" fragment="moments">Moments</a>
+          <a [routerLink]="['/showcase']">Showcase</a>
           <a [routerLink]="['/login']">Admin Login</a>
           <a [routerLink]="['/admin']">Admin Panel</a>
         </nav>
@@ -26,6 +27,7 @@ import { RouterLink } from '@angular/router';
         </p>
         <div class="hero-actions">
           <a class="primary" [routerLink]="['/']" fragment="moments">View Story Moments</a>
+          <a class="secondary" [routerLink]="['/showcase']">Open Showcase</a>
           <a class="secondary" [routerLink]="['/login']">Manage Content</a>
         </div>
       </section>
