@@ -32,11 +32,20 @@ type ShowcaseConfig = {
   supabaseAnonKey: string;
   mediaTable: string;
   selectColumns: string;
+  mediaLimit: number;
+};
+
+type ShowcaseRuntimeConfig = {
+  supabaseUrl?: string;
+  supabaseAnonKey?: string;
+  mediaTable?: string;
+  selectColumns?: string;
+  mediaLimit?: string;
 };
 
 declare global {
   interface Window {
-    __NANAMI_SHOWCASE_CONFIG__?: Partial<ShowcaseConfig>;
+    __NANAMI_SHOWCASE_CONFIG__?: ShowcaseRuntimeConfig;
   }
 }
 
@@ -337,7 +346,8 @@ export class ShowcasePageComponent implements OnInit {
       supabaseUrl: this.getWindowEnv('SUPABASE_URL'),
       supabaseAnonKey: this.getWindowEnv('SUPABASE_ANON_KEY'),
       mediaTable: this.getWindowEnv('SUPABASE_MEDIA_TABLE'),
-      selectColumns: this.getWindowEnv('SUPABASE_MEDIA_SELECT')
+      selectColumns: this.getWindowEnv('SUPABASE_MEDIA_SELECT'),
+      mediaLimit: this.getWindowEnv('SUPABASE_MEDIA_LIMIT')
     };
 
     const config: ShowcaseConfig = {
@@ -346,7 +356,8 @@ export class ShowcasePageComponent implements OnInit {
       mediaTable: this.pickConfigValue(runtimeConfig.mediaTable, envConfig.mediaTable) || 'media_items',
       selectColumns:
         this.pickConfigValue(runtimeConfig.selectColumns, envConfig.selectColumns) ||
-        'id,title,description,media_type,public_url,thumbnail_url,created_at'
+        'id,title,description,media_type,public_url,thumbnail_url,created_at',
+      mediaLimit: this.parseMediaLimit(this.pickConfigValue(runtimeConfig.mediaLimit, envConfig.mediaLimit))
     };
 
     if (!config.supabaseUrl || !config.supabaseAnonKey) {
@@ -358,6 +369,14 @@ export class ShowcasePageComponent implements OnInit {
 
   private pickConfigValue(primary?: string, fallback?: string): string {
     return (primary || fallback || '').trim();
+  }
+
+  private parseMediaLimit(rawLimit: string): number {
+    const parsed = Number.parseInt(rawLimit, 10);
+    if (Number.isNaN(parsed)) {
+      return 24;
+    }
+    return Math.max(1, Math.min(parsed, 120));
   }
 
   private getWindowEnv(name: string): string {
@@ -380,7 +399,7 @@ export class ShowcasePageComponent implements OnInit {
 
   private async fetchRows(config: ShowcaseConfig): Promise<RawMediaRow[]> {
     const cleanedBase = config.supabaseUrl.replace(/\/+$/, '');
-    const endpoint = `${cleanedBase}/rest/v1/${encodeURIComponent(config.mediaTable)}?select=${encodeURIComponent(config.selectColumns)}&order=created_at.desc`;
+    const endpoint = `${cleanedBase}/rest/v1/${encodeURIComponent(config.mediaTable)}?select=${encodeURIComponent(config.selectColumns)}&order=created_at.desc&limit=${config.mediaLimit}`;
     const response = await fetch(endpoint, {
       method: 'GET',
       headers: {
@@ -402,7 +421,7 @@ export class ShowcasePageComponent implements OnInit {
   }
 
   private mapRowToItem(row: RawMediaRow): ShowcaseItem | null {
-    const mediaUrl = String(row.public_url || row.media_url || row.url || '').trim();
+    const mediaUrl = this.normalizeMediaUrl(String(row.public_url || row.media_url || row.url || '').trim());
     if (!mediaUrl) {
       return null;
     }
@@ -416,8 +435,26 @@ export class ShowcasePageComponent implements OnInit {
       description: String(row.description || ''),
       mediaType,
       mediaUrl,
-      thumbnailUrl: row.thumbnail_url ? String(row.thumbnail_url) : null,
+      thumbnailUrl: row.thumbnail_url
+        ? this.normalizeMediaUrl(String(row.thumbnail_url).trim())
+        : null,
       createdAt: row.created_at ? String(row.created_at) : null
     };
+  }
+
+  private normalizeMediaUrl(rawUrl: string): string | null {
+    if (!rawUrl) {
+      return null;
+    }
+
+    try {
+      const parsed = new URL(rawUrl);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        return null;
+      }
+      return parsed.toString();
+    } catch {
+      return null;
+    }
   }
 }

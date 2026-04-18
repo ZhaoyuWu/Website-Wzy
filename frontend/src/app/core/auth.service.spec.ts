@@ -87,4 +87,38 @@ describe('AuthService (logic)', () => {
     expect(service.isAuthenticated).toBe(false);
     expect(localStorage.getItem(storageKey)).toBeNull();
   });
+
+  it('register stores token, username and expiresAt on success', async () => {
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          ok: true,
+          token: 'token-register-1',
+          username: 'new-user',
+          expiresAt: new Date(Date.now() + 60_000).toISOString()
+        }),
+        { status: 201, headers: { 'Content-Type': 'application/json' } }
+      );
+
+    const service = new AuthService();
+    await service.register('new-user', 'new-user@example.com', 'superpass123');
+
+    const raw = localStorage.getItem(storageKey);
+    expect(raw).not.toBeNull();
+    expect(service.isAuthenticated).toBe(true);
+    expect(service.username).toBe('new-user');
+  });
+
+  it('register throws backend message when registration fails', async () => {
+    globalThis.fetch = async () =>
+      new Response(JSON.stringify({ ok: false, message: 'Username or email already exists.' }), {
+        status: 409,
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+    const service = new AuthService();
+    await expect(
+      service.register('existing-user', 'existing@example.com', 'superpass123')
+    ).rejects.toThrow('Username or email already exists.');
+  });
 });

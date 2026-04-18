@@ -13,6 +13,7 @@ import { RouterLink } from '@angular/router';
         <nav>
           <a [routerLink]="['/']" fragment="moments">Moments</a>
           <a [routerLink]="['/showcase']">Showcase</a>
+          <a [routerLink]="['/register']">Register</a>
           <a [routerLink]="['/login']">Admin Login</a>
           <a [routerLink]="['/admin']">Admin Panel</a>
         </nav>
@@ -28,6 +29,7 @@ import { RouterLink } from '@angular/router';
         <div class="hero-actions">
           <a class="primary" [routerLink]="['/']" fragment="moments">View Story Moments</a>
           <a class="secondary" [routerLink]="['/showcase']">Open Showcase</a>
+          <a class="secondary" [routerLink]="['/register']">Create Account</a>
           <a class="secondary" [routerLink]="['/login']">Manage Content</a>
         </div>
       </section>

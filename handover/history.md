@@ -1,5 +1,20 @@
 # Handover History
 
+## 2026-04-18 - Task3 Showcase Public Handover (Scoped)
+- Type: public handover update (scoped)
+- Scope: `T-003` showcase delivery + evaluator audit hardening
+- Source docs:
+  - `handover/local/generator.md`
+  - `handover/local/evaluator.md`
+  - `handover/public.md`
+- Key outcomes:
+  - Scoped audit completed for `/showcase` public flow.
+  - Added bounded Supabase list retrieval (`limit`) for performance control.
+  - Added URL protocol allowlist filtering for media safety.
+  - Added Showcase-specific tests; frontend verification passed (`17/17`) with production build pass.
+- Decision: continue
+- Next owner: producer (`T-004`)
+
 ## 2026-04-18 - Evaluator Security Remediation and Test Expansion
 - Type: public handover update (scoped)
 - Scope: `T-001` security hardening + regression/performance verification

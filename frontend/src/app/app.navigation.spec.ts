@@ -23,6 +23,11 @@ class MockAuthService {
     return { Authorization: 'Bearer fake-token' };
   }
 
+  apiUrl(path: string): string {
+    const cleanPath = path.startsWith('/') ? path : `/${path}`;
+    return `http://localhost:4000${cleanPath}`;
+  }
+
   async logout(): Promise<void> {
     this.logoutCallCount += 1;
     this.authenticated = false;

@@ -73,6 +73,41 @@ export class AuthService {
     this.writeSession(session);
   }
 
+  async register(username: string, email: string, password: string): Promise<void> {
+    const response = await fetch(`${this.apiBaseUrl}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, email, password })
+    });
+
+    let payload: Record<string, unknown> = {};
+    try {
+      payload = (await response.json()) as Record<string, unknown>;
+    } catch {
+      payload = {};
+    }
+
+    if (!response.ok) {
+      const message =
+        typeof payload['message'] === 'string'
+          ? payload['message']
+          : 'Registration failed. Please try again.';
+      throw new Error(message);
+    }
+
+    const session: SessionSnapshot = {
+      token: String(payload['token'] ?? ''),
+      username: String(payload['username'] ?? ''),
+      expiresAt: String(payload['expiresAt'] ?? '')
+    };
+
+    if (!session.token || !session.username || !session.expiresAt) {
+      throw new Error('Registration response is incomplete.');
+    }
+
+    this.writeSession(session);
+  }
+
   async logout(): Promise<void> {
     const token = this.getToken();
     if (token) {
@@ -96,6 +131,11 @@ export class AuthService {
   authHeaders(): HeadersInit {
     const token = this.getToken();
     return token ? { Authorization: `Bearer ${token}` } : {};
+  }
+
+  apiUrl(path: string): string {
+    const cleanPath = path.startsWith('/') ? path : `/${path}`;
+    return `${this.apiBaseUrl}${cleanPath}`;
   }
 
   private isExpired(expiresAt: string): boolean {

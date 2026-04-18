@@ -5,26 +5,27 @@ auditor
 handover/local/evaluator.md
 
 ## Summary Written
-- Audited and remediated `T-001` security blockers found in prior evaluator pass.
-- Backend login now includes throttling and temporary lockout on repeated failed attempts.
-- `db:init` now rejects weak/default bootstrap credentials and enforces strong `ADMIN_PASSWORD`.
-- Backend CORS policy narrowed to an allowlist model with secure localhost defaults.
-- Added and passed logic/functional/performance regression tests for backend and frontend.
+- Completed scoped evaluator audit for `T-003` Showcase page delivery.
+- Verified public routing and page accessibility for `/showcase` without auth gating.
+- Audited data-path behavior for loading/error/empty states and media rendering branches (image/video).
+- Hardened `T-003` implementation quality during audit by requiring:
+  - Supabase query row limit (`mediaLimit`) to avoid unbounded list pulls.
+  - URL protocol allowlist (`http/https`) for media and thumbnails.
+- Added dedicated Showcase logic tests to cover happy path, edge/error branches, and security filtering.
 
 ## Validation Evidence
-- `npm.cmd test` (backend): passed (`11 passed, 0 failed`).
-- `npm.cmd run test:ci` (frontend): passed (`11 passed, 0 failed`).
-- `npm.cmd run verify-thorough`: executed (workflow template rendered).
-- `npm.cmd run principles-check`: executed (workflow template rendered).
+- `npm.cmd run test:ci` (frontend): passed (`17 passed, 0 failed`).
+- `npm.cmd run build` (frontend): passed (Angular production build completed).
+- Showcase-specific test file added:
+  - `frontend/src/app/pages/showcase-page.component.spec.ts`
 
 ## Unresolved Risks
-- `T-003` to `T-006` are not completed in this handover scope | full master release gate cannot be declared final-go yet | continue feature delivery sequence and re-run evaluator gate at each milestone.
-- Session store is still in-memory | restart invalidates active sessions | move to durable/jwt-backed strategy in `T-006`.
+- Supabase runtime config is still deployment-dependent (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, optional table/select/limit config) | missing config results in readable page error but no content | ensure env/runtime bootstrap is defined before release.
+- This gate is scoped to `T-003` only | overall project final release gate (`T-001`~`T-006`) remains pending | continue per-task evaluator gates.
 
 ## Decision
 continue
 
 ## Follow-up Actions
-- Complete `T-003` showcase route and API integration.
-- Complete `T-004` upload/edit with file validation and persistence checks.
-- Re-run evaluator gate with full project scope once `T-005` and `T-006` are done.
+- Producer proceeds to `T-004` upload/edit workflow and keeps `T-003` runtime config documentation synchronized.
+- Re-run evaluator for `T-004` with upload validation/security emphasis.

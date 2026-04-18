@@ -3,21 +3,22 @@
 - handover/local/evaluator.md
 
 ## Preconditions Check
-pass (for current scope `T-001` remediation): security, functionality/tests, and performance checks passed with no open P0/P1 in this scoped handover.
+pass (for scoped `T-003` gate): no open P0/P1 findings for Showcase delivery; functionality/tests/performance evidence attached.
 
 ## Shared Summary
-- Generator delivered public homepage flow on top of auth foundation (`T-002` progress) and kept login/admin routes stable.
-- Evaluator identified and then remediated `T-001` security blockers:
-  - removed weak default admin bootstrap behavior,
-  - added login attempt throttling/temporary lockout,
-  - tightened CORS to allowlist behavior.
-- Test coverage now includes logic, functional, and performance baselines across backend/frontend:
-  - backend `npm test`: `11/11` pass,
-  - frontend `npm run test:ci`: `11/11` pass.
-- Scope note: this is a scoped public handover update, not the final full-project release gate for `T-001`~`T-006`.
+- Task focus: `T-003` Showcase page public media display.
+- Generator delivered `/showcase` route and public media listing flow backed by Supabase REST metadata.
+- Evaluator completed scoped audit and applied quality hardening in this cycle:
+  - enforced bounded media query (`limit`) for list retrieval,
+  - enforced URL protocol allowlist (`http/https`) for media rendering safety.
+- Added/validated Task3-focused tests:
+  - `frontend/src/app/pages/showcase-page.component.spec.ts`
+  - `frontend npm run test:ci`: `17/17` pass
+  - `frontend npm run build`: pass
+- Scope note: this public handover is scoped to `T-003` and does not represent final project-wide release gate completion.
 
 ## Final Status
 done (scoped)
 
 ## Next Owner
-producer
+producer (T-004)

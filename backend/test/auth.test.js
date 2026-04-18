@@ -2,7 +2,13 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const { hashPassword } = require("../src/password");
-const { createApp, parseBearerToken } = require("../src/index");
+const {
+  createApp,
+  isValidEmail,
+  isValidPassword,
+  isValidUsername,
+  parseBearerToken,
+} = require("../src/index");
 
 function startTestServer(options = {}) {
   const dbPool = options.dbPool || { query: async () => ({ rowCount: 0, rows: [] }) };
@@ -45,11 +51,75 @@ test("parseBearerToken handles valid and invalid authorization headers", () => {
   assert.equal(parseBearerToken(undefined), null);
 });
 
+test("registration validators enforce username/email/password rules", () => {
+  assert.equal(isValidUsername("ab"), false);
+  assert.equal(isValidUsername("nanami_admin"), true);
+
+  assert.equal(isValidEmail("not-an-email"), false);
+  assert.equal(isValidEmail("nanami@example.com"), true);
+
+  assert.equal(isValidPassword("short"), false);
+  assert.equal(isValidPassword("good-length-password"), true);
+});
+
 test("login returns 400 when username/password are missing (edge case)", async () => {
   const ctx = await startTestServer();
   try {
     const { response, payload } = await postJson(ctx.baseUrl, "/api/auth/login", { username: "" });
     assert.equal(response.status, 400);
+    assert.equal(payload.ok, false);
+  } finally {
+    ctx.server.close();
+  }
+});
+
+test("register creates user and returns session token (happy path)", async () => {
+  const dbPool = {
+    query: async (sql, values) => {
+      if (String(sql).includes("SELECT 1 FROM users WHERE username = $1 OR email = $2")) {
+        return { rowCount: 0, rows: [] };
+      }
+      if (String(sql).includes("INSERT INTO users")) {
+        return { rowCount: 1, rows: [{ username: values[0] }] };
+      }
+      return { rowCount: 0, rows: [] };
+    },
+  };
+
+  const ctx = await startTestServer({ dbPool });
+  try {
+    const { response, payload } = await postJson(ctx.baseUrl, "/api/auth/register", {
+      username: "nanami_user",
+      email: "nanami@example.com",
+      password: "very-secure-2026",
+    });
+    assert.equal(response.status, 201);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.username, "nanami_user");
+    assert.equal(typeof payload.token, "string");
+  } finally {
+    ctx.server.close();
+  }
+});
+
+test("register rejects duplicate username or email", async () => {
+  const dbPool = {
+    query: async (sql) => {
+      if (String(sql).includes("SELECT 1 FROM users WHERE username = $1 OR email = $2")) {
+        return { rowCount: 1, rows: [{ "?column?": 1 }] };
+      }
+      return { rowCount: 0, rows: [] };
+    },
+  };
+
+  const ctx = await startTestServer({ dbPool });
+  try {
+    const { response, payload } = await postJson(ctx.baseUrl, "/api/auth/register", {
+      username: "nanami_user",
+      email: "nanami@example.com",
+      password: "very-secure-2026",
+    });
+    assert.equal(response.status, 409);
     assert.equal(payload.ok, false);
   } finally {
     ctx.server.close();
