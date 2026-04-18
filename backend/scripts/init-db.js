@@ -68,24 +68,30 @@ async function ensureSchema() {
       username VARCHAR(50) UNIQUE NOT NULL,
       email VARCHAR(120) UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
+      role VARCHAR(20) NOT NULL DEFAULT 'Viewer' CHECK (role IN ('Admin', 'Publisher', 'Viewer')),
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
+  `);
+  await appClient.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'Viewer'
+      CHECK (role IN ('Admin', 'Publisher', 'Viewer'));
   `);
   console.log("Schema ready: users table");
 
   const passwordHash = hashPassword(defaultAdminPassword);
   await appClient.query(
     `
-      INSERT INTO users (username, email, password_hash)
-      VALUES ($1, $2, $3)
+      INSERT INTO users (username, email, password_hash, role)
+      VALUES ($1, $2, $3, 'Admin')
       ON CONFLICT (username)
       DO UPDATE SET
         email = EXCLUDED.email,
-        password_hash = EXCLUDED.password_hash
+        password_hash = EXCLUDED.password_hash,
+        role = 'Admin'
     `,
     [defaultAdminUsername, defaultAdminEmail, passwordHash]
   );
-  console.log(`Default admin ensured: ${defaultAdminUsername}`);
+  console.log(`Default admin ensured: ${defaultAdminUsername} (role=Admin)`);
 
   await appClient.end();
 }

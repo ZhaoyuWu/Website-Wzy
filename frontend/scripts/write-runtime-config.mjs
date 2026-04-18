@@ -12,6 +12,22 @@ export function readArgApiBaseUrl(argv = process.argv) {
   return match.slice('--api-base-url='.length).trim();
 }
 
+export function readArgSupabaseUrl(argv = process.argv) {
+  const match = argv.find((arg) => arg.startsWith('--supabase-url='));
+  if (!match) {
+    return '';
+  }
+  return match.slice('--supabase-url='.length).trim();
+}
+
+export function readArgSupabaseAnonKey(argv = process.argv) {
+  const match = argv.find((arg) => arg.startsWith('--supabase-anon-key='));
+  if (!match) {
+    return '';
+  }
+  return match.slice('--supabase-anon-key='.length).trim();
+}
+
 function pickApiBaseUrl(argv = process.argv, env = process.env) {
   const fromArg = readArgApiBaseUrl(argv);
   if (fromArg) {
@@ -28,6 +44,26 @@ function pickApiBaseUrl(argv = process.argv, env = process.env) {
 
 function normalizeBaseUrl(url) {
   return String(url || '').trim().replace(/\/+$/, '');
+}
+
+function pickSupabaseUrl(argv = process.argv, env = process.env) {
+  const fromArg = readArgSupabaseUrl(argv);
+  if (fromArg) {
+    return fromArg;
+  }
+
+  const fromEnv = String(env.NANAMI_SUPABASE_URL || env.SUPABASE_URL || '').trim();
+  return fromEnv;
+}
+
+function pickSupabaseAnonKey(argv = process.argv, env = process.env) {
+  const fromArg = readArgSupabaseAnonKey(argv);
+  if (fromArg) {
+    return fromArg;
+  }
+
+  const fromEnv = String(env.NANAMI_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY || '').trim();
+  return fromEnv;
 }
 
 function ensureHttpUrl(url) {
@@ -63,11 +99,15 @@ export function resolveApiBaseUrl({
   return DEFAULT_API_BASE_URL;
 }
 
-export function buildRuntimeConfigContent(apiBaseUrl) {
+export function buildRuntimeConfigContent({ apiBaseUrl, supabaseUrl = '', supabaseAnonKey = '' }) {
   const encodedApiBaseUrl = JSON.stringify(apiBaseUrl);
+  const encodedSupabaseUrl = JSON.stringify(normalizeBaseUrl(supabaseUrl));
+  const encodedSupabaseAnonKey = JSON.stringify(supabaseAnonKey);
   return [
     'window.__NANAMI_APP_CONFIG__ = window.__NANAMI_APP_CONFIG__ || {};',
     `window.__NANAMI_APP_CONFIG__.apiBaseUrl = ${encodedApiBaseUrl};`,
+    `window.__NANAMI_APP_CONFIG__.supabaseUrl = ${encodedSupabaseUrl};`,
+    `window.__NANAMI_APP_CONFIG__.supabaseAnonKey = ${encodedSupabaseAnonKey};`,
     ''
   ].join('\n');
 }
@@ -76,7 +116,9 @@ export function writeRuntimeConfig(options = {}) {
   const apiBaseUrl = resolveApiBaseUrl(options);
   const cwd = options.cwd || process.cwd();
   const outputPath = path.join(cwd, 'public', 'runtime-config.js');
-  const fileContent = buildRuntimeConfigContent(apiBaseUrl);
+  const supabaseUrl = normalizeBaseUrl(pickSupabaseUrl(options.argv, options.env));
+  const supabaseAnonKey = pickSupabaseAnonKey(options.argv, options.env);
+  const fileContent = buildRuntimeConfigContent({ apiBaseUrl, supabaseUrl, supabaseAnonKey });
   fs.writeFileSync(outputPath, fileContent, 'utf8');
   return apiBaseUrl;
 }

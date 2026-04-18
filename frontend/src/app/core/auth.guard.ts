@@ -14,3 +14,20 @@ export const authGuard: CanActivateFn = (_route, state) => {
     queryParams: { redirect: state.url }
   });
 };
+
+export function roleGuard(...roles: string[]): CanActivateFn {
+  return (_route, state) => {
+    const auth = inject(AuthService);
+    const router = inject(Router);
+
+    if (!auth.isAuthenticated) {
+      return router.createUrlTree(['/login'], { queryParams: { redirect: state.url } });
+    }
+
+    if (roles.includes(auth.userRole)) {
+      return true;
+    }
+
+    return router.createUrlTree(['/']);
+  };
+}

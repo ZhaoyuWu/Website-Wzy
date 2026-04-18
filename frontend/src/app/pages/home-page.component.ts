@@ -31,8 +31,8 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
           <a [routerLink]="['/']" fragment="moments">Moments</a>
           <a [routerLink]="['/showcase']">Showcase</a>
           <a [routerLink]="['/register']">Register</a>
-          <a [routerLink]="['/login']">Admin Login</a>
-          <a [routerLink]="['/admin']">Admin Panel</a>
+          <a [routerLink]="['/login']">Login</a>
+          <a [routerLink]="['/admin']">Member Console</a>
         </nav>
       </header>
 
@@ -44,7 +44,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
           <a class="primary" [routerLink]="['/']" fragment="moments">View Story Moments</a>
           <a class="secondary" [routerLink]="['/showcase']">Open Showcase</a>
           <a class="secondary" [routerLink]="['/register']">Create Account</a>
-          <a class="secondary" [routerLink]="['/login']">Manage Content</a>
+          <a class="secondary" [routerLink]="['/login']">Member Login</a>
         </div>
       </section>
 

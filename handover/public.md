@@ -3,25 +3,24 @@
 - handover/local/evaluator.md
 
 ## Preconditions Check
-pass (for scoped `T-006` gate): evaluator blockers found and remediated; no unresolved P0/P1 in current scope.
+pass (scoped): evaluator blockers found and remediated for generator1 new changes.
 
 ## Shared Summary
-- Task focus: `T-006` hardening and deployment readiness.
-- Generator provided env split/runtime-config/deploy checklist baseline.
-- Evaluator completed scoped audit and fixed release-critical gaps in runtime-config generation:
-  - enforce absolute `http/https` API URL validation,
-  - fail production config generation when API base env is missing,
-  - serialize generated runtime value safely (`JSON.stringify`),
-  - add dedicated runtime-config tests and include them in frontend CI test chain.
+- Task focus: generator1 new auth/role delivery and regression impact on existing accepted features.
+- Evaluator detected and fixed blocker/high issues:
+  - restored governance baseline (task/principles contract files),
+  - removed hardcoded Supabase runtime secrets from frontend start script,
+  - added secure bootstrap-admin claim flow to prevent first-admin lockout,
+  - restored admin page functional scope so role management does not replace existing media/settings capabilities.
 - Verified evidence:
-  - `backend npm test`: `27/27` pass
+  - `backend npm test`: `30/30` pass
   - `frontend npm run test:runtime-config`: `5/5` pass
-  - `frontend npm run test:ci`: pass (`runtime-config + 24 Angular tests`)
-  - production config behavior manually verified for both fail/success paths.
-- Scope note: this handover is scoped to `T-006` evaluator audit/remediation and does not replace post-deploy production smoke verification.
+  - `frontend npm run test:ci`: pass (`runtime-config + 27 Angular tests`)
+  - `frontend npm run build`: pass
+- Scope note: this handover is a scoped evaluator remediation pass over generator1 changes and does not replace environment-specific production smoke verification.
 
 ## Final Status
 done (scoped)
 
 ## Next Owner
-evaluator/release-owner (final go-no-go in target deploy env)
+release-owner

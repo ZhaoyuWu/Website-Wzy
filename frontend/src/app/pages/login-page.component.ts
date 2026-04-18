@@ -12,14 +12,14 @@ import { AuthService } from '../core/auth.service';
     <main class="auth-layout">
       <section class="auth-card">
         <p class="eyebrow">Nanami Admin</p>
-        <h1>Admin Login</h1>
-        <p class="subtitle">Sign in to manage uploads and site settings.</p>
+        <h1>Login</h1>
+        <p class="subtitle">Sign in with your Supabase account to access protected pages.</p>
 
         <form [formGroup]="form" (ngSubmit)="onSubmit()" novalidate>
-          <label for="username">Username</label>
-          <input id="username" type="text" formControlName="username" autocomplete="username" />
-          <p class="field-error" *ngIf="showError('username')">
-            Username is required.
+          <label for="email">Email</label>
+          <input id="email" type="email" formControlName="email" autocomplete="email" />
+          <p class="field-error" *ngIf="showError('email')">
+            Please enter a valid email address.
           </p>
 
           <label for="password">Password</label>
@@ -41,7 +41,7 @@ import { AuthService } from '../core/auth.service';
         </form>
 
         <p class="hint">
-          Visit the public homepage, or create an account first.
+          Visit the public homepage to continue browsing Nanami stories.
           <a [routerLink]="['/']">Go to homepage</a>
           <span class="divider">|</span>
           <a [routerLink]="['/register']">Create account</a>
@@ -155,6 +155,7 @@ import { AuthService } from '../core/auth.service';
       margin: 0 8px;
       color: #b59883;
     }
+
   `
 })
 export class LoginPageComponent {
@@ -164,7 +165,7 @@ export class LoginPageComponent {
   private readonly route = inject(ActivatedRoute);
 
   readonly form = this.fb.nonNullable.group({
-    username: ['', [Validators.required]],
+    email: ['', [Validators.required, Validators.email]],
     password: ['', [Validators.required, Validators.minLength(8)]]
   });
 
@@ -177,7 +178,7 @@ export class LoginPageComponent {
     }
   }
 
-  showError(controlName: 'username' | 'password'): boolean {
+  showError(controlName: 'email' | 'password'): boolean {
     const control = this.form.controls[controlName];
     return control.invalid && (control.touched || control.dirty);
   }
@@ -190,10 +191,10 @@ export class LoginPageComponent {
     }
 
     this.isSubmitting = true;
-    const { username, password } = this.form.getRawValue();
+    const { email, password } = this.form.getRawValue();
     try {
-      await this.auth.login(username.trim(), password);
-      const redirect = this.route.snapshot.queryParamMap.get('redirect') || '/';
+      await this.auth.login(email.trim(), password);
+      const redirect = this.route.snapshot.queryParamMap.get('redirect') || '/admin';
       await this.router.navigateByUrl(redirect);
     } catch (error) {
       this.submitError =

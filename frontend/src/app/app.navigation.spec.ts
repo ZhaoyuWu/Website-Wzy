@@ -19,6 +19,18 @@ class MockAuthService {
     return 'admin';
   }
 
+  get userRole(): string {
+    return 'Admin';
+  }
+
+  get isAdmin(): boolean {
+    return true;
+  }
+
+  get isPublisherOrAdmin(): boolean {
+    return true;
+  }
+
   authHeaders(): HeadersInit {
     return { Authorization: 'Bearer fake-token' };
   }

@@ -17,6 +17,7 @@ function startTestServer(options = {}) {
     dbPool,
     randomBytes: () => Buffer.alloc(32, 7),
     now: () => nowState.value,
+    fetchImpl: options.fetchImpl,
   });
 
   return new Promise((resolve) => {
@@ -31,6 +32,13 @@ function startTestServer(options = {}) {
         },
       });
     });
+  });
+}
+
+function createJsonResponse(payload, status = 200) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { "Content-Type": "application/json" },
   });
 }
 
@@ -80,7 +88,7 @@ test("register creates user and returns session token (happy path)", async () =>
         return { rowCount: 0, rows: [] };
       }
       if (String(sql).includes("INSERT INTO users")) {
-        return { rowCount: 1, rows: [{ username: values[0] }] };
+        return { rowCount: 1, rows: [{ username: values[0], role: "Viewer" }] };
       }
       return { rowCount: 0, rows: [] };
     },
@@ -132,7 +140,7 @@ test("login + session + admin + logout flow works and invalidates token (happy/r
       if (String(sql).includes("FROM users") && values[0] === "admin") {
         return {
           rowCount: 1,
-          rows: [{ username: "admin", password_hash: hashPassword("admin123456") }],
+          rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
         };
       }
       if (String(sql).includes("SELECT NOW()")) {
@@ -182,7 +190,7 @@ test("login returns 401 on wrong password (edge case)", async () => {
   const dbPool = {
     query: async () => ({
       rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("correct-password") }],
+      rows: [{ username: "admin", password_hash: hashPassword("correct-password"), role: "Admin" }],
     }),
   };
   const ctx = await startTestServer({ dbPool });
@@ -203,7 +211,7 @@ test("session expires after ttl and becomes unauthorized (regression)", async ()
   const dbPool = {
     query: async () => ({
       rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("admin123456") }],
+      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
     }),
   };
 
@@ -251,7 +259,7 @@ test("performance baseline: authenticated admin overview p95 is under 250ms", as
   const dbPool = {
     query: async () => ({
       rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("admin123456") }],
+      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
     }),
   };
   const ctx = await startTestServer({ dbPool });
@@ -289,7 +297,7 @@ test("rate limit blocks login after repeated failures and returns 429", async ()
   const dbPool = {
     query: async () => ({
       rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("correct-password") }],
+      rows: [{ username: "admin", password_hash: hashPassword("correct-password"), role: "Admin" }],
     }),
   };
   const ctx = await startTestServer({ dbPool, initialNow: 2_000_000_000_000 });
@@ -316,6 +324,124 @@ test("rate limit blocks login after repeated failures and returns 429", async ()
     delete process.env.LOGIN_ATTEMPT_MAX;
     delete process.env.LOGIN_ATTEMPT_WINDOW_MS;
     delete process.env.LOGIN_BLOCK_MS;
+    ctx.server.close();
+  }
+});
+
+test("bootstrap status allows claim when there is no admin user", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role";
+
+  const fetchImpl = async (url) => {
+    if (String(url).includes("/auth/v1/user")) {
+      return createJsonResponse({
+        id: "user-viewer-1",
+        email: "viewer@example.com",
+        app_metadata: { role: "Viewer" },
+      });
+    }
+    if (String(url).includes("/auth/v1/admin/users?per_page=200")) {
+      return createJsonResponse({
+        users: [{ id: "user-viewer-1", email: "viewer@example.com", app_metadata: { role: "Viewer" } }],
+      });
+    }
+    throw new Error(`Unexpected URL in bootstrap status test: ${url}`);
+  };
+
+  const ctx = await startTestServer({ fetchImpl });
+  try {
+    const response = await fetch(`${ctx.baseUrl}/api/admin/bootstrap/status`, {
+      headers: { Authorization: "Bearer supabase-token" },
+    });
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.hasAdmin, false);
+    assert.equal(payload.canClaimAdmin, true);
+  } finally {
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    ctx.server.close();
+  }
+});
+
+test("bootstrap claim promotes current user when there is no admin", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role";
+
+  const fetchImpl = async (url, init = {}) => {
+    if (String(url).includes("/auth/v1/user")) {
+      return createJsonResponse({
+        id: "user-viewer-2",
+        email: "viewer2@example.com",
+        app_metadata: { role: "Viewer" },
+      });
+    }
+    if (String(url).includes("/auth/v1/admin/users?per_page=200")) {
+      return createJsonResponse({
+        users: [{ id: "user-viewer-2", email: "viewer2@example.com", app_metadata: { role: "Viewer" } }],
+      });
+    }
+    if (String(url).includes("/auth/v1/admin/users/user-viewer-2")) {
+      assert.equal(init.method, "PUT");
+      return createJsonResponse({
+        id: "user-viewer-2",
+        email: "viewer2@example.com",
+        app_metadata: { role: "Admin" },
+      });
+    }
+    throw new Error(`Unexpected URL in bootstrap claim test: ${url}`);
+  };
+
+  const ctx = await startTestServer({ fetchImpl });
+  try {
+    const response = await fetch(`${ctx.baseUrl}/api/admin/bootstrap/claim`, {
+      method: "POST",
+      headers: { Authorization: "Bearer supabase-token" },
+    });
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.user.role, "Admin");
+  } finally {
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    ctx.server.close();
+  }
+});
+
+test("bootstrap claim is rejected when an admin already exists", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role";
+
+  const fetchImpl = async (url) => {
+    if (String(url).includes("/auth/v1/user")) {
+      return createJsonResponse({
+        id: "user-viewer-3",
+        email: "viewer3@example.com",
+        app_metadata: { role: "Viewer" },
+      });
+    }
+    if (String(url).includes("/auth/v1/admin/users?per_page=200")) {
+      return createJsonResponse({
+        users: [{ id: "user-admin-1", email: "admin@example.com", app_metadata: { role: "Admin" } }],
+      });
+    }
+    throw new Error(`Unexpected URL in bootstrap reject test: ${url}`);
+  };
+
+  const ctx = await startTestServer({ fetchImpl });
+  try {
+    const response = await fetch(`${ctx.baseUrl}/api/admin/bootstrap/claim`, {
+      method: "POST",
+      headers: { Authorization: "Bearer supabase-token" },
+    });
+    const payload = await response.json();
+    assert.equal(response.status, 409);
+    assert.equal(payload.ok, false);
+  } finally {
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
     ctx.server.close();
   }
 });

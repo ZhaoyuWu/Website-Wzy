@@ -1,5 +1,23 @@
 # Handover History
 
+## 2026-04-18 - Generator1 Audit Remediation and Public Handover
+- Type: public handover update (scoped)
+- Scope: generator1 new modifications (`T-001` + role extensions) audit + blocker remediation
+- Source docs:
+  - `handover/local/generator1-task1.md`
+  - `handover/local/generator.md`
+  - `handover/local/evaluator.md`
+  - `handover/public.md`
+- Key outcomes:
+  - Restored task/principles contract baseline after unapproved topology rewrite.
+  - Removed hardcoded Supabase runtime values from frontend startup command.
+  - Added secure first-admin bootstrap flow (`/api/admin/bootstrap/status`, `/api/admin/bootstrap/claim`).
+  - Restored admin page scope to avoid regression (role management + existing media/settings paths).
+  - Expanded backend auth tests with bootstrap-admin path checks.
+  - Validation passed: backend `30/30`, frontend runtime-config `5/5`, frontend CI tests pass, frontend build pass.
+- Decision: continue
+- Next owner: release-owner
+
 ## 2026-04-18 - Task6 Hardening Public Handover (Evaluator Scoped)
 - Type: public handover update (scoped)
 - Scope: `T-006` runtime-config/deployment hardening audit + remediation

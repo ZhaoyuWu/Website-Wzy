@@ -22,6 +22,14 @@ type SiteSettings = {
   updatedAt?: string | null;
 };
 
+type UserRow = {
+  id: string;
+  email: string;
+  role: string;
+  created_at?: string;
+};
+
+const ASSIGNABLE_ROLES = ['Admin', 'Publisher', 'Viewer'] as const;
 const IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 const VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime']);
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
@@ -47,7 +55,10 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
           <div>
             <p class="eyebrow">Protected Route</p>
             <h1>Nanami Admin Panel</h1>
-            <p class="desc">Logged in as {{ auth.username ?? 'admin' }}</p>
+            <p class="desc">
+              Logged in as {{ auth.username ?? 'unknown' }}
+              <span class="role-badge role-{{ auth.userRole.toLowerCase() }}">{{ auth.userRole }}</span>
+            </p>
           </div>
           <button type="button" class="logout" (click)="logout()" [disabled]="isLoggingOut">
             {{ isLoggingOut ? 'Signing out...' : 'Logout' }}
@@ -61,7 +72,48 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
         <p class="message" *ngIf="serverMessage">{{ serverMessage }}</p>
       </section>
 
-      <section class="admin-card">
+      <section class="admin-card" *ngIf="auth.isAdmin">
+        <div class="list-header">
+          <h2>User Management (Role)</h2>
+          <button type="button" class="secondary" (click)="loadUsers()" [disabled]="isLoadingUsers">
+            {{ isLoadingUsers ? 'Loading...' : 'Refresh' }}
+          </button>
+        </div>
+        <p class="hint">Admin can assign roles for registered users.</p>
+        <p class="error" *ngIf="usersError">{{ usersError }}</p>
+        <p class="hint" *ngIf="!isLoadingUsers && users.length === 0 && !usersError">No users found.</p>
+
+        <article class="user-row" *ngFor="let user of users; trackBy: trackByUserId">
+          <strong>{{ user.email }}</strong>
+          <div class="role-wrap">
+            <select
+              [ngModel]="user.role"
+              [ngModelOptions]="{ standalone: true }"
+              (ngModelChange)="updateUserRole(user, $event)"
+              [disabled]="savingRoleId === user.id"
+            >
+              <option *ngFor="let role of assignableRoles" [value]="role">{{ role }}</option>
+            </select>
+            <span class="message" *ngIf="savingRoleId === user.id">Saving...</span>
+            <span class="success" *ngIf="savedRoleId === user.id">Saved</span>
+          </div>
+        </article>
+        <p class="error" *ngIf="roleUpdateError">{{ roleUpdateError }}</p>
+      </section>
+
+      <section class="admin-card" *ngIf="!auth.isAdmin && canClaimAdmin">
+        <h2>Bootstrap Admin</h2>
+        <p class="hint">
+          No admin account exists yet. You can claim the first Admin role for project bootstrap.
+        </p>
+        <p class="error" *ngIf="claimAdminError">{{ claimAdminError }}</p>
+        <p class="success" *ngIf="claimAdminSuccess">{{ claimAdminSuccess }}</p>
+        <button type="button" (click)="claimAdminRole()" [disabled]="isClaimingAdmin">
+          {{ isClaimingAdmin ? 'Claiming...' : 'Claim Admin Role' }}
+        </button>
+      </section>
+
+      <section class="admin-card" *ngIf="auth.isAdmin">
         <h2>Information & Settings (T-005)</h2>
         <p class="hint">Manage public profile text and contact preference shown on the homepage.</p>
 
@@ -145,7 +197,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
         </form>
       </section>
 
-      <section class="admin-card">
+      <section class="admin-card" *ngIf="auth.isPublisherOrAdmin">
         <h2>Upload Media (T-004)</h2>
         <p class="hint">Allowed: JPG/PNG/WEBP/GIF up to 10MB, MP4/WEBM/MOV up to 50MB.</p>
 
@@ -191,7 +243,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
         </form>
       </section>
 
-      <section class="admin-card">
+      <section class="admin-card" *ngIf="auth.isPublisherOrAdmin">
         <div class="list-header">
           <h2>Existing Media</h2>
           <button type="button" class="secondary" (click)="loadMediaItems()" [disabled]="isRefreshing">
@@ -265,6 +317,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
       justify-content: space-between;
       gap: 16px;
       margin-bottom: 14px;
+      flex-wrap: wrap;
     }
 
     .eyebrow {
@@ -285,6 +338,32 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
     .desc {
       margin: 0;
       color: #3b5e4d;
+    }
+
+    .role-badge {
+      display: inline-block;
+      margin-left: 8px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .role-admin {
+      background: #d4edda;
+      color: #1a5c33;
+    }
+
+    .role-publisher {
+      background: #cce5ff;
+      color: #1a3a6c;
+    }
+
+    .role-viewer {
+      background: #ececec;
+      color: #555;
     }
 
     .status-row {
@@ -337,7 +416,8 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
     }
 
     input,
-    textarea {
+    textarea,
+    select {
       border: 1px solid #cce5d8;
       border-radius: 10px;
       padding: 10px;
@@ -369,6 +449,24 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
       align-items: center;
       gap: 12px;
       margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+
+    .user-row {
+      border-top: 1px solid #ddede5;
+      padding: 10px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .role-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
     }
 
     .media-row {
@@ -485,6 +583,18 @@ export class AdminPageComponent implements OnInit {
   serverMessage = '';
   isLoggingOut = false;
 
+  readonly assignableRoles = ASSIGNABLE_ROLES;
+  users: UserRow[] = [];
+  usersError = '';
+  isLoadingUsers = false;
+  savingRoleId: string | null = null;
+  savedRoleId: string | null = null;
+  roleUpdateError = '';
+  canClaimAdmin = false;
+  isClaimingAdmin = false;
+  claimAdminError = '';
+  claimAdminSuccess = '';
+
   mediaItems: MediaItem[] = [];
   mediaLoadError = '';
   isRefreshing = false;
@@ -516,8 +626,16 @@ export class AdminPageComponent implements OnInit {
 
       this.authCheckStatus = 'Authenticated';
       this.serverMessage = payload.message || 'Admin API is reachable.';
-      await this.loadSettings();
-      await this.loadMediaItems();
+      if (this.auth.isAdmin) {
+        await this.loadUsers();
+      }
+      await this.loadBootstrapStatus();
+      if (this.auth.isAdmin) {
+        await this.loadSettings();
+      }
+      if (this.auth.isPublisherOrAdmin) {
+        await this.loadMediaItems();
+      }
     } catch {
       this.authCheckStatus = 'Session expired or invalid';
       await this.auth.logout();
@@ -527,6 +645,109 @@ export class AdminPageComponent implements OnInit {
 
   trackById(index: number, item: MediaItem): number | string {
     return item.id ?? index;
+  }
+
+  trackByUserId(_index: number, user: UserRow): string {
+    return user.id;
+  }
+
+  async loadUsers(): Promise<void> {
+    if (!this.auth.isAdmin) {
+      this.users = [];
+      return;
+    }
+
+    this.isLoadingUsers = true;
+    this.usersError = '';
+    try {
+      const response = await fetch(this.auth.apiUrl('/api/admin/users'), {
+        headers: this.auth.authHeaders()
+      });
+      const payload = (await response.json()) as { ok?: boolean; users?: UserRow[]; message?: string };
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.message || 'Failed to load users.');
+      }
+      this.users = Array.isArray(payload.users) ? payload.users : [];
+    } catch (error) {
+      this.usersError = error instanceof Error ? error.message : 'Failed to load users.';
+    } finally {
+      this.isLoadingUsers = false;
+    }
+  }
+
+  async updateUserRole(user: UserRow, newRole: string): Promise<void> {
+    this.roleUpdateError = '';
+    this.savedRoleId = null;
+    this.savingRoleId = user.id;
+
+    try {
+      const response = await fetch(this.auth.apiUrl(`/api/admin/users/${encodeURIComponent(user.id)}/role`), {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...this.auth.authHeaders()
+        },
+        body: JSON.stringify({ role: newRole })
+      });
+      const payload = (await response.json()) as { ok?: boolean; message?: string; user?: UserRow };
+      if (!response.ok || !payload.ok || !payload.user) {
+        throw new Error(payload.message || 'Failed to update role.');
+      }
+      this.users = this.users.map((current) =>
+        current.id === user.id ? { ...current, role: payload.user?.role || newRole } : current
+      );
+      this.savedRoleId = user.id;
+      setTimeout(() => {
+        this.savedRoleId = null;
+      }, 2000);
+    } catch (error) {
+      this.roleUpdateError = error instanceof Error ? error.message : 'Failed to update role.';
+    } finally {
+      this.savingRoleId = null;
+    }
+  }
+
+  async loadBootstrapStatus(): Promise<void> {
+    this.claimAdminError = '';
+    try {
+      const response = await fetch(this.auth.apiUrl('/api/admin/bootstrap/status'), {
+        headers: this.auth.authHeaders()
+      });
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        canClaimAdmin?: boolean;
+        hasAdmin?: boolean;
+      };
+      if (!response.ok || !payload.ok) {
+        this.canClaimAdmin = false;
+        return;
+      }
+      this.canClaimAdmin = Boolean(payload.canClaimAdmin) && !this.auth.isAdmin;
+    } catch {
+      this.canClaimAdmin = false;
+    }
+  }
+
+  async claimAdminRole(): Promise<void> {
+    this.claimAdminError = '';
+    this.claimAdminSuccess = '';
+    this.isClaimingAdmin = true;
+    try {
+      const response = await fetch(this.auth.apiUrl('/api/admin/bootstrap/claim'), {
+        method: 'POST',
+        headers: this.auth.authHeaders()
+      });
+      const payload = (await response.json()) as { ok?: boolean; message?: string };
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.message || 'Failed to claim admin role.');
+      }
+      this.claimAdminSuccess = payload.message || 'Admin role claimed. Please login again.';
+      this.canClaimAdmin = false;
+    } catch (error) {
+      this.claimAdminError = error instanceof Error ? error.message : 'Failed to claim admin role.';
+    } finally {
+      this.isClaimingAdmin = false;
+    }
   }
 
   onFileSelected(event: Event): void {

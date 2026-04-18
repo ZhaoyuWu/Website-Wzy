@@ -65,14 +65,19 @@ runCase('writes escaped runtime-config content to public folder', () => {
   try {
     const apiBaseUrl = writeRuntimeConfig({
       cwd: tempDir,
-      argv: ['node', 'write-runtime-config.mjs'],
-      env: { NANAMI_API_BASE_URL: 'https://api.nanami.test?a=1&b=2' },
+      argv: ['node', 'write-runtime-config.mjs', '--supabase-url=https://demo.supabase.co/'],
+      env: {
+        NANAMI_API_BASE_URL: 'https://api.nanami.test?a=1&b=2',
+        SUPABASE_ANON_KEY: 'demo-anon-key'
+      },
       nodeEnv: 'development'
     });
     const content = fs.readFileSync(outputPath, 'utf8');
 
     assert.equal(apiBaseUrl, 'https://api.nanami.test?a=1&b=2');
     assert.match(content, /window\.__NANAMI_APP_CONFIG__\.apiBaseUrl = "https:\/\/api\.nanami\.test\?a=1&b=2";/);
+    assert.match(content, /window\.__NANAMI_APP_CONFIG__\.supabaseUrl = "https:\/\/demo\.supabase\.co";/);
+    assert.match(content, /window\.__NANAMI_APP_CONFIG__\.supabaseAnonKey = "demo-anon-key";/);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

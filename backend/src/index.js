@@ -190,10 +190,10 @@ function createApp(options = {}) {
     settingsRowKey: String(process.env.SUPABASE_SETTINGS_ROW_KEY || "site").trim(),
   };
 
-  function createSession(username) {
+  function createSession(username, role) {
     const token = randomBytes(32).toString("hex");
     const expiresAt = now() + sessionTtlMs;
-    sessions.set(token, { username, expiresAt });
+    sessions.set(token, { username, role: role || "Viewer", expiresAt });
     return { token, expiresAt };
   }
 
@@ -206,17 +206,54 @@ function createApp(options = {}) {
     }
   }
 
-  function requireAuth(req, res, next) {
+  async function requireAuth(req, res, next) {
     clearExpiredSessions();
     const token = parseBearerToken(req.headers.authorization);
     const session = token ? sessions.get(token) : null;
 
-    if (!session) {
-      return res.status(401).json({ ok: false, message: "Authentication required" });
+    if (session) {
+      req.auth = { token, username: session.username, role: session.role || "Viewer", expiresAt: session.expiresAt };
+      return next();
     }
 
-    req.auth = { token, username: session.username, expiresAt: session.expiresAt };
-    return next();
+    if (token && mediaConfig.supabaseUrl && mediaConfig.serviceRoleKey) {
+      try {
+        const userResponse = await fetchImpl(`${mediaConfig.supabaseUrl}/auth/v1/user`, {
+          headers: {
+            apikey: mediaConfig.serviceRoleKey,
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        if (userResponse.ok) {
+          const userData = await userResponse.json();
+          const appMeta =
+            userData?.app_metadata && typeof userData.app_metadata === "object"
+              ? userData.app_metadata
+              : {};
+          req.auth = {
+            token,
+            username: userData?.email || userData?.id || "unknown",
+            userId: userData?.id || null,
+            role: typeof appMeta.role === "string" && appMeta.role ? appMeta.role : "Viewer",
+            expiresAt: new Date(Date.now() + sessionTtlMs).toISOString(),
+          };
+          return next();
+        }
+      } catch {
+        // Fall through to 401
+      }
+    }
+
+    return res.status(401).json({ ok: false, message: "Authentication required" });
+  }
+
+  function requireRole(...roles) {
+    return (req, res, next) => {
+      if (!roles.includes(req.auth?.role)) {
+        return res.status(403).json({ ok: false, message: "Insufficient permissions" });
+      }
+      return next();
+    };
   }
 
   function getThrottleKey(req, username) {
@@ -428,20 +465,22 @@ function createApp(options = {}) {
       const passwordHash = hashPassword(password);
       const insertResult = await dbPool.query(
         `
-          INSERT INTO users (username, email, password_hash)
-          VALUES ($1, $2, $3)
-          RETURNING username
+          INSERT INTO users (username, email, password_hash, role)
+          VALUES ($1, $2, $3, 'Viewer')
+          RETURNING username, role
         `,
         [username, email, passwordHash]
       );
 
       const createdUsername = insertResult.rows[0]?.username || username;
-      const session = createSession(createdUsername);
+      const createdRole = insertResult.rows[0]?.role || "Viewer";
+      const session = createSession(createdUsername, createdRole);
       return res.status(201).json({
         ok: true,
         token: session.token,
         expiresAt: new Date(session.expiresAt).toISOString(),
         username: createdUsername,
+        role: createdRole,
       });
     } catch (error) {
       if (error && typeof error === "object" && error.code === "23505") {
@@ -470,7 +509,7 @@ function createApp(options = {}) {
 
     try {
       const result = await dbPool.query(
-        "SELECT username, password_hash FROM users WHERE username = $1 LIMIT 1",
+        "SELECT username, password_hash, role FROM users WHERE username = $1 LIMIT 1",
         [username]
       );
 
@@ -486,13 +525,15 @@ function createApp(options = {}) {
         return res.status(401).json({ ok: false, message: "Invalid username or password" });
       }
 
-      const session = createSession(user.username);
+      const userRole = user.role || "Viewer";
+      const session = createSession(user.username, userRole);
       clearLoginFailures(throttleKey);
       return res.json({
         ok: true,
         token: session.token,
         expiresAt: new Date(session.expiresAt).toISOString(),
         username: user.username,
+        role: userRole,
       });
     } catch (error) {
       console.error("Login failed:", error.message);
@@ -504,6 +545,7 @@ function createApp(options = {}) {
     res.json({
       ok: true,
       username: req.auth.username,
+      role: req.auth.role,
       expiresAt: new Date(req.auth.expiresAt).toISOString(),
     });
   });
@@ -543,7 +585,7 @@ function createApp(options = {}) {
     }
   });
 
-  app.get("/api/admin/settings", requireAuth, async (_req, res) => {
+  app.get("/api/admin/settings", requireAuth, requireRole("Admin"), async (_req, res) => {
     try {
       const result = await readSiteSettings();
       if (!result.ok) {
@@ -564,7 +606,7 @@ function createApp(options = {}) {
     }
   });
 
-  app.patch("/api/admin/settings", requireAuth, async (req, res) => {
+  app.patch("/api/admin/settings", requireAuth, requireRole("Admin"), async (req, res) => {
     const patchResult = buildSettingsPatch(req.body);
     if (!patchResult.ok) {
       return res.status(400).json({ ok: false, message: patchResult.message });
@@ -613,7 +655,7 @@ function createApp(options = {}) {
     }
   });
 
-  app.get("/api/admin/media", requireAuth, async (_req, res) => {
+  app.get("/api/admin/media", requireAuth, requireRole("Admin", "Publisher"), async (_req, res) => {
     try {
       const selectColumns = "id,title,description,media_type,public_url,thumbnail_url,created_at";
       const endpoint =
@@ -637,7 +679,7 @@ function createApp(options = {}) {
     }
   });
 
-  app.post("/api/admin/media", requireAuth, async (req, res) => {
+  app.post("/api/admin/media", requireAuth, requireRole("Admin", "Publisher"), async (req, res) => {
     const title = normalizeMediaTitle(req.body?.title);
     const description = normalizeMediaDescription(req.body?.description);
     const fileName = typeof req.body?.fileName === "string" ? req.body.fileName.trim() : "";
@@ -734,7 +776,7 @@ function createApp(options = {}) {
     }
   });
 
-  app.patch("/api/admin/media/:id", requireAuth, async (req, res) => {
+  app.patch("/api/admin/media/:id", requireAuth, requireRole("Admin", "Publisher"), async (req, res) => {
     const id = String(req.params.id || "").trim();
     const hasTitle = Object.prototype.hasOwnProperty.call(req.body || {}, "title");
     const hasDescription = Object.prototype.hasOwnProperty.call(req.body || {}, "description");
@@ -797,6 +839,162 @@ function createApp(options = {}) {
     }
   });
 
+  const VALID_ROLES = new Set(["Admin", "Publisher", "Viewer"]);
+
+  function mapSupabaseUser(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const appMeta = raw.app_metadata && typeof raw.app_metadata === "object" ? raw.app_metadata : {};
+    return {
+      id: String(raw.id || ""),
+      email: String(raw.email || ""),
+      role: typeof appMeta.role === "string" && appMeta.role ? appMeta.role : "Viewer",
+      created_at: raw.created_at || null,
+    };
+  }
+
+  async function readSupabaseUsers() {
+    const response = await callSupabase("/auth/v1/admin/users?per_page=200", { method: "GET" });
+    const payload = await response.json();
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        message: "Failed to load users from Supabase.",
+      };
+    }
+
+    const rawUsers = Array.isArray(payload?.users) ? payload.users : Array.isArray(payload) ? payload : [];
+    return { ok: true, users: rawUsers.map(mapSupabaseUser).filter(Boolean) };
+  }
+
+  function hasAdminUser(users) {
+    return Array.isArray(users) && users.some((user) => user && user.role === "Admin");
+  }
+
+  app.get("/api/admin/bootstrap/status", requireAuth, async (req, res) => {
+    try {
+      ensureSupabaseConfig();
+      const usersResult = await readSupabaseUsers();
+      if (!usersResult.ok) {
+        return res
+          .status(usersResult.status)
+          .json({ ok: false, message: usersResult.message || "Failed to load users." });
+      }
+
+      const hasAdmin = hasAdminUser(usersResult.users);
+      return res.json({
+        ok: true,
+        currentRole: req.auth.role || "Viewer",
+        hasAdmin,
+        canClaimAdmin: !hasAdmin,
+      });
+    } catch (error) {
+      return res.status(500).json({ ok: false, message: error.message || "Failed to load bootstrap status." });
+    }
+  });
+
+  app.post("/api/admin/bootstrap/claim", requireAuth, async (req, res) => {
+    try {
+      ensureSupabaseConfig();
+      const usersResult = await readSupabaseUsers();
+      if (!usersResult.ok) {
+        return res
+          .status(usersResult.status)
+          .json({ ok: false, message: usersResult.message || "Failed to load users." });
+      }
+
+      if (hasAdminUser(usersResult.users)) {
+        return res.status(409).json({
+          ok: false,
+          message: "Admin account already exists. Ask an existing admin to assign your role.",
+        });
+      }
+
+      const authUserId = String(req.auth?.userId || "").trim();
+      if (!authUserId) {
+        return res.status(400).json({
+          ok: false,
+          message: "Current session is not linked to a Supabase user id.",
+        });
+      }
+
+      const response = await callSupabase(`/auth/v1/admin/users/${encodeURIComponent(authUserId)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ app_metadata: { role: "Admin" } }),
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        return res.status(response.status).json({ ok: false, message: "Failed to claim admin role." });
+      }
+
+      const user = mapSupabaseUser(payload);
+      if (!user) {
+        return res.status(500).json({ ok: false, message: "Unexpected Supabase response." });
+      }
+
+      return res.json({
+        ok: true,
+        user,
+        message: "Admin role granted. Re-login may be required for UI role refresh.",
+      });
+    } catch (error) {
+      return res.status(500).json({ ok: false, message: error.message || "Failed to claim admin role." });
+    }
+  });
+
+  app.get("/api/admin/users", requireAuth, requireRole("Admin"), async (_req, res) => {
+    try {
+      ensureSupabaseConfig();
+      const usersResult = await readSupabaseUsers();
+      if (!usersResult.ok) {
+        return res
+          .status(usersResult.status)
+          .json({ ok: false, message: usersResult.message || "Failed to load users from Supabase." });
+      }
+      return res.json({ ok: true, users: usersResult.users });
+    } catch (error) {
+      return res.status(500).json({ ok: false, message: error.message || "Failed to load users" });
+    }
+  });
+
+  app.patch("/api/admin/users/:id/role", requireAuth, requireRole("Admin"), async (req, res) => {
+    const id = String(req.params.id || "").trim();
+    const role = typeof req.body?.role === "string" ? req.body.role.trim() : "";
+
+    if (!id) {
+      return res.status(400).json({ ok: false, message: "User id is required." });
+    }
+
+    if (!VALID_ROLES.has(role)) {
+      return res.status(400).json({ ok: false, message: "Role must be Admin, Publisher, or Viewer." });
+    }
+
+    try {
+      ensureSupabaseConfig();
+      const response = await callSupabase(`/auth/v1/admin/users/${encodeURIComponent(id)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ app_metadata: { role } }),
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        return res.status(response.status).json({ ok: false, message: "Failed to update role in Supabase." });
+      }
+
+      const user = mapSupabaseUser(payload);
+      if (!user) {
+        return res.status(500).json({ ok: false, message: "Unexpected Supabase response." });
+      }
+
+      return res.json({ ok: true, user });
+    } catch (error) {
+      return res.status(500).json({ ok: false, message: error.message || "Failed to update role" });
+    }
+  });
+
   app.get("/api/db-check", async (_req, res) => {
     try {
       const result = await dbPool.query("SELECT NOW() AS server_time");
@@ -837,4 +1035,6 @@ module.exports = {
   parseBearerToken,
   sanitizeObjectName,
   startServer,
+  VALID_ROLES: new Set(["Admin", "Publisher", "Viewer"]),
+  ASSIGNABLE_ROLES: ["Admin", "Publisher", "Viewer"],
 };

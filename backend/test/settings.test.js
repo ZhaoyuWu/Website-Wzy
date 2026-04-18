@@ -136,7 +136,7 @@ test("admin settings patch validates malformed input", async () => {
   const dbPool = {
     query: async () => ({
       rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("admin123456") }],
+      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
     }),
   };
   const ctx = await startTestServer({
@@ -171,7 +171,7 @@ test("admin settings patch rejects unsafe control chars and non-boolean visibili
   const dbPool = {
     query: async () => ({
       rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("admin123456") }],
+      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
     }),
   };
   const ctx = await startTestServer({
@@ -250,7 +250,7 @@ test("admin settings patch persists and public settings reflect updated values",
   const dbPool = {
     query: async () => ({
       rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("admin123456") }],
+      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
     }),
   };
 

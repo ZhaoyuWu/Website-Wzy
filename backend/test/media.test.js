@@ -124,7 +124,7 @@ test("upload endpoint rejects unsupported file type with readable message", asyn
   const dbPool = {
     query: async () => ({
       rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("admin123456") }],
+      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
     }),
   };
 
@@ -160,7 +160,7 @@ test("upload endpoint rejects inconsistent payload size", async () => {
   const dbPool = {
     query: async () => ({
       rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("admin123456") }],
+      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
     }),
   };
 
@@ -197,7 +197,7 @@ test("upload endpoint rejects oversize image with readable message", async () =>
   const dbPool = {
     query: async () => ({
       rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("admin123456") }],
+      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
     }),
   };
 
@@ -236,7 +236,7 @@ test("upload endpoint stores media in Supabase and writes metadata", async () =>
   const dbPool = {
     query: async () => ({
       rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("admin123456") }],
+      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
     }),
   };
 
@@ -303,7 +303,7 @@ test("metadata patch endpoint updates title/description through Supabase", async
   const dbPool = {
     query: async () => ({
       rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("admin123456") }],
+      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
     }),
   };
 
@@ -356,7 +356,7 @@ test("metadata patch endpoint rejects control characters in title", async () => 
   const dbPool = {
     query: async () => ({
       rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("admin123456") }],
+      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
     }),
   };
 

@@ -1,16 +1,22 @@
 import { Injectable } from '@angular/core';
-import { resolveApiBaseUrl } from './runtime-config';
+import { resolveApiBaseUrl, resolveSupabaseAnonKey, resolveSupabaseUrl } from './runtime-config';
 
 type SessionSnapshot = {
-  token: string;
-  username: string;
+  accessToken: string;
+  refreshToken: string;
+  tokenType: string;
+  userId: string;
+  email: string;
+  role: string;
   expiresAt: string;
 };
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly apiBaseUrl = resolveApiBaseUrl();
-  private readonly storageKey = 'nanami_admin_session';
+  private readonly supabaseUrl = resolveSupabaseUrl();
+  private readonly supabaseAnonKey = resolveSupabaseAnonKey();
+  private readonly storageKey = 'nanami_supabase_session';
 
   loginPayload: SessionSnapshot | null = null;
 
@@ -36,14 +42,31 @@ export class AuthService {
   }
 
   get username(): string | null {
-    return this.readSession()?.username ?? null;
+    return this.readSession()?.email ?? null;
   }
 
-  async login(username: string, password: string): Promise<void> {
-    const response = await fetch(`${this.apiBaseUrl}/api/auth/login`, {
+  get userRole(): string {
+    return this.readSession()?.role ?? 'Viewer';
+  }
+
+  get isAdmin(): boolean {
+    return this.userRole === 'Admin';
+  }
+
+  get isPublisherOrAdmin(): boolean {
+    const role = this.userRole;
+    return role === 'Admin' || role === 'Publisher';
+  }
+
+  async login(email: string, password: string): Promise<void> {
+    this.ensureSupabaseAuthConfig();
+    const response = await fetch(`${this.supabaseUrl}/auth/v1/token?grant_type=password`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: this.supabaseAnonKey
+      },
+      body: JSON.stringify({ email, password })
     });
 
     let payload: Record<string, unknown> = {};
@@ -57,28 +80,26 @@ export class AuthService {
       const message =
         typeof payload['message'] === 'string'
           ? payload['message']
-          : 'Login failed. Please try again.';
+          : 'Login failed. Please check your credentials.';
       throw new Error(message);
     }
 
-    const session: SessionSnapshot = {
-      token: String(payload['token'] ?? ''),
-      username: String(payload['username'] ?? ''),
-      expiresAt: String(payload['expiresAt'] ?? '')
-    };
-
-    if (!session.token || !session.username || !session.expiresAt) {
-      throw new Error('Login response is incomplete.');
-    }
-
-    this.writeSession(session);
+    this.writeSession(this.parseSupabaseSession(payload));
   }
 
   async register(username: string, email: string, password: string): Promise<void> {
-    const response = await fetch(`${this.apiBaseUrl}/api/auth/register`, {
+    this.ensureSupabaseAuthConfig();
+    const response = await fetch(`${this.supabaseUrl}/auth/v1/signup`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, email, password })
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: this.supabaseAnonKey
+      },
+      body: JSON.stringify({
+        email,
+        password,
+        data: { username }
+      })
     });
 
     let payload: Record<string, unknown> = {};
@@ -96,26 +117,19 @@ export class AuthService {
       throw new Error(message);
     }
 
-    const session: SessionSnapshot = {
-      token: String(payload['token'] ?? ''),
-      username: String(payload['username'] ?? ''),
-      expiresAt: String(payload['expiresAt'] ?? '')
-    };
-
-    if (!session.token || !session.username || !session.expiresAt) {
-      throw new Error('Registration response is incomplete.');
-    }
-
-    this.writeSession(session);
+    this.writeSession(this.parseSupabaseSession(payload));
   }
 
   async logout(): Promise<void> {
-    const token = this.getToken();
-    if (token) {
+    const accessToken = this.getToken();
+    if (accessToken && this.supabaseUrl && this.supabaseAnonKey) {
       try {
-        await fetch(`${this.apiBaseUrl}/api/auth/logout`, {
+        await fetch(`${this.supabaseUrl}/auth/v1/logout`, {
           method: 'POST',
-          headers: { Authorization: `Bearer ${token}` }
+          headers: {
+            apikey: this.supabaseAnonKey,
+            Authorization: `Bearer ${accessToken}`
+          }
         });
       } catch {
         // Ignore API errors and still clear local state.
@@ -126,7 +140,7 @@ export class AuthService {
   }
 
   getToken(): string | null {
-    return this.readSession()?.token ?? null;
+    return this.readSession()?.accessToken ?? null;
   }
 
   authHeaders(): HeadersInit {
@@ -137,6 +151,45 @@ export class AuthService {
   apiUrl(path: string): string {
     const cleanPath = path.startsWith('/') ? path : `/${path}`;
     return `${this.apiBaseUrl}${cleanPath}`;
+  }
+
+  private ensureSupabaseAuthConfig(): void {
+    if (!this.supabaseUrl || !this.supabaseAnonKey) {
+      throw new Error('Missing Supabase config. Set SUPABASE_URL and SUPABASE_ANON_KEY.');
+    }
+  }
+
+  private parseSupabaseSession(payload: Record<string, unknown>): SessionSnapshot {
+    const user =
+      payload['user'] && typeof payload['user'] === 'object'
+        ? (payload['user'] as Record<string, unknown>)
+        : {};
+    const appMetadata =
+      user['app_metadata'] && typeof user['app_metadata'] === 'object'
+        ? (user['app_metadata'] as Record<string, unknown>)
+        : {};
+    const expiresInRaw = Number(payload['expires_in'] ?? 0);
+    const expiresAt = new Date(
+      Date.now() + (Number.isFinite(expiresInRaw) && expiresInRaw > 0 ? expiresInRaw : 3600) * 1000
+    ).toISOString();
+
+    const session: SessionSnapshot = {
+      accessToken: String(payload['access_token'] ?? ''),
+      refreshToken: String(payload['refresh_token'] ?? ''),
+      tokenType: String(payload['token_type'] ?? 'bearer'),
+      userId: String(user['id'] ?? ''),
+      email: String(user['email'] ?? ''),
+      role: String(appMetadata['role'] ?? 'Viewer'),
+      expiresAt
+    };
+
+    if (!session.accessToken || !session.refreshToken || !session.email) {
+      throw new Error(
+        'Authentication succeeded, but no active session was returned. Check Supabase email confirmation settings.'
+      );
+    }
+
+    return session;
   }
 
   private isExpired(expiresAt: string): boolean {
