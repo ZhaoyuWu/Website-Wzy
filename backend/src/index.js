@@ -80,12 +80,12 @@ function normalizeMediaDescription(description) {
 
 function isValidMediaTitle(title) {
   const normalized = normalizeMediaTitle(title);
-  return normalized.length >= 1 && normalized.length <= 120;
+  return normalized.length >= 1 && normalized.length <= 120 && !hasUnsafeControlChars(normalized);
 }
 
 function isValidMediaDescription(description) {
   const normalized = normalizeMediaDescription(description);
-  return normalized.length <= 500;
+  return normalized.length <= 500 && !hasUnsafeControlChars(normalized);
 }
 
 function normalizeSettingText(value) {

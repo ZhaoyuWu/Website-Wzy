@@ -13,10 +13,28 @@ type MediaItem = {
   created_at?: string;
 };
 
+type SiteSettings = {
+  profileName: string;
+  heroTagline: string;
+  aboutText: string;
+  contactEmail: string;
+  showContactEmail: boolean;
+  updatedAt?: string | null;
+};
+
 const IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 const VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime']);
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
 const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
+
+const DEFAULT_SITE_SETTINGS: SiteSettings = {
+  profileName: 'Nanami',
+  heroTagline: 'Nanami, the sunshine of every walk.',
+  aboutText: "This page shares Nanami's personality, daily routine, and favorite places in a warm timeline style.",
+  contactEmail: '',
+  showContactEmail: false,
+  updatedAt: null
+};
 
 @Component({
   selector: 'app-admin-page',
@@ -41,6 +59,90 @@ const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
           <strong>{{ authCheckStatus }}</strong>
         </div>
         <p class="message" *ngIf="serverMessage">{{ serverMessage }}</p>
+      </section>
+
+      <section class="admin-card">
+        <h2>Information & Settings (T-005)</h2>
+        <p class="hint">Manage public profile text and contact preference shown on the homepage.</p>
+
+        <form class="form-grid" (ngSubmit)="saveSettings()">
+          <label>
+            <span>Profile Name</span>
+            <input
+              type="text"
+              [(ngModel)]="settingsForm.profileName"
+              name="profileName"
+              maxlength="80"
+              required
+              [disabled]="isSavingSettings || isLoadingSettings"
+            />
+          </label>
+
+          <label>
+            <span>Hero Tagline</span>
+            <input
+              type="text"
+              [(ngModel)]="settingsForm.heroTagline"
+              name="heroTagline"
+              maxlength="180"
+              required
+              [disabled]="isSavingSettings || isLoadingSettings"
+            />
+          </label>
+
+          <label>
+            <span>About Text</span>
+            <textarea
+              [(ngModel)]="settingsForm.aboutText"
+              name="aboutText"
+              maxlength="1200"
+              rows="4"
+              required
+              [disabled]="isSavingSettings || isLoadingSettings"
+            ></textarea>
+          </label>
+
+          <label>
+            <span>Contact Email (optional)</span>
+            <input
+              type="email"
+              [(ngModel)]="settingsForm.contactEmail"
+              name="contactEmail"
+              maxlength="120"
+              [disabled]="isSavingSettings || isLoadingSettings"
+            />
+          </label>
+
+          <label class="checkbox-label">
+            <input
+              type="checkbox"
+              [(ngModel)]="settingsForm.showContactEmail"
+              name="showContactEmail"
+              [disabled]="isSavingSettings || isLoadingSettings"
+            />
+            <span>Show contact email on homepage</span>
+          </label>
+
+          <p class="message" *ngIf="settingsForm.updatedAt">
+            Last updated: {{ formatDateTime(settingsForm.updatedAt) }}
+          </p>
+          <p class="error" *ngIf="settingsError">{{ settingsError }}</p>
+          <p class="success" *ngIf="settingsSuccess">{{ settingsSuccess }}</p>
+
+          <div class="row-actions">
+            <button type="submit" [disabled]="isSavingSettings || isLoadingSettings">
+              {{ isSavingSettings ? 'Saving...' : 'Save Settings' }}
+            </button>
+            <button
+              type="button"
+              class="secondary"
+              (click)="loadSettings()"
+              [disabled]="isSavingSettings || isLoadingSettings"
+            >
+              {{ isLoadingSettings ? 'Loading...' : 'Reload Settings' }}
+            </button>
+          </div>
+        </form>
       </section>
 
       <section class="admin-card">
@@ -317,6 +419,19 @@ const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
       flex-wrap: wrap;
     }
 
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 600;
+    }
+
+    .checkbox-label input {
+      width: 18px;
+      height: 18px;
+      margin: 0;
+    }
+
     .row-actions a {
       color: #1f6a49;
       text-decoration: none;
@@ -360,6 +475,12 @@ export class AdminPageComponent implements OnInit {
   isUploading = false;
   isSavingId: number | string | null = null;
 
+  settingsForm: SiteSettings = { ...DEFAULT_SITE_SETTINGS };
+  settingsError = '';
+  settingsSuccess = '';
+  isLoadingSettings = false;
+  isSavingSettings = false;
+
   async ngOnInit(): Promise<void> {
     try {
       const response = await fetch(this.auth.apiUrl('/api/admin/overview'), {
@@ -373,6 +494,7 @@ export class AdminPageComponent implements OnInit {
 
       this.authCheckStatus = 'Authenticated';
       this.serverMessage = payload.message || 'Admin API is reachable.';
+      await this.loadSettings();
       await this.loadMediaItems();
     } catch {
       this.authCheckStatus = 'Session expired or invalid';
@@ -562,6 +684,98 @@ export class AdminPageComponent implements OnInit {
     }
   }
 
+  async loadSettings(): Promise<void> {
+    this.isLoadingSettings = true;
+    this.settingsError = '';
+    this.settingsSuccess = '';
+
+    try {
+      const response = await fetch(this.auth.apiUrl('/api/admin/settings'), {
+        headers: this.auth.authHeaders()
+      });
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        message?: string;
+        settings?: Partial<SiteSettings>;
+      };
+
+      if (!response.ok || !payload.ok || !payload.settings) {
+        throw new Error(payload.message || 'Failed to load settings.');
+      }
+
+      this.settingsForm = this.mergeSettings(payload.settings);
+    } catch (error) {
+      this.settingsError = error instanceof Error ? error.message : 'Failed to load settings.';
+    } finally {
+      this.isLoadingSettings = false;
+    }
+  }
+
+  async saveSettings(): Promise<void> {
+    this.settingsError = '';
+    this.settingsSuccess = '';
+
+    const profileName = this.settingsForm.profileName.trim();
+    const heroTagline = this.settingsForm.heroTagline.trim();
+    const aboutText = this.settingsForm.aboutText.trim();
+    const contactEmail = this.settingsForm.contactEmail.trim().toLowerCase();
+
+    if (!profileName || profileName.length > 80) {
+      this.settingsError = 'Profile name must be 1-80 characters.';
+      return;
+    }
+
+    if (!heroTagline || heroTagline.length > 180) {
+      this.settingsError = 'Hero tagline must be 1-180 characters.';
+      return;
+    }
+
+    if (!aboutText || aboutText.length > 1200) {
+      this.settingsError = 'About text must be 1-1200 characters.';
+      return;
+    }
+
+    if (contactEmail && !this.isValidEmail(contactEmail)) {
+      this.settingsError = 'Contact email must be empty or a valid email address.';
+      return;
+    }
+
+    this.isSavingSettings = true;
+    try {
+      const response = await fetch(this.auth.apiUrl('/api/admin/settings'), {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...this.auth.authHeaders()
+        },
+        body: JSON.stringify({
+          profileName,
+          heroTagline,
+          aboutText,
+          contactEmail,
+          showContactEmail: Boolean(this.settingsForm.showContactEmail)
+        })
+      });
+
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        message?: string;
+        settings?: Partial<SiteSettings>;
+      };
+
+      if (!response.ok || !payload.ok || !payload.settings) {
+        throw new Error(payload.message || 'Failed to save settings.');
+      }
+
+      this.settingsForm = this.mergeSettings(payload.settings);
+      this.settingsSuccess = payload.message || 'Settings saved.';
+    } catch (error) {
+      this.settingsError = error instanceof Error ? error.message : 'Failed to save settings.';
+    } finally {
+      this.isSavingSettings = false;
+    }
+  }
+
   async logout(): Promise<void> {
     this.isLoggingOut = true;
     await this.auth.logout();
@@ -579,6 +793,14 @@ export class AdminPageComponent implements OnInit {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 
+  formatDateTime(rawDate: string): string {
+    const timestamp = Date.parse(rawDate);
+    if (Number.isNaN(timestamp)) {
+      return rawDate;
+    }
+    return new Date(timestamp).toLocaleString();
+  }
+
   private inferMediaType(mimeType: string): 'image' | 'video' | null {
     const normalized = String(mimeType || '').toLowerCase();
     if (IMAGE_MIME_TYPES.has(normalized)) {
@@ -588,6 +810,34 @@ export class AdminPageComponent implements OnInit {
       return 'video';
     }
     return null;
+  }
+
+  private isValidEmail(email: string): boolean {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  }
+
+  private mergeSettings(raw: Partial<SiteSettings>): SiteSettings {
+    return {
+      profileName: this.pickSafeText(raw.profileName, DEFAULT_SITE_SETTINGS.profileName, 80),
+      heroTagline: this.pickSafeText(raw.heroTagline, DEFAULT_SITE_SETTINGS.heroTagline, 180),
+      aboutText: this.pickSafeText(raw.aboutText, DEFAULT_SITE_SETTINGS.aboutText, 1200),
+      contactEmail: this.pickSafeText(raw.contactEmail, '', 120),
+      showContactEmail: Boolean(raw.showContactEmail),
+      updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : null
+    };
+  }
+
+  private pickSafeText(value: unknown, fallback: string, maxLength: number): string {
+    if (typeof value !== 'string') {
+      return fallback;
+    }
+
+    const normalized = value.trim();
+    if (!normalized || normalized.length > maxLength) {
+      return fallback;
+    }
+
+    return normalized;
   }
 
   private async fileToBase64(file: File): Promise<string> {

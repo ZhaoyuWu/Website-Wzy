@@ -1,6 +1,22 @@
 import { CommonModule } from '@angular/common';
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { RouterLink } from '@angular/router';
+
+type SiteSettings = {
+  profileName: string;
+  heroTagline: string;
+  aboutText: string;
+  contactEmail: string;
+  showContactEmail: boolean;
+};
+
+const DEFAULT_SITE_SETTINGS: SiteSettings = {
+  profileName: 'Nanami',
+  heroTagline: 'Nanami, the sunshine of every walk.',
+  aboutText: "This page shares Nanami's personality, daily routine, and favorite places in a warm timeline style.",
+  contactEmail: '',
+  showContactEmail: false
+};
 
 @Component({
   selector: 'app-home-page',
@@ -9,7 +25,7 @@ import { RouterLink } from '@angular/router';
   template: `
     <main class="home">
       <header class="top-nav">
-        <a class="brand" [routerLink]="['/']">Nanami Journal</a>
+        <a class="brand" [routerLink]="['/']">{{ settings.profileName }} Journal</a>
         <nav>
           <a [routerLink]="['/']" fragment="moments">Moments</a>
           <a [routerLink]="['/showcase']">Showcase</a>
@@ -21,17 +37,23 @@ import { RouterLink } from '@angular/router';
 
       <section class="hero">
         <p class="eyebrow">Public Homepage</p>
-        <h1>Nanami, the sunshine of every walk.</h1>
-        <p>
-          This page shares Nanami's personality, daily routine, and favorite places in a warm
-          timeline style.
-        </p>
+        <h1>{{ settings.heroTagline }}</h1>
+        <p>{{ settings.aboutText }}</p>
         <div class="hero-actions">
           <a class="primary" [routerLink]="['/']" fragment="moments">View Story Moments</a>
           <a class="secondary" [routerLink]="['/showcase']">Open Showcase</a>
           <a class="secondary" [routerLink]="['/register']">Create Account</a>
           <a class="secondary" [routerLink]="['/login']">Manage Content</a>
         </div>
+      </section>
+
+      <section class="profile-card">
+        <h2>About {{ settings.profileName }}</h2>
+        <p>{{ settings.aboutText }}</p>
+        <p class="contact" *ngIf="settings.showContactEmail && settings.contactEmail">
+          Contact: <a [href]="'mailto:' + settings.contactEmail">{{ settings.contactEmail }}</a>
+        </p>
+        <p class="message" *ngIf="settingsMessage">{{ settingsMessage }}</p>
       </section>
 
       <section id="moments" class="moments">
@@ -136,6 +158,36 @@ import { RouterLink } from '@angular/router';
       margin-top: 24px;
     }
 
+    .profile-card {
+      width: min(1100px, 100%);
+      margin: 16px auto 0;
+      border: 1px solid #dbe9f5;
+      border-radius: 16px;
+      background: #ffffffdb;
+      padding: 18px;
+    }
+
+    .profile-card h2 {
+      margin: 0;
+      color: #234564;
+    }
+
+    .profile-card p {
+      margin: 8px 0 0;
+      color: #3a5268;
+    }
+
+    .contact a {
+      color: #184f7f;
+      text-decoration: none;
+      font-weight: 700;
+    }
+
+    .message {
+      color: #5b6f84;
+      font-size: 14px;
+    }
+
     .hero-actions a {
       text-decoration: none;
       border-radius: 12px;
@@ -207,4 +259,54 @@ import { RouterLink } from '@angular/router';
     }
   `
 })
-export class HomePageComponent {}
+export class HomePageComponent implements OnInit {
+  settings: SiteSettings = { ...DEFAULT_SITE_SETTINGS };
+  settingsMessage = '';
+
+  async ngOnInit(): Promise<void> {
+    try {
+      const response = await fetch('http://localhost:4000/api/settings');
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        message?: string;
+        settings?: Partial<SiteSettings>;
+        source?: string;
+      };
+
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.message || 'Failed to load site settings.');
+      }
+
+      this.settings = this.mergeSettings(payload.settings);
+      this.settingsMessage =
+        payload.source === 'default' ? 'Using default site settings. Admin can customize this page.' : '';
+    } catch {
+      this.settings = { ...DEFAULT_SITE_SETTINGS };
+      this.settingsMessage = 'Unable to load custom settings right now. Showing default content.';
+    }
+  }
+
+  private mergeSettings(raw?: Partial<SiteSettings>): SiteSettings {
+    const source = raw || {};
+    return {
+      profileName: this.pickSafeText(source.profileName, DEFAULT_SITE_SETTINGS.profileName, 80),
+      heroTagline: this.pickSafeText(source.heroTagline, DEFAULT_SITE_SETTINGS.heroTagline, 180),
+      aboutText: this.pickSafeText(source.aboutText, DEFAULT_SITE_SETTINGS.aboutText, 1200),
+      contactEmail: this.pickSafeText(source.contactEmail, '', 120),
+      showContactEmail: Boolean(source.showContactEmail)
+    };
+  }
+
+  private pickSafeText(value: unknown, fallback: string, maxLength: number): string {
+    if (typeof value !== 'string') {
+      return fallback;
+    }
+
+    const normalized = value.trim();
+    if (!normalized || normalized.length > maxLength) {
+      return fallback;
+    }
+
+    return normalized;
+  }
+}

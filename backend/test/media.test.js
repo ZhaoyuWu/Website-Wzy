@@ -83,8 +83,10 @@ test("media helper validation behaves as expected", () => {
 
   assert.equal(isValidMediaTitle("   "), false);
   assert.equal(isValidMediaTitle("Nanami at the park"), true);
+  assert.equal(isValidMediaTitle("Bad\u0007Title"), false);
   assert.equal(isValidMediaDescription("x".repeat(500)), true);
   assert.equal(isValidMediaDescription("x".repeat(501)), false);
+  assert.equal(isValidMediaDescription("good\u0000bad"), false);
 
   assert.equal(parseBase64Payload("bad!@#"), null);
   assert.equal(parseBase64Payload(Buffer.from("hello").toString("base64")).toString("utf8"), "hello");
@@ -146,6 +148,80 @@ test("upload endpoint rejects unsupported file type with readable message", asyn
 
     assert.equal(response.status, 400);
     assert.match(String(payload.message || ""), /Unsupported file type/i);
+  } finally {
+    ctx.server.close();
+  }
+});
+
+test("upload endpoint rejects inconsistent payload size", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+
+  const dbPool = {
+    query: async () => ({
+      rowCount: 1,
+      rows: [{ username: "admin", password_hash: hashPassword("admin123456") }],
+    }),
+  };
+
+  const ctx = await startTestServer({ dbPool, fetchImpl: async () => new Response("[]", { status: 200 }) });
+  try {
+    const token = await loginAndGetToken(ctx.baseUrl);
+    const raw = Buffer.from("1234567890");
+
+    const { response, payload } = await postJson(
+      ctx.baseUrl,
+      "/api/admin/media",
+      {
+        title: "Nanami payload mismatch",
+        description: "bad payload",
+        fileName: "nanami.jpg",
+        fileType: "image/jpeg",
+        fileSize: raw.length + 100,
+        fileBase64: raw.toString("base64"),
+      },
+      { Authorization: `Bearer ${token}` }
+    );
+
+    assert.equal(response.status, 400);
+    assert.match(String(payload.message || ""), /payload is inconsistent/i);
+  } finally {
+    ctx.server.close();
+  }
+});
+
+test("upload endpoint rejects oversize image with readable message", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+
+  const dbPool = {
+    query: async () => ({
+      rowCount: 1,
+      rows: [{ username: "admin", password_hash: hashPassword("admin123456") }],
+    }),
+  };
+
+  const ctx = await startTestServer({ dbPool, fetchImpl: async () => new Response("[]", { status: 200 }) });
+  try {
+    const token = await loginAndGetToken(ctx.baseUrl);
+    const raw = Buffer.alloc(MAX_IMAGE_SIZE_BYTES + 1, 1);
+
+    const { response, payload } = await postJson(
+      ctx.baseUrl,
+      "/api/admin/media",
+      {
+        title: "Too large image",
+        description: "should fail",
+        fileName: "large.jpg",
+        fileType: "image/jpeg",
+        fileSize: raw.length,
+        fileBase64: raw.toString("base64"),
+      },
+      { Authorization: `Bearer ${token}` }
+    );
+
+    assert.equal(response.status, 400);
+    assert.match(String(payload.message || ""), /image file exceeds 10MB limit/i);
   } finally {
     ctx.server.close();
   }
@@ -267,6 +343,38 @@ test("metadata patch endpoint updates title/description through Supabase", async
     assert.equal(response.status, 200);
     assert.equal(payload.ok, true);
     assert.equal(payload.item.id, 9);
+  } finally {
+    ctx.server.close();
+  }
+});
+
+test("metadata patch endpoint rejects control characters in title", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+  process.env.SUPABASE_MEDIA_TABLE = "media_items";
+
+  const dbPool = {
+    query: async () => ({
+      rowCount: 1,
+      rows: [{ username: "admin", password_hash: hashPassword("admin123456") }],
+    }),
+  };
+
+  const ctx = await startTestServer({ dbPool, fetchImpl: async () => new Response("[]", { status: 200 }) });
+  try {
+    const token = await loginAndGetToken(ctx.baseUrl);
+
+    const { response, payload } = await patchJson(
+      ctx.baseUrl,
+      "/api/admin/media/9",
+      {
+        title: "Bad\u0007Title",
+      },
+      { Authorization: `Bearer ${token}` }
+    );
+
+    assert.equal(response.status, 400);
+    assert.match(String(payload.message || ""), /Title is required/i);
   } finally {
     ctx.server.close();
   }
