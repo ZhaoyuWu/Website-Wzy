@@ -1,5 +1,21 @@
 # Handover History
 
+## 2026-04-18 - Generator4 Task4 Audit and Public Handover
+- Type: public handover update (scoped)
+- Scope: generator4 `T-004` privilege management audit
+- Source docs:
+  - `handover/local/generator4-task4.md`
+  - `handover/local/evaluator.md`
+  - `handover/public.md`
+- Key outcomes:
+  - Completed evaluator audit for role enforcement chain.
+  - Added backend regression tests proving Viewer is forbidden for admin-restricted endpoints (`403`).
+  - Added backend regression test proving Admin is not blocked by role gate on admin settings path.
+  - Normalized generator4 local handover file encoding/content for readability and continuity.
+  - Validation passed: backend `32/32`, frontend runtime-config `5/5`, frontend CI tests pass.
+- Decision: continue
+- Next owner: release-owner
+
 ## 2026-04-18 - Generator1 Audit Remediation and Public Handover
 - Type: public handover update (scoped)
 - Scope: generator1 new modifications (`T-001` + role extensions) audit + blocker remediation

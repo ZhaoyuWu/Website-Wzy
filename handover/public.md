@@ -1,23 +1,22 @@
 ## Source Files
+- handover/local/generator4-task4.md
 - handover/local/generator.md
 - handover/local/evaluator.md
 
 ## Preconditions Check
-pass (scoped): evaluator blockers found and remediated for generator1 new changes.
+pass (scoped): no unresolved blocker for generator4 role-management audit.
 
 ## Shared Summary
-- Task focus: generator1 new auth/role delivery and regression impact on existing accepted features.
-- Evaluator detected and fixed blocker/high issues:
-  - restored governance baseline (task/principles contract files),
-  - removed hardcoded Supabase runtime secrets from frontend start script,
-  - added secure bootstrap-admin claim flow to prevent first-admin lockout,
-  - restored admin page functional scope so role management does not replace existing media/settings capabilities.
+- Task focus: generator4 `T-004` role-management delivery and enforcement audit.
+- Evaluator verified role-based access behavior and added direct regression tests:
+  - Viewer receives `403` on admin-restricted endpoints.
+  - Admin passes role gate for admin settings path.
+- Generator4 local handover encoding/content was normalized to prevent continuity break.
 - Verified evidence:
-  - `backend npm test`: `30/30` pass
+  - `backend npm test`: `32/32` pass
   - `frontend npm run test:runtime-config`: `5/5` pass
   - `frontend npm run test:ci`: pass (`runtime-config + 27 Angular tests`)
-  - `frontend npm run build`: pass
-- Scope note: this handover is a scoped evaluator remediation pass over generator1 changes and does not replace environment-specific production smoke verification.
+- Scope note: this handover is scoped to generator4/T-004 audit and does not replace environment-specific production smoke verification.
 
 ## Final Status
 done (scoped)
