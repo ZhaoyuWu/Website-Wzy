@@ -98,4 +98,9 @@ describe('runtime-config', () => {
     expect(resolveSupabaseUrl()).toBe('https://storage.supabase.co');
     expect(resolveSupabaseAnonKey()).toBe('storage-anon-key');
   });
+
+  it('returns empty supabase config when no runtime value exists', () => {
+    expect(resolveSupabaseUrl()).toBe('');
+    expect(resolveSupabaseAnonKey()).toBe('');
+  });
 });

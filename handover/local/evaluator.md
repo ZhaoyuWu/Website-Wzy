@@ -30,3 +30,19 @@ continue
 ## Follow-up Actions
 - Publish generator5 scoped public handover and history entry.
 - Run post-deploy smoke on role matrix: Viewer, Publisher, Admin.
+
+## 2026-04-18 Addendum - Runtime Supabase Fallback Safety Fix (Scoped)
+
+## Summary Written
+- Addressed evaluator risk/remediation conflict: avoid repository hardcoded runtime auth config while preventing local runtime `Missing Supabase config` breakage.
+- Implemented build-time strategy in runtime-config writer:
+  - development: auto-fallback to known local Supabase project values,
+  - production: fail fast when `NANAMI_SUPABASE_URL` / `NANAMI_SUPABASE_ANON_KEY` are missing.
+- Removed hardcoded Supabase args from npm `config:runtime` script and kept runtime source-of-truth in generated runtime config.
+
+## Validation Evidence
+- `npm.cmd run test:runtime-config` (frontend): passed (`7 passed, 0 failed`).
+- `npm.cmd run test:ci` (frontend): passed (`runtime-config + 28 Angular tests`).
+
+## Decision
+continue

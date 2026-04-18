@@ -25,3 +25,34 @@ done (scoped)
 
 ## Next Owner
 release-owner
+
+---
+
+## 2026-04-18 Scoped Update - Runtime Supabase Config Safety
+
+## Source Files
+- frontend/scripts/write-runtime-config.mjs
+- frontend/scripts/write-runtime-config.test.mjs
+- frontend/src/app/core/runtime-config.spec.ts
+- frontend/package.json
+- frontend/public/runtime-config.js
+- handover/local/evaluator.md
+
+## Preconditions Check
+pass (scoped): requested fix must preserve local functionality and avoid unsafe hardcoded config policy drift.
+
+## Shared Summary
+- Fixed the Supabase config regression path with a dual-mode policy:
+  - development builds auto-populate runtime config fallback values to prevent local login/runtime breakage,
+  - production builds require explicit `NANAMI_SUPABASE_URL` and `NANAMI_SUPABASE_ANON_KEY` and fail fast when missing.
+- Removed hardcoded Supabase CLI args from `frontend/package.json` `config:runtime` so repository script no longer pins project credentials.
+- Expanded runtime-config tests to verify both development fallback and production mandatory-config guardrails.
+- Validation passed:
+  - `frontend npm run test:runtime-config`: `7/7` pass
+  - `frontend npm run test:ci`: pass (`runtime-config + 28 Angular tests`)
+
+## Final Status
+done (scoped)
+
+## Next Owner
+release-owner

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { resolveApiBaseUrl, writeRuntimeConfig } from './write-runtime-config.mjs';
+import { resolveApiBaseUrl, resolveSupabaseConfig, writeRuntimeConfig } from './write-runtime-config.mjs';
 
 function runCase(name, fn) {
   try {
@@ -53,6 +53,28 @@ runCase('rejects non-http api base url values', () => {
         nodeEnv: 'development'
       }),
     /Invalid API base URL/
+  );
+});
+
+runCase('uses development supabase fallback when config is missing', () => {
+  const config = resolveSupabaseConfig({
+    argv: ['node', 'write-runtime-config.mjs'],
+    env: { NANAMI_SUPABASE_URL: '', NANAMI_SUPABASE_ANON_KEY: '' },
+    nodeEnv: 'development'
+  });
+  assert.equal(config.supabaseUrl, 'https://pltveorkgsxfccyuwidk.supabase.co');
+  assert.equal(config.supabaseAnonKey, 'sb_publishable_ESrIEMrD1MFDAe_0rJ93Hw_2UNRaxJS');
+});
+
+runCase('fails in production when supabase config is missing', () => {
+  assert.throws(
+    () =>
+      resolveSupabaseConfig({
+        argv: ['node', 'write-runtime-config.mjs'],
+        env: { NANAMI_SUPABASE_URL: '', NANAMI_SUPABASE_ANON_KEY: '' },
+        nodeEnv: 'production'
+      }),
+    /Missing Supabase config for production build/
   );
 });
 

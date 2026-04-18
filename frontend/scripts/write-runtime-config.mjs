@@ -3,6 +3,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const DEFAULT_API_BASE_URL = 'http://localhost:4000';
+const DEFAULT_DEV_SUPABASE_URL = 'https://pltveorkgsxfccyuwidk.supabase.co';
+const DEFAULT_DEV_SUPABASE_ANON_KEY = 'sb_publishable_ESrIEMrD1MFDAe_0rJ93Hw_2UNRaxJS';
 
 export function readArgApiBaseUrl(argv = process.argv) {
   const match = argv.find((arg) => arg.startsWith('--api-base-url='));
@@ -66,6 +68,30 @@ function pickSupabaseAnonKey(argv = process.argv, env = process.env) {
   return fromEnv;
 }
 
+export function resolveSupabaseConfig({
+  argv = process.argv,
+  env = process.env,
+  nodeEnv = process.env.NODE_ENV
+} = {}) {
+  const supabaseUrl = normalizeBaseUrl(pickSupabaseUrl(argv, env));
+  const supabaseAnonKey = pickSupabaseAnonKey(argv, env);
+
+  if (supabaseUrl && supabaseAnonKey) {
+    return { supabaseUrl, supabaseAnonKey };
+  }
+
+  if (nodeEnv === 'production') {
+    throw new Error(
+      'Missing Supabase config for production build. Set NANAMI_SUPABASE_URL and NANAMI_SUPABASE_ANON_KEY.'
+    );
+  }
+
+  return {
+    supabaseUrl: DEFAULT_DEV_SUPABASE_URL,
+    supabaseAnonKey: DEFAULT_DEV_SUPABASE_ANON_KEY
+  };
+}
+
 function ensureHttpUrl(url) {
   try {
     const parsed = new URL(url);
@@ -116,8 +142,7 @@ export function writeRuntimeConfig(options = {}) {
   const apiBaseUrl = resolveApiBaseUrl(options);
   const cwd = options.cwd || process.cwd();
   const outputPath = path.join(cwd, 'public', 'runtime-config.js');
-  const supabaseUrl = normalizeBaseUrl(pickSupabaseUrl(options.argv, options.env));
-  const supabaseAnonKey = pickSupabaseAnonKey(options.argv, options.env);
+  const { supabaseUrl, supabaseAnonKey } = resolveSupabaseConfig(options);
   const fileContent = buildRuntimeConfigContent({ apiBaseUrl, supabaseUrl, supabaseAnonKey });
   fs.writeFileSync(outputPath, fileContent, 'utf8');
   return apiBaseUrl;

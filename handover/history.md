@@ -1,5 +1,20 @@
 # Handover History
 
+## 2026-04-18 - Runtime Supabase Fallback Safety Fix (Scoped)
+- Type: public handover update (scoped)
+- Scope: frontend runtime-config safety remediation after evaluator follow-up
+- Source docs:
+  - `handover/local/evaluator.md`
+  - `handover/public.md`
+- Key outcomes:
+  - Replaced repository hardcoded runtime Supabase script values with runtime-config writer policy.
+  - Added development-only fallback for Supabase runtime config to avoid local `Missing Supabase config` breakage.
+  - Enforced production fail-fast when `NANAMI_SUPABASE_URL` / `NANAMI_SUPABASE_ANON_KEY` are missing.
+  - Expanded runtime-config tests to cover development fallback and production mandatory-config behavior.
+  - Validation passed: frontend runtime-config `7/7`, frontend CI tests pass (`28/28` Angular tests).
+- Decision: continue
+- Next owner: release-owner
+
 ## 2026-04-18 - Generator5 Task5 Audit and Public Handover
 - Type: public handover update (scoped)
 - Scope: generator5 `T-005` settings/info audit + regression remediation
