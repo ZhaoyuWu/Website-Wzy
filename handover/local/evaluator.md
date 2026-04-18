@@ -5,19 +5,19 @@ auditor
 handover/local/evaluator.md
 
 ## Summary Written
-- Completed scoped evaluator audit for generator4 delivery (`T-004` role and privilege management).
-- Re-validated role enforcement chain after prior remediation:
-  - Viewer is denied admin-restricted APIs,
-  - Admin role passes settings role-gate path.
-- Cleaned generator4 local handover document encoding and normalized content for continuity.
+- Completed scoped evaluator audit for generator5 delivery (`T-005` settings/info path + role route gating).
+- Found and remediated two issues during audit:
+  - Frontend home-page logic tests failed after `inject()` usage change; tests were updated to run in Angular injection context.
+  - Local dev runtime script reintroduced hardcoded Supabase values; restored env/runtime-config driven behavior (no hardcoded project values in `package.json`).
+- Normalized generator5 local handover document encoding/content for continuity.
 
 ## Validation Evidence
 - `npm.cmd test` (backend): passed (`32 passed, 0 failed`).
 - `npm.cmd run test:runtime-config` (frontend): passed (`5 passed, 0 failed`).
 - `npm.cmd run test:ci` (frontend): passed (`runtime-config tests + 27 Angular tests`).
-- Added/verified role-gate tests in backend auth suite:
-  - Viewer receives `403` for admin-restricted endpoints.
-  - Admin is not blocked by role gate for admin settings path.
+- `npm.cmd run build` (frontend): passed.
+- Verified generator5 route-gate intent:
+  - `/admin` uses `roleGuard('Admin', 'Publisher')`.
 
 ## Unresolved Risks
 - Backend still relies on valid `SUPABASE_SERVICE_ROLE_KEY`; missing/invalid secret breaks admin media/settings/user-role operations.
@@ -28,5 +28,5 @@ handover/local/evaluator.md
 continue
 
 ## Follow-up Actions
-- Publish generator4 scoped public handover and history entry.
+- Publish generator5 scoped public handover and history entry.
 - Run post-deploy smoke on role matrix: Viewer, Publisher, Admin.

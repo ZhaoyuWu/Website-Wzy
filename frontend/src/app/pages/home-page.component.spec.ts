@@ -1,4 +1,7 @@
 import { HomePageComponent } from './home-page.component';
+import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
+import { AuthService } from '../core/auth.service';
 
 describe('HomePageComponent logic (T-005)', () => {
   let originalFetch: typeof fetch;
@@ -10,6 +13,20 @@ describe('HomePageComponent logic (T-005)', () => {
     originalWindowFetch = window.fetch;
     originalRuntimeConfig = window.__NANAMI_APP_CONFIG__;
     window.__NANAMI_APP_CONFIG__ = undefined;
+
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        {
+          provide: AuthService,
+          useValue: {
+            isAuthenticated: false,
+            isPublisherOrAdmin: false,
+            logout: async () => undefined
+          }
+        }
+      ]
+    });
   });
 
   afterEach(() => {
@@ -39,7 +56,7 @@ describe('HomePageComponent logic (T-005)', () => {
     globalThis.fetch = mockedFetch;
     window.fetch = mockedFetch;
 
-    const component = new HomePageComponent();
+    const component = TestBed.runInInjectionContext(() => new HomePageComponent());
     await component.ngOnInit();
 
     expect(component.settings.profileName).toBe('Nanami Star');
@@ -54,7 +71,7 @@ describe('HomePageComponent logic (T-005)', () => {
     globalThis.fetch = mockedFetch;
     window.fetch = mockedFetch;
 
-    const component = new HomePageComponent();
+    const component = TestBed.runInInjectionContext(() => new HomePageComponent());
     await component.ngOnInit();
 
     expect(component.settings.profileName).toBe('Nanami');
@@ -74,7 +91,7 @@ describe('HomePageComponent logic (T-005)', () => {
     globalThis.fetch = mockedFetch;
     window.fetch = mockedFetch;
 
-    const component = new HomePageComponent();
+    const component = TestBed.runInInjectionContext(() => new HomePageComponent());
     await component.ngOnInit();
 
     expect(calledUrl).toBe('https://api.nanami.test/api/settings');

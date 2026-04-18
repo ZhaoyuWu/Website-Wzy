@@ -1,5 +1,21 @@
 # Handover History
 
+## 2026-04-18 - Generator5 Task5 Audit and Public Handover
+- Type: public handover update (scoped)
+- Scope: generator5 `T-005` settings/info audit + regression remediation
+- Source docs:
+  - `handover/local/generator5-task5.md`
+  - `handover/local/evaluator.md`
+  - `handover/public.md`
+- Key outcomes:
+  - Completed evaluator audit for generator5 T-005 delivery.
+  - Fixed frontend spec regression caused by `inject()` context requirement in `home-page.component.spec.ts`.
+  - Removed reintroduced hardcoded Supabase values from frontend local runtime script.
+  - Confirmed role-gated `/admin` behavior and full regression suite health.
+  - Validation passed: backend `32/32`, frontend runtime-config `5/5`, frontend CI tests pass, frontend build pass.
+- Decision: continue
+- Next owner: release-owner
+
 ## 2026-04-18 - Generator4 Task4 Audit and Public Handover
 - Type: public handover update (scoped)
 - Scope: generator4 `T-004` privilege management audit

@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Component, OnInit, inject } from '@angular/core';
+import { Router, RouterLink } from '@angular/router';
+import { AuthService } from '../core/auth.service';
 import { resolveApiBaseUrl } from '../core/runtime-config';
 
 type SiteSettings = {
@@ -30,9 +31,16 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
         <nav>
           <a [routerLink]="['/']" fragment="moments">Moments</a>
           <a [routerLink]="['/showcase']">Showcase</a>
-          <a [routerLink]="['/register']">Register</a>
-          <a [routerLink]="['/login']">Login</a>
-          <a [routerLink]="['/admin']">Member Console</a>
+          <ng-container *ngIf="!auth.isAuthenticated">
+            <a [routerLink]="['/register']">Register</a>
+            <a [routerLink]="['/login']">Login</a>
+          </ng-container>
+          <ng-container *ngIf="auth.isAuthenticated">
+            <a *ngIf="auth.isPublisherOrAdmin" [routerLink]="['/admin']">Admin</a>
+            <button type="button" class="nav-logout" (click)="logout()" [disabled]="isLoggingOut">
+              {{ isLoggingOut ? '...' : 'Logout' }}
+            </button>
+          </ng-container>
         </nav>
       </header>
 
@@ -43,8 +51,11 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
         <div class="hero-actions">
           <a class="primary" [routerLink]="['/']" fragment="moments">View Story Moments</a>
           <a class="secondary" [routerLink]="['/showcase']">Open Showcase</a>
-          <a class="secondary" [routerLink]="['/register']">Create Account</a>
-          <a class="secondary" [routerLink]="['/login']">Member Login</a>
+          <ng-container *ngIf="!auth.isAuthenticated">
+            <a class="secondary" [routerLink]="['/register']">Create Account</a>
+            <a class="secondary" [routerLink]="['/login']">Member Login</a>
+          </ng-container>
+          <a *ngIf="auth.isPublisherOrAdmin" class="secondary" [routerLink]="['/admin']">Admin Panel</a>
         </div>
       </section>
 
@@ -107,7 +118,8 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
       justify-content: flex-end;
     }
 
-    nav a {
+    nav a,
+    .nav-logout {
       color: #5f412b;
       text-decoration: none;
       border: 1px solid #e4ccb8;
@@ -116,7 +128,11 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
       background: rgba(255, 255, 255, 0.78);
       font-size: 14px;
       font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
     }
+
+    .nav-logout:disabled { opacity: 0.6; cursor: not-allowed; }
 
     .hero {
       width: min(1100px, 100%);
@@ -285,9 +301,19 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
   `
 })
 export class HomePageComponent implements OnInit {
+  readonly auth = inject(AuthService);
+  private readonly router = inject(Router);
   private readonly apiBaseUrl = resolveApiBaseUrl();
   settings: SiteSettings = { ...DEFAULT_SITE_SETTINGS };
   settingsMessage = '';
+  isLoggingOut = false;
+
+  async logout(): Promise<void> {
+    this.isLoggingOut = true;
+    await this.auth.logout();
+    await this.router.navigate(['/login']);
+    this.isLoggingOut = false;
+  }
 
   async ngOnInit(): Promise<void> {
     try {
