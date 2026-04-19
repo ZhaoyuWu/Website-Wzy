@@ -35,23 +35,33 @@ describe('HomePageComponent logic (T-005)', () => {
     window.__NANAMI_APP_CONFIG__ = originalRuntimeConfig;
   });
 
+  function emptyTimelineResponse(): Response {
+    return new Response(
+      JSON.stringify({ ok: true, items: [], total: 0, page: 1, pageSize: 20, totalPages: 1 }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+
   it('loads public settings and applies them to page state', async () => {
     const mockedFetch: typeof fetch = async (input: RequestInfo | URL) => {
-      expect(String(input)).toContain('/api/settings');
-      return new Response(
-        JSON.stringify({
-          ok: true,
-          source: 'supabase',
-          settings: {
-            profileName: 'Nanami Star',
-            heroTagline: 'Joy on every walk',
-            aboutText: 'Nanami likes morning runs and calm evenings.',
-            contactEmail: 'hello@nanami.test',
-            showContactEmail: true
-          }
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
-      );
+      const url = String(input);
+      if (url.includes('/api/settings')) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            source: 'supabase',
+            settings: {
+              profileName: 'Nanami Star',
+              heroTagline: 'Joy on every walk',
+              aboutText: 'Nanami likes morning runs and calm evenings.',
+              contactEmail: 'hello@nanami.test',
+              showContactEmail: true
+            }
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      return emptyTimelineResponse();
     };
     globalThis.fetch = mockedFetch;
     window.fetch = mockedFetch;
@@ -66,8 +76,12 @@ describe('HomePageComponent logic (T-005)', () => {
   });
 
   it('falls back to defaults when settings request fails', async () => {
-    const mockedFetch: typeof fetch = async () => {
-      throw new Error('network down');
+    const mockedFetch: typeof fetch = async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/settings')) {
+        throw new Error('network down');
+      }
+      return emptyTimelineResponse();
     };
     globalThis.fetch = mockedFetch;
     window.fetch = mockedFetch;
@@ -82,13 +96,17 @@ describe('HomePageComponent logic (T-005)', () => {
 
   it('uses runtime API base URL for settings request', async () => {
     window.__NANAMI_APP_CONFIG__ = { apiBaseUrl: 'https://api.nanami.test/' };
-    let calledUrl = '';
+    const settingsUrls: string[] = [];
     const mockedFetch: typeof fetch = async (input: RequestInfo | URL) => {
-      calledUrl = String(input);
-      return new Response(
-        JSON.stringify({ ok: true, source: 'default', settings: {} }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
-      );
+      const url = String(input);
+      if (url.includes('/api/settings')) {
+        settingsUrls.push(url);
+        return new Response(
+          JSON.stringify({ ok: true, source: 'default', settings: {} }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      return emptyTimelineResponse();
     };
     globalThis.fetch = mockedFetch;
     window.fetch = mockedFetch;
@@ -97,7 +115,7 @@ describe('HomePageComponent logic (T-005)', () => {
     const component = fixture.componentInstance;
     await component.ngOnInit();
 
-    expect(calledUrl).toBe('https://api.nanami.test/api/settings');
+    expect(settingsUrls).toContain('https://api.nanami.test/api/settings');
   });
 });
 

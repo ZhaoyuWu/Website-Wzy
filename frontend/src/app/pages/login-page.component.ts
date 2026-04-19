@@ -3,26 +3,31 @@ import { ChangeDetectorRef, Component, ViewRef, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AuthService } from '../core/auth.service';
+import { I18nService } from '../core/i18n.service';
+import { LanguagePickerComponent } from '../components/language-picker.component';
 
 @Component({
   selector: 'app-login-page',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink],
+  imports: [CommonModule, ReactiveFormsModule, RouterLink, LanguagePickerComponent],
   template: `
     <main class="auth-layout">
       <section class="auth-card">
-        <p class="eyebrow">Nanami Admin</p>
-        <h1>Login</h1>
-        <p class="subtitle">Sign in with your Supabase account to access protected pages.</p>
+        <div class="card-head">
+          <p class="eyebrow">{{ i18n.t('login.eyebrow') }}</p>
+          <app-language-picker></app-language-picker>
+        </div>
+        <h1>{{ i18n.t('login.heading') }}</h1>
+        <p class="subtitle">{{ i18n.t('login.subtitle') }}</p>
 
         <form [formGroup]="form" (ngSubmit)="onSubmit()" novalidate>
-          <label for="email">Email</label>
+          <label for="email">{{ i18n.t('login.field.email') }}</label>
           <input id="email" type="email" formControlName="email" autocomplete="email" />
           <p class="field-error" *ngIf="showError('email')">
-            Please enter a valid email address.
+            {{ i18n.t('login.error.email') }}
           </p>
 
-          <label for="password">Password</label>
+          <label for="password">{{ i18n.t('login.field.password') }}</label>
           <input
             id="password"
             type="password"
@@ -30,21 +35,21 @@ import { AuthService } from '../core/auth.service';
             autocomplete="current-password"
           />
           <p class="field-error" *ngIf="showError('password')">
-            Password must be at least 8 characters.
+            {{ i18n.t('login.error.password') }}
           </p>
 
           <p class="status-error" *ngIf="submitError">{{ submitError }}</p>
 
           <button type="submit" [disabled]="isSubmitting">
-            {{ isSubmitting ? 'Signing in...' : 'Sign in' }}
+            {{ isSubmitting ? i18n.t('login.submitting') : i18n.t('login.submit') }}
           </button>
         </form>
 
         <p class="hint">
-          Visit the public homepage to continue browsing Nanami stories.
-          <a [routerLink]="['/']">Go to homepage</a>
+          {{ i18n.t('login.footer.text') }}
+          <a [routerLink]="['/']">{{ i18n.t('login.footer.homeLink') }}</a>
           <span class="divider">|</span>
-          <a [routerLink]="['/register']">Create account</a>
+          <a [routerLink]="['/register']">{{ i18n.t('login.footer.register') }}</a>
         </p>
       </section>
     </main>
@@ -55,39 +60,43 @@ import { AuthService } from '../core/auth.service';
       display: grid;
       place-items: center;
       padding: 24px;
-      background:
-        radial-gradient(circle at 10% 20%, var(--fx-login-warm-glow), transparent 48%),
-        radial-gradient(circle at 85% 80%, var(--fx-login-cool-glow), transparent 40%),
-        linear-gradient(160deg, var(--clr-fff5ea) 0%, var(--clr-f7fbff) 100%);
+      background: var(--color-app-bg);
     }
 
     .auth-card {
       width: min(420px, 100%);
-      background: var(--color-surface);
+      background: var(--color-paper);
       border-radius: 18px;
-      border: 1px solid var(--clr-ecd8c5);
+      border: 2px solid var(--color-ink);
       padding: 28px;
-      box-shadow: 0 20px 45px var(--fx-shadow-auth);
+      box-shadow: 6px 6px 0 var(--color-ink);
+    }
+
+    .card-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
     }
 
     .eyebrow {
       margin: 0;
-      color: var(--clr-885935);
+      color: var(--color-ink);
       font-size: 12px;
       text-transform: uppercase;
-      letter-spacing: 0.09em;
-      font-weight: 700;
+      letter-spacing: 0.12em;
+      font-weight: 800;
     }
 
     h1 {
       margin: 8px 0 0;
-      color: var(--clr-372217);
+      color: var(--color-ink);
       font-size: 30px;
     }
 
     .subtitle {
       margin: 10px 0 18px;
-      color: var(--color-text-muted);
+      color: var(--color-ink-muted);
     }
 
     form {
@@ -98,39 +107,38 @@ import { AuthService } from '../core/auth.service';
     label {
       margin-top: 8px;
       font-weight: 600;
-      color: var(--clr-4b3020);
+      color: var(--color-ink-soft);
     }
 
     input {
       height: 42px;
-      border: 1px solid var(--clr-dbc5b3);
+      border: 1.5px solid var(--color-ink);
       border-radius: 10px;
       padding: 0 12px;
       font-size: 15px;
-      background: var(--clr-fffdfb);
+      background: var(--color-paper);
     }
 
     input:focus {
-      outline: 2px solid var(--clr-f3b88b);
-      border-color: var(--clr-d88f58);
+      outline: 2px solid var(--color-accent);
       outline-offset: 1px;
     }
 
     button {
       margin-top: 12px;
       height: 44px;
-      border: 0;
+      border: 1.5px solid var(--color-ink);
       border-radius: 10px;
       font-size: 15px;
       font-weight: 700;
-      color: var(--color-surface);
-      background: linear-gradient(90deg, var(--clr-cc6f2d) 0%, var(--clr-d98d53) 100%);
+      color: var(--color-ink);
+      background: var(--color-accent);
       cursor: pointer;
     }
 
     button[disabled] {
       cursor: not-allowed;
-      opacity: 0.75;
+      opacity: 0.55;
     }
 
     .field-error,
@@ -171,6 +179,7 @@ import { AuthService } from '../core/auth.service';
 export class LoginPageComponent {
   private readonly fb = inject(FormBuilder);
   private readonly auth = inject(AuthService);
+  readonly i18n = inject(I18nService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly cdr = inject(ChangeDetectorRef);
@@ -209,7 +218,7 @@ export class LoginPageComponent {
       await this.router.navigateByUrl(redirect);
     } catch (error) {
       this.submitError =
-        error instanceof Error ? error.message : 'Unable to login at the moment.';
+        error instanceof Error ? error.message : this.i18n.t('login.error.generic');
     } finally {
       this.isSubmitting = false;
       this.safeDetectChanges();

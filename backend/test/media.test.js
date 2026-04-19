@@ -138,6 +138,7 @@ test("upload endpoint rejects unsupported file type with readable message", asyn
       {
         title: "Bad file",
         description: "invalid type",
+        displayDate: "2026-04-19",
         fileName: "doc.pdf",
         fileType: "application/pdf",
         fileSize: 10,
@@ -175,6 +176,7 @@ test("upload endpoint rejects inconsistent payload size", async () => {
       {
         title: "Nanami payload mismatch",
         description: "bad payload",
+        displayDate: "2026-04-19",
         fileName: "nanami.jpg",
         fileType: "image/jpeg",
         fileSize: raw.length + 100,
@@ -212,6 +214,7 @@ test("upload endpoint rejects oversize image with readable message", async () =>
       {
         title: "Too large image",
         description: "should fail",
+        displayDate: "2026-04-19",
         fileName: "large.jpg",
         fileType: "image/jpeg",
         fileSize: raw.length,
@@ -277,6 +280,7 @@ test("upload endpoint stores media in Supabase and writes metadata", async () =>
       {
         title: "Nanami Running",
         description: "At the field",
+        displayDate: "2026-04-19",
         fileName: "nanami.jpg",
         fileType: "image/jpeg",
         fileSize: buffer.length,
@@ -380,40 +384,349 @@ test("metadata patch endpoint rejects control characters in title", async () => 
   }
 });
 
-test("public showcase endpoint returns media list without authentication", async () => {
+test("public story timeline endpoint merges media and text entries newest-first", async () => {
   process.env.SUPABASE_URL = "https://example.supabase.co";
   process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
   process.env.SUPABASE_MEDIA_TABLE = "media_items";
 
   const fetchImpl = async (url) => {
-    if (String(url).includes("/rest/v1/media_items")) {
+    const urlText = String(url);
+    if (urlText.includes("/rest/v1/media_items")) {
       return new Response(
         JSON.stringify([
           {
             id: 1,
-            title: "Nanami Public",
-            description: "Visible on showcase",
+            title: "Older Image",
+            description: "Sunrise",
             media_type: "image",
-            public_url: "https://example.supabase.co/storage/v1/object/public/media/nanami.jpg",
-            created_at: new Date().toISOString(),
+            public_url: "https://example.supabase.co/storage/v1/object/public/media/a.jpg",
+            likes_count: 2,
+            created_at: "2026-04-01T10:00:00Z",
           },
         ]),
         { status: 200, headers: { "Content-Type": "application/json" } }
       );
     }
-    return new Response(JSON.stringify([]), { status: 200, headers: { "Content-Type": "application/json" } });
+    if (urlText.includes("/rest/v1/story_posts")) {
+      return new Response(
+        JSON.stringify([
+          {
+            id: 10,
+            title: "Newest Text",
+            body: "Hello world",
+            likes_count: 4,
+            created_at: "2026-04-19T11:00:00Z",
+          },
+        ]),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    return new Response(JSON.stringify([]), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
   };
 
   const ctx = await startTestServer({ fetchImpl });
   try {
-    const response = await fetch(`${ctx.baseUrl}/api/showcase/media?limit=24`);
+    const response = await fetch(`${ctx.baseUrl}/api/story/timeline?page=1`);
     const payload = await response.json();
 
     assert.equal(response.status, 200);
     assert.equal(payload.ok, true);
-    assert.equal(Array.isArray(payload.items), true);
-    assert.equal(payload.items.length, 1);
-    assert.equal(payload.items[0].title, "Nanami Public");
+    assert.equal(payload.items.length, 2);
+    assert.equal(payload.items[0].type, "text");
+    assert.equal(payload.items[0].title, "Newest Text");
+    assert.equal(payload.items[1].type, "image");
+    assert.equal(payload.items[1].title, "Older Image");
+    assert.equal(payload.pageSize, 20);
+    assert.equal(payload.page, 1);
+    assert.equal(payload.totalPages, 1);
+  } finally {
+    ctx.server.close();
+  }
+});
+
+test("story like endpoint routes media and text to their RPCs and returns new count", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+
+  const calls = [];
+  const fetchImpl = async (url, init = {}) => {
+    const urlText = String(url);
+    calls.push({ url: urlText, method: init.method || "GET" });
+    if (urlText.endsWith("/rest/v1/rpc/increment_media_likes")) {
+      return new Response("6", { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    if (urlText.endsWith("/rest/v1/rpc/decrement_story_post_likes")) {
+      return new Response("3", { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    return new Response("null", { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+
+  const ctx = await startTestServer({ fetchImpl });
+  try {
+    const up = await fetch(`${ctx.baseUrl}/api/story/media/1/like`, { method: "POST" });
+    const upPayload = await up.json();
+    assert.equal(up.status, 200);
+    assert.equal(upPayload.likesCount, 6);
+    assert.equal(upPayload.type, "media");
+
+    const down = await fetch(`${ctx.baseUrl}/api/story/text/10/like`, { method: "DELETE" });
+    const downPayload = await down.json();
+    assert.equal(down.status, 200);
+    assert.equal(downPayload.likesCount, 3);
+    assert.equal(downPayload.type, "text");
+
+    assert.ok(calls.some((c) => c.url.endsWith("increment_media_likes") && c.method === "POST"));
+    assert.ok(calls.some((c) => c.url.endsWith("decrement_story_post_likes") && c.method === "POST"));
+  } finally {
+    ctx.server.close();
+  }
+});
+
+test("story like endpoint rejects unsupported entry types", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+
+  const ctx = await startTestServer({ fetchImpl: async () => new Response("null") });
+  try {
+    const response = await fetch(`${ctx.baseUrl}/api/story/xml/1/like`, { method: "POST" });
+    assert.equal(response.status, 400);
+  } finally {
+    ctx.server.close();
+  }
+});
+
+test("story like endpoint throttles rapid repeats on the same entry", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+
+  const fetchImpl = async () =>
+    new Response("1", { status: 200, headers: { "Content-Type": "application/json" } });
+
+  const ctx = await startTestServer({ fetchImpl });
+  try {
+    const first = await fetch(`${ctx.baseUrl}/api/story/media/42/like`, { method: "POST" });
+    assert.equal(first.status, 200);
+
+    const second = await fetch(`${ctx.baseUrl}/api/story/media/42/like`, { method: "POST" });
+    assert.equal(second.status, 429);
+    assert.ok(second.headers.get("Retry-After"));
+  } finally {
+    ctx.server.close();
+  }
+});
+
+test("story like endpoint enforces per-IP burst ceiling across entries", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+  process.env.LIKE_MAX_PER_WINDOW = "3";
+  process.env.LIKE_COOLDOWN_MS = "0";
+
+  const fetchImpl = async () =>
+    new Response("1", { status: 200, headers: { "Content-Type": "application/json" } });
+
+  const ctx = await startTestServer({ fetchImpl });
+  try {
+    for (let id = 1; id <= 3; id += 1) {
+      const ok = await fetch(`${ctx.baseUrl}/api/story/media/${id}/like`, { method: "POST" });
+      assert.equal(ok.status, 200, `request ${id} should succeed`);
+    }
+    const blocked = await fetch(`${ctx.baseUrl}/api/story/media/4/like`, { method: "POST" });
+    assert.equal(blocked.status, 429);
+  } finally {
+    ctx.server.close();
+    delete process.env.LIKE_MAX_PER_WINDOW;
+    delete process.env.LIKE_COOLDOWN_MS;
+  }
+});
+
+test("admin story-posts create persists to Supabase with author_id", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+
+  let insertBody = null;
+  const fetchImpl = async (url, init = {}) => {
+    const urlText = String(url);
+    if (urlText.includes("/rest/v1/story_posts") && init.method === "POST") {
+      insertBody = init.body;
+      return new Response(
+        JSON.stringify([
+          { id: 11, title: "New", body: "Body here", likes_count: 0 },
+        ]),
+        { status: 201, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    return new Response(JSON.stringify([]), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  const dbPool = {
+    query: async () => ({
+      rowCount: 1,
+      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
+    }),
+  };
+
+  const ctx = await startTestServer({ fetchImpl, dbPool });
+  try {
+    const token = await loginAndGetToken(ctx.baseUrl);
+    const response = await postJson(
+      ctx.baseUrl,
+      "/api/admin/story-posts",
+      { title: "New", body: "Body here", displayDate: "2026-04-19" },
+      { Authorization: `Bearer ${token}` }
+    );
+    assert.equal(response.response.status, 201);
+    assert.equal(response.payload.ok, true);
+    assert.equal(response.payload.item.id, 11);
+    assert.ok(insertBody && insertBody.includes("New"));
+    assert.ok(
+      insertBody && insertBody.includes('"display_date":"2026-04-19"'),
+      "expected display_date to be persisted"
+    );
+  } finally {
+    ctx.server.close();
+  }
+});
+
+test("upload endpoint rejects missing or malformed displayDate", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+
+  const dbPool = {
+    query: async () => ({
+      rowCount: 1,
+      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
+    }),
+  };
+
+  const ctx = await startTestServer({ dbPool, fetchImpl: async () => new Response("[]", { status: 200 }) });
+  try {
+    const token = await loginAndGetToken(ctx.baseUrl);
+    const basePayload = {
+      title: "Valid",
+      description: "",
+      fileName: "nanami.jpg",
+      fileType: "image/jpeg",
+      fileSize: 3,
+      fileBase64: Buffer.from("abc").toString("base64"),
+    };
+
+    const missing = await postJson(ctx.baseUrl, "/api/admin/media", basePayload, {
+      Authorization: `Bearer ${token}`,
+    });
+    assert.equal(missing.response.status, 400);
+    assert.match(String(missing.payload.message || ""), /display date/i);
+
+    const malformed = await postJson(
+      ctx.baseUrl,
+      "/api/admin/media",
+      { ...basePayload, displayDate: "04/19/2026" },
+      { Authorization: `Bearer ${token}` }
+    );
+    assert.equal(malformed.response.status, 400);
+    assert.match(String(malformed.payload.message || ""), /YYYY-MM-DD/i);
+  } finally {
+    ctx.server.close();
+  }
+});
+
+test("public timeline orders by display_date desc then created_at desc", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+  process.env.SUPABASE_MEDIA_TABLE = "media_items";
+
+  const fetchImpl = async (url) => {
+    const urlText = String(url);
+    if (urlText.includes("/rest/v1/media_items")) {
+      return new Response(
+        JSON.stringify([
+          {
+            id: 1,
+            title: "Old media (recent upload)",
+            description: "",
+            media_type: "image",
+            public_url: "https://example.supabase.co/storage/v1/object/public/media/a.jpg",
+            display_date: "2024-01-15",
+            created_at: "2026-04-19T10:00:00Z",
+          },
+          {
+            id: 2,
+            title: "Recent media (old upload)",
+            description: "",
+            media_type: "image",
+            public_url: "https://example.supabase.co/storage/v1/object/public/media/b.jpg",
+            display_date: "2026-04-15",
+            created_at: "2024-01-10T10:00:00Z",
+          },
+        ]),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (urlText.includes("/rest/v1/story_posts")) {
+      return new Response(
+        JSON.stringify([
+          {
+            id: 3,
+            title: "Text from 2025",
+            body: "hello",
+            display_date: "2025-06-01",
+            created_at: "2026-04-19T09:00:00Z",
+            likes_count: 0,
+          },
+        ]),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    return new Response(JSON.stringify([]), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  const ctx = await startTestServer({ fetchImpl });
+  try {
+    const response = await fetch(`${ctx.baseUrl}/api/story/timeline?page=1`);
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.ok, true);
+    assert.deepEqual(
+      payload.items.map((entry) => entry.id),
+      [2, 3, 1],
+      "expected display_date desc ordering regardless of created_at"
+    );
+    assert.equal(payload.items[0].displayDate, "2026-04-15");
+  } finally {
+    ctx.server.close();
+  }
+});
+
+test("admin story-posts create rejects missing title or body", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+
+  const dbPool = {
+    query: async () => ({
+      rowCount: 1,
+      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
+    }),
+  };
+
+  const ctx = await startTestServer({ fetchImpl: async () => new Response("null"), dbPool });
+  try {
+    const token = await loginAndGetToken(ctx.baseUrl);
+    const noBody = await postJson(
+      ctx.baseUrl,
+      "/api/admin/story-posts",
+      { title: "Valid" },
+      { Authorization: `Bearer ${token}` }
+    );
+    assert.equal(noBody.response.status, 400);
+    assert.match(String(noBody.payload.message || ""), /body/i);
   } finally {
     ctx.server.close();
   }

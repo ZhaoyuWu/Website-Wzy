@@ -93,6 +93,36 @@ function normalizeSettingText(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function normalizeStoryBody(body) {
+  return typeof body === "string" ? body.trim() : "";
+}
+
+function isValidStoryBody(body) {
+  const normalized = normalizeStoryBody(body);
+  return normalized.length >= 1 && normalized.length <= 4000 && !hasUnsafeControlChars(normalized);
+}
+
+function normalizeDisplayDate(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function isValidDisplayDate(value) {
+  const normalized = normalizeDisplayDate(value);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    return false;
+  }
+  const [year, month, day] = normalized.split("-").map((part) => Number(part));
+  if (year < 1900 || year > 9999 || month < 1 || month > 12 || day < 1 || day > 31) {
+    return false;
+  }
+  const asDate = new Date(Date.UTC(year, month - 1, day));
+  return (
+    asDate.getUTCFullYear() === year &&
+    asDate.getUTCMonth() + 1 === month &&
+    asDate.getUTCDate() === day
+  );
+}
+
 function hasUnsafeControlChars(value) {
   return UNSAFE_CONTROL_CHARS_REGEX.test(String(value || ""));
 }
@@ -206,11 +236,15 @@ function createApp(options = {}) {
   const loginAttemptWindowMs = Number(process.env.LOGIN_ATTEMPT_WINDOW_MS || 10 * 60 * 1000);
   const loginAttemptMax = Number(process.env.LOGIN_ATTEMPT_MAX || 5);
   const loginBlockMs = Number(process.env.LOGIN_BLOCK_MS || 15 * 60 * 1000);
+  const likeCooldownMs = Number(process.env.LIKE_COOLDOWN_MS || 1500);
+  const likeWindowMs = Number(process.env.LIKE_WINDOW_MS || 60 * 1000);
+  const likeMaxPerWindow = Number(process.env.LIKE_MAX_PER_WINDOW || 30);
   const now = typeof options.now === "function" ? options.now : Date.now;
   const randomBytes = options.randomBytes || crypto.randomBytes;
   const fetchImpl = options.fetchImpl || globalThis.fetch;
   const sessions = new Map();
   const loginAttempts = new Map();
+  const likeAttempts = new Map();
   const app = express();
 
   app.use(cors(buildCorsOptions()));
@@ -364,6 +398,44 @@ function createApp(options = {}) {
     loginAttempts.delete(key);
   }
 
+  function getClientIp(req) {
+    return req.ip || req.socket?.remoteAddress || "unknown";
+  }
+
+  function checkLikeThrottle(req, entryType, entryId) {
+    const ip = getClientIp(req);
+    const current = now();
+    const state = likeAttempts.get(ip) || {
+      windowStart: current,
+      count: 0,
+      lastByEntry: new Map(),
+    };
+
+    if (current - state.windowStart > likeWindowMs) {
+      state.windowStart = current;
+      state.count = 0;
+    }
+
+    const entryKey = `${entryType}:${entryId}`;
+    const lastAt = state.lastByEntry.get(entryKey) || 0;
+    if (current - lastAt < likeCooldownMs) {
+      return { allowed: false, retryAfterMs: likeCooldownMs - (current - lastAt) };
+    }
+
+    if (state.count >= likeMaxPerWindow) {
+      return { allowed: false, retryAfterMs: likeWindowMs - (current - state.windowStart) };
+    }
+
+    state.count += 1;
+    state.lastByEntry.set(entryKey, current);
+    if (state.lastByEntry.size > 200) {
+      const oldestKey = state.lastByEntry.keys().next().value;
+      if (oldestKey !== undefined) state.lastByEntry.delete(oldestKey);
+    }
+    likeAttempts.set(ip, state);
+    return { allowed: true };
+  }
+
   function ensureSupabaseConfig() {
     if (!mediaConfig.supabaseUrl || !mediaConfig.serviceRoleKey) {
       throw new Error(
@@ -487,13 +559,13 @@ function createApp(options = {}) {
 
   async function listMediaItems(limit, maxLimit = 120) {
     const selectColumns =
-      "id,title,description,media_type,public_url,thumbnail_url,created_at,updated_at";
+      "id,title,description,media_type,public_url,thumbnail_url,likes_count,display_date,created_at,updated_at";
     const hardMax = Math.max(1, Number(maxLimit) || 120);
     const effectiveLimit = Math.max(1, Math.min(Number(limit) || mediaConfig.adminListLimit, hardMax));
     const endpoint =
       `/rest/v1/${encodeURIComponent(mediaConfig.mediaTable)}` +
       `?select=${encodeURIComponent(selectColumns)}` +
-      `&order=created_at.desc&limit=${effectiveLimit}`;
+      `&order=display_date.desc,created_at.desc&limit=${effectiveLimit}`;
     const response = await callSupabase(endpoint, { method: "GET" });
     const payload = await response.json();
 
@@ -513,10 +585,179 @@ function createApp(options = {}) {
     res.json({ ok: true, service: "backend", timestamp: new Date().toISOString() });
   });
 
-  app.get("/api/showcase/media", async (req, res) => {
+  const STORY_PAGE_SIZE = 20;
+  const STORY_POSTS_TABLE = "story_posts";
+
+  async function listStoryPosts() {
+    const selectColumns =
+      "id,title,body,author_id,likes_count,display_date,created_at,updated_at";
+    const endpoint =
+      `/rest/v1/${encodeURIComponent(STORY_POSTS_TABLE)}` +
+      `?select=${encodeURIComponent(selectColumns)}` +
+      `&order=display_date.desc,created_at.desc`;
+    const response = await callSupabase(endpoint, { method: "GET" });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        message: "Failed to load story posts from Supabase.",
+        details: payload,
+      };
+    }
+    return { ok: true, items: Array.isArray(payload) ? payload : [] };
+  }
+
+  function toMediaTimelineNode(row) {
+    return {
+      type: String(row?.media_type) === "video" ? "video" : "image",
+      id: row?.id,
+      title: String(row?.title || ""),
+      description: String(row?.description || ""),
+      body: null,
+      mediaUrl: String(row?.public_url || ""),
+      thumbnailUrl: row?.thumbnail_url ? String(row.thumbnail_url) : null,
+      likesCount: Number.isFinite(Number(row?.likes_count)) ? Number(row.likes_count) : 0,
+      displayDate: row?.display_date ? String(row.display_date) : null,
+      createdAt: row?.created_at ? String(row.created_at) : null,
+    };
+  }
+
+  function toStoryTimelineNode(row) {
+    return {
+      type: "text",
+      id: row?.id,
+      title: String(row?.title || ""),
+      description: "",
+      body: String(row?.body || ""),
+      mediaUrl: null,
+      thumbnailUrl: null,
+      likesCount: Number.isFinite(Number(row?.likes_count)) ? Number(row.likes_count) : 0,
+      displayDate: row?.display_date ? String(row.display_date) : null,
+      createdAt: row?.created_at ? String(row.created_at) : null,
+    };
+  }
+
+  app.get("/api/story/timeline", async (req, res) => {
+    const page = Math.max(1, toPositiveInt(req.query?.page, 1));
+
     try {
-      const requestedLimit = toPositiveInt(req.query?.limit, 24);
-      const result = await listMediaItems(requestedLimit);
+      const [mediaResult, storyResult] = await Promise.all([
+        listMediaItems(mediaConfig.adminListLimit, mediaConfig.adminListLimit),
+        listStoryPosts(),
+      ]);
+
+      if (!mediaResult.ok) {
+        return res.status(mediaResult.status).json({
+          ok: false,
+          message: mediaResult.message,
+          details: mediaResult.details,
+        });
+      }
+      if (!storyResult.ok) {
+        return res.status(storyResult.status).json({
+          ok: false,
+          message: storyResult.message,
+          details: storyResult.details,
+        });
+      }
+
+      const merged = [
+        ...mediaResult.items.map(toMediaTimelineNode),
+        ...storyResult.items.map(toStoryTimelineNode),
+      ].sort((a, b) => {
+        const aDay = a.displayDate ? Date.parse(`${a.displayDate}T00:00:00Z`) : 0;
+        const bDay = b.displayDate ? Date.parse(`${b.displayDate}T00:00:00Z`) : 0;
+        if (bDay !== aDay) {
+          return bDay - aDay;
+        }
+        const aTime = a.createdAt ? Date.parse(a.createdAt) : 0;
+        const bTime = b.createdAt ? Date.parse(b.createdAt) : 0;
+        return bTime - aTime;
+      });
+
+      const total = merged.length;
+      const totalPages = Math.max(1, Math.ceil(total / STORY_PAGE_SIZE));
+      const clampedPage = Math.min(page, totalPages);
+      const start = (clampedPage - 1) * STORY_PAGE_SIZE;
+      const items = merged.slice(start, start + STORY_PAGE_SIZE);
+
+      return res.json({
+        ok: true,
+        items,
+        total,
+        page: clampedPage,
+        pageSize: STORY_PAGE_SIZE,
+        totalPages,
+      });
+    } catch (error) {
+      return res
+        .status(500)
+        .json({ ok: false, message: error.message || "Unable to load story timeline." });
+    }
+  });
+
+  async function adjustEntryLikes(entryType, entryId, direction) {
+    const config =
+      entryType === "media"
+        ? {
+            rpc: direction === "up" ? "increment_media_likes" : "decrement_media_likes",
+            missing: "Media not found.",
+          }
+        : entryType === "text"
+        ? {
+            rpc: direction === "up" ? "increment_story_post_likes" : "decrement_story_post_likes",
+            missing: "Story post not found.",
+          }
+        : null;
+
+    if (!config) {
+      return { ok: false, status: 400, message: "Unsupported entry type." };
+    }
+
+    const response = await callSupabase(`/rest/v1/rpc/${config.rpc}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ p_id: entryId }),
+    });
+    const payload = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        message:
+          direction === "up" ? "Failed to increment likes." : "Failed to decrement likes.",
+        details: payload,
+      };
+    }
+
+    const newCount = typeof payload === "number" ? payload : Number(payload);
+    if (!Number.isFinite(newCount)) {
+      return { ok: false, status: 404, message: config.missing };
+    }
+
+    return { ok: true, likesCount: newCount };
+  }
+
+  app.post("/api/story/:type/:id/like", async (req, res) => {
+    const entryType = String(req.params?.type || "").toLowerCase();
+    const entryId = toPositiveInt(req.params?.id, 0);
+    if (!entryId) {
+      return res.status(400).json({ ok: false, message: "Invalid entry id." });
+    }
+
+    const throttle = checkLikeThrottle(req, entryType, entryId);
+    if (!throttle.allowed) {
+      const retryAfter = Math.max(1, Math.ceil(throttle.retryAfterMs / 1000));
+      res.set("Retry-After", String(retryAfter));
+      return res
+        .status(429)
+        .json({ ok: false, message: "Too many like attempts. Try again later." });
+    }
+
+    try {
+      const result = await adjustEntryLikes(entryType, entryId, "up");
       if (!result.ok) {
         return res.status(result.status).json({
           ok: false,
@@ -524,9 +765,44 @@ function createApp(options = {}) {
           details: result.details,
         });
       }
-      return res.json({ ok: true, items: result.items });
+      return res.json({ ok: true, type: entryType, id: entryId, likesCount: result.likesCount });
     } catch (error) {
-      return res.status(500).json({ ok: false, message: error.message || "Unable to load showcase media." });
+      return res
+        .status(500)
+        .json({ ok: false, message: error.message || "Unable to like entry right now." });
+    }
+  });
+
+  app.delete("/api/story/:type/:id/like", async (req, res) => {
+    const entryType = String(req.params?.type || "").toLowerCase();
+    const entryId = toPositiveInt(req.params?.id, 0);
+    if (!entryId) {
+      return res.status(400).json({ ok: false, message: "Invalid entry id." });
+    }
+
+    const throttle = checkLikeThrottle(req, entryType, entryId);
+    if (!throttle.allowed) {
+      const retryAfter = Math.max(1, Math.ceil(throttle.retryAfterMs / 1000));
+      res.set("Retry-After", String(retryAfter));
+      return res
+        .status(429)
+        .json({ ok: false, message: "Too many like attempts. Try again later." });
+    }
+
+    try {
+      const result = await adjustEntryLikes(entryType, entryId, "down");
+      if (!result.ok) {
+        return res.status(result.status).json({
+          ok: false,
+          message: result.message,
+          details: result.details,
+        });
+      }
+      return res.json({ ok: true, type: entryType, id: entryId, likesCount: result.likesCount });
+    } catch (error) {
+      return res
+        .status(500)
+        .json({ ok: false, message: error.message || "Unable to unlike entry right now." });
     }
   });
 
@@ -777,6 +1053,7 @@ function createApp(options = {}) {
   app.post("/api/admin/media", requireAuth, requireRole("Admin", "Publisher"), async (req, res) => {
     const title = normalizeMediaTitle(req.body?.title);
     const description = normalizeMediaDescription(req.body?.description);
+    const displayDate = normalizeDisplayDate(req.body?.displayDate);
     const fileName = typeof req.body?.fileName === "string" ? req.body.fileName.trim() : "";
     const fileType = typeof req.body?.fileType === "string" ? req.body.fileType.trim().toLowerCase() : "";
     const declaredFileSize = Number(req.body?.fileSize || 0);
@@ -789,6 +1066,12 @@ function createApp(options = {}) {
 
     if (!isValidMediaDescription(description)) {
       return res.status(400).json({ ok: false, message: "Description must be at most 500 characters." });
+    }
+
+    if (!isValidDisplayDate(displayDate)) {
+      return res
+        .status(400)
+        .json({ ok: false, message: "Display date is required and must be a valid YYYY-MM-DD." });
     }
 
     if (!mediaType) {
@@ -851,6 +1134,7 @@ function createApp(options = {}) {
             description,
             media_type: mediaType,
             public_url: publicUrl,
+            display_date: displayDate,
           },
         ]),
       });
@@ -875,12 +1159,13 @@ function createApp(options = {}) {
     const id = String(req.params.id || "").trim();
     const hasTitle = Object.prototype.hasOwnProperty.call(req.body || {}, "title");
     const hasDescription = Object.prototype.hasOwnProperty.call(req.body || {}, "description");
+    const hasDisplayDate = Object.prototype.hasOwnProperty.call(req.body || {}, "displayDate");
 
     if (!id) {
       return res.status(400).json({ ok: false, message: "Media id is required." });
     }
 
-    if (!hasTitle && !hasDescription) {
+    if (!hasTitle && !hasDescription && !hasDisplayDate) {
       return res.status(400).json({ ok: false, message: "Nothing to update." });
     }
 
@@ -899,6 +1184,16 @@ function createApp(options = {}) {
         return res.status(400).json({ ok: false, message: "Description must be at most 500 characters." });
       }
       patch.description = description;
+    }
+
+    if (hasDisplayDate) {
+      const displayDate = normalizeDisplayDate(req.body?.displayDate);
+      if (!isValidDisplayDate(displayDate)) {
+        return res
+          .status(400)
+          .json({ ok: false, message: "Display date must be a valid YYYY-MM-DD." });
+      }
+      patch.display_date = displayDate;
     }
 
     patch.updated_at = new Date().toISOString();
@@ -1002,6 +1297,208 @@ function createApp(options = {}) {
       return res.status(500).json({ ok: false, message: error.message || "Media delete failed" });
     }
   });
+
+  app.get(
+    "/api/admin/story-posts",
+    requireAuth,
+    requireRole("Admin", "Publisher"),
+    async (_req, res) => {
+      try {
+        const result = await listStoryPosts();
+        if (!result.ok) {
+          return res.status(result.status).json({
+            ok: false,
+            message: result.message,
+            details: result.details,
+          });
+        }
+        return res.json({ ok: true, items: result.items });
+      } catch (error) {
+        return res
+          .status(500)
+          .json({ ok: false, message: error.message || "Unable to load story posts" });
+      }
+    }
+  );
+
+  app.post(
+    "/api/admin/story-posts",
+    requireAuth,
+    requireRole("Admin", "Publisher"),
+    async (req, res) => {
+      const title = normalizeMediaTitle(req.body?.title);
+      const body = normalizeStoryBody(req.body?.body);
+      const displayDate = normalizeDisplayDate(req.body?.displayDate);
+
+      if (!isValidMediaTitle(title)) {
+        return res.status(400).json({
+          ok: false,
+          message: "Title is required and must be at most 120 characters.",
+        });
+      }
+      if (!isValidStoryBody(body)) {
+        return res.status(400).json({
+          ok: false,
+          message: "Body is required and must be at most 4000 characters.",
+        });
+      }
+      if (!isValidDisplayDate(displayDate)) {
+        return res.status(400).json({
+          ok: false,
+          message: "Display date is required and must be a valid YYYY-MM-DD.",
+        });
+      }
+
+      try {
+        const authorId = req.auth?.userId ? String(req.auth.userId) : null;
+        const insertResponse = await callSupabase(
+          `/rest/v1/${encodeURIComponent(STORY_POSTS_TABLE)}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Prefer: "return=representation",
+            },
+            body: JSON.stringify([
+              { title, body, author_id: authorId, display_date: displayDate },
+            ]),
+          }
+        );
+        const payload = await insertResponse.json();
+        if (!insertResponse.ok) {
+          return res.status(insertResponse.status).json({
+            ok: false,
+            message: "Failed to save story post.",
+            details: payload,
+          });
+        }
+        const item = Array.isArray(payload) ? payload[0] : payload;
+        return res.status(201).json({ ok: true, item });
+      } catch (error) {
+        return res
+          .status(500)
+          .json({ ok: false, message: error.message || "Story post create failed" });
+      }
+    }
+  );
+
+  app.patch(
+    "/api/admin/story-posts/:id",
+    requireAuth,
+    requireRole("Admin", "Publisher"),
+    async (req, res) => {
+      const id = toPositiveInt(req.params?.id, 0);
+      if (!id) {
+        return res.status(400).json({ ok: false, message: "Story post id is required." });
+      }
+
+      const hasTitle = Object.prototype.hasOwnProperty.call(req.body || {}, "title");
+      const hasBody = Object.prototype.hasOwnProperty.call(req.body || {}, "body");
+      const hasDisplayDate = Object.prototype.hasOwnProperty.call(req.body || {}, "displayDate");
+      if (!hasTitle && !hasBody && !hasDisplayDate) {
+        return res.status(400).json({ ok: false, message: "Nothing to update." });
+      }
+
+      const patch = {};
+      if (hasTitle) {
+        const title = normalizeMediaTitle(req.body?.title);
+        if (!isValidMediaTitle(title)) {
+          return res.status(400).json({
+            ok: false,
+            message: "Title is required and must be at most 120 characters.",
+          });
+        }
+        patch.title = title;
+      }
+      if (hasBody) {
+        const body = normalizeStoryBody(req.body?.body);
+        if (!isValidStoryBody(body)) {
+          return res.status(400).json({
+            ok: false,
+            message: "Body is required and must be at most 4000 characters.",
+          });
+        }
+        patch.body = body;
+      }
+      if (hasDisplayDate) {
+        const displayDate = normalizeDisplayDate(req.body?.displayDate);
+        if (!isValidDisplayDate(displayDate)) {
+          return res
+            .status(400)
+            .json({ ok: false, message: "Display date must be a valid YYYY-MM-DD." });
+        }
+        patch.display_date = displayDate;
+      }
+      patch.updated_at = new Date().toISOString();
+
+      try {
+        const response = await callSupabase(
+          `/rest/v1/${encodeURIComponent(STORY_POSTS_TABLE)}?id=eq.${encodeURIComponent(id)}`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              Prefer: "return=representation",
+            },
+            body: JSON.stringify(patch),
+          }
+        );
+        const payload = await response.json();
+        if (!response.ok) {
+          return res.status(response.status).json({
+            ok: false,
+            message: "Failed to update story post.",
+            details: payload,
+          });
+        }
+        const item = Array.isArray(payload) ? payload[0] : null;
+        if (!item) {
+          return res.status(404).json({ ok: false, message: "Story post not found." });
+        }
+        return res.json({ ok: true, item });
+      } catch (error) {
+        return res
+          .status(500)
+          .json({ ok: false, message: error.message || "Story post update failed" });
+      }
+    }
+  );
+
+  app.delete(
+    "/api/admin/story-posts/:id",
+    requireAuth,
+    requireRole("Admin", "Publisher"),
+    async (req, res) => {
+      const id = toPositiveInt(req.params?.id, 0);
+      if (!id) {
+        return res.status(400).json({ ok: false, message: "Story post id is required." });
+      }
+
+      try {
+        const response = await callSupabase(
+          `/rest/v1/${encodeURIComponent(STORY_POSTS_TABLE)}?id=eq.${encodeURIComponent(id)}`,
+          { method: "DELETE", headers: { Prefer: "return=representation" } }
+        );
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+          return res.status(response.status).json({
+            ok: false,
+            message: "Failed to delete story post.",
+            details: payload,
+          });
+        }
+        const removed = Array.isArray(payload) ? payload[0] : null;
+        if (!removed) {
+          return res.status(404).json({ ok: false, message: "Story post not found." });
+        }
+        return res.json({ ok: true, id });
+      } catch (error) {
+        return res
+          .status(500)
+          .json({ ok: false, message: error.message || "Story post delete failed" });
+      }
+    }
+  );
 
   function mapSupabaseUser(raw, profileRole) {
     if (!raw || typeof raw !== "object") return null;
