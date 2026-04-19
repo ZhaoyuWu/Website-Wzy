@@ -6,6 +6,7 @@ type SessionSnapshot = {
   refreshToken: string;
   tokenType: string;
   userId: string;
+  username: string;
   email: string;
   role: string;
   expiresAt: string;
@@ -40,7 +41,20 @@ export class AuthService {
   }
 
   get username(): string | null {
-    return this.readSession()?.email ?? null;
+    const session = this.readSession();
+    const explicitUsername = String(session?.username || '').trim();
+    if (explicitUsername) {
+      return explicitUsername;
+    }
+    const email = String(session?.email || '').trim();
+    if (!email) {
+      return null;
+    }
+    const atIndex = email.indexOf('@');
+    if (atIndex > 0) {
+      return email.slice(0, atIndex);
+    }
+    return email;
   }
 
   get userRole(): string {
@@ -84,6 +98,7 @@ export class AuthService {
 
     const session = this.parseSupabaseSession(payload);
     this.writeSession(session);
+    await this.syncProfileFromBackend();
     await this.refreshRoleFromBackend();
   }
 
@@ -117,7 +132,14 @@ export class AuthService {
       throw new Error(message);
     }
 
+    const hasSession =
+      typeof payload['access_token'] === 'string' && typeof payload['refresh_token'] === 'string';
+    if (!hasSession) {
+      return;
+    }
+
     this.writeSession(this.parseSupabaseSession(payload));
+    await this.syncProfileFromBackend(username);
   }
 
   async logout(): Promise<void> {
@@ -173,6 +195,27 @@ export class AuthService {
     }
   }
 
+  private async syncProfileFromBackend(username?: string): Promise<void> {
+    const token = this.getToken();
+    if (!token) {
+      return;
+    }
+
+    const payload = typeof username === 'string' ? { username: username.trim() } : {};
+    try {
+      await fetch(`${this.apiBaseUrl}/api/auth/sync-profile`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+    } catch {
+      // Non-blocking: auth session remains valid even if profile sync fails.
+    }
+  }
+
   private ensureSupabaseAuthConfig(): { supabaseUrl: string; supabaseAnonKey: string } {
     const supabaseUrl = resolveSupabaseUrl();
     const supabaseAnonKey = resolveSupabaseAnonKey();
@@ -191,6 +234,21 @@ export class AuthService {
       user['app_metadata'] && typeof user['app_metadata'] === 'object'
         ? (user['app_metadata'] as Record<string, unknown>)
         : {};
+    const userMetadata =
+      user['user_metadata'] && typeof user['user_metadata'] === 'object'
+        ? (user['user_metadata'] as Record<string, unknown>)
+        : user['raw_user_meta_data'] && typeof user['raw_user_meta_data'] === 'object'
+          ? (user['raw_user_meta_data'] as Record<string, unknown>)
+          : {};
+    const metadataUsername = String(userMetadata['username'] ?? '').trim();
+    const email = String(user['email'] ?? '');
+    const fallbackUsername = (() => {
+      const atIndex = email.indexOf('@');
+      if (atIndex > 0) {
+        return email.slice(0, atIndex);
+      }
+      return email;
+    })();
     const expiresInRaw = Number(payload['expires_in'] ?? 0);
     const expiresAt = new Date(
       Date.now() + (Number.isFinite(expiresInRaw) && expiresInRaw > 0 ? expiresInRaw : 3600) * 1000
@@ -201,7 +259,8 @@ export class AuthService {
       refreshToken: String(payload['refresh_token'] ?? ''),
       tokenType: String(payload['token_type'] ?? 'bearer'),
       userId: String(user['id'] ?? ''),
-      email: String(user['email'] ?? ''),
+      username: metadataUsername || fallbackUsername,
+      email,
       role: String(appMetadata['role'] ?? 'Viewer'),
       expiresAt
     };

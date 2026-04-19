@@ -69,7 +69,7 @@ Build a warm, media-first personal website to showcase the dog Nanami, with reli
 - `T-003`:
   - Public timeline lists image/video metadata from Supabase Postgres. Delivered pivot: the timeline is embedded on the homepage under the `#story` anchor; the legacy `/showcase` route is kept as a redirect for bookmark compatibility.
   - Supports stable playback/viewing on modern browsers (image click opens an in-page lightbox; video uses `preload="metadata"`, `playsinline`, and controls).
-  - Timeline merges `media_items` + `story_posts` (text entries) sorted by user-authored `display_date` desc with `created_at` tiebreak; paginated 20 per page.
+  - Timeline merges `media_items` + `story_posts` (text entries) sorted by user-authored `display_date` desc with `created_at` tiebreak; paginated 10 per page.
   - Per-entry like counter is public and rate-limited per client IP (`LIKE_COOLDOWN_MS` per entry + `LIKE_MAX_PER_WINDOW` per window) to keep anonymous engagement possible while blocking abuse. Frontend dedupes with `localStorage` for UX only.
   - UI strings are translated EN/DE/ZH via `I18nService` + language picker; locale is persisted to `localStorage` and auto-detected from `navigator.language`.
 - `T-004`:
@@ -89,6 +89,11 @@ Build a warm, media-first personal website to showcase the dog Nanami, with reli
   - No page-level horizontal scrolling on phone widths.
   - Primary interactive controls are touch-friendly (visually >= `44px` height where applicable).
   - Typography and spacing keep clear hierarchy and readable rhythm on small screens.
+- `T-007-2`:
+  - Each uploaded media row persists `file_size` so total storage usage can be summed server-side.
+  - `/manage-media` surfaces a usage banner (`used / hard limit`, %, progress bar) for Admin/Publisher; changes colour when `STORAGE_SOFT_LIMIT_BYTES` is reached and switches to critical copy when `STORAGE_HARD_LIMIT_BYTES` is exceeded.
+  - Backend `GET /api/admin/storage/usage` is role-gated and returns `{ usedBytes, softLimitBytes, hardLimitBytes, percentOfHard, status, trackedItems }`.
+  - Banner refreshes after successful upload and delete so the number stays live; Supabase itself still enforces the real ceiling — the banner is an early warning, not a gatekeeper.
 
 ## Definition of Done (Project)
 - Tasks `T-001` to `T-007` are implemented and demoable.

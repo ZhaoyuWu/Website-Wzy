@@ -44,6 +44,15 @@ type UnifiedEntry =
   | { kind: 'media'; id: number | string; displayDate: string; item: MediaItem }
   | { kind: 'story'; id: number | string; displayDate: string; post: StoryPost };
 
+type StorageUsage = {
+  usedBytes: number;
+  softLimitBytes: number;
+  hardLimitBytes: number;
+  percentOfHard: number;
+  trackedItems: number;
+  status: 'ok' | 'warn' | 'critical';
+};
+
 const IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 const VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime']);
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
@@ -73,6 +82,30 @@ const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
             </button>
           </div>
         </div>
+      </section>
+
+      <section class="media-card storage-card" *ngIf="storage">
+        <div class="storage-head">
+          <span>{{ i18n.t('media.storage.heading') }}</span>
+          <span class="storage-value" [class.warn]="storage.status === 'warn'" [class.critical]="storage.status === 'critical'">
+            {{ formatBytes(storage.usedBytes) }} / {{ formatBytes(storage.hardLimitBytes) }}
+            ({{ storage.percentOfHard }}%)
+          </span>
+        </div>
+        <div class="storage-bar" [attr.aria-label]="i18n.t('media.storage.heading')">
+          <div
+            class="storage-bar-fill"
+            [class.warn]="storage.status === 'warn'"
+            [class.critical]="storage.status === 'critical'"
+            [style.width.%]="storageBarPercent"
+          ></div>
+        </div>
+        <p class="storage-note" *ngIf="storage.status === 'warn'">
+          {{ i18n.t('media.storage.warn') }}
+        </p>
+        <p class="storage-note critical" *ngIf="storage.status === 'critical'">
+          {{ i18n.t('media.storage.critical') }}
+        </p>
       </section>
 
       <section class="media-card">
@@ -719,6 +752,56 @@ const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
         width: min(1120px, 100%);
       }
     }
+
+    .storage-card {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .storage-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      flex-wrap: wrap;
+      color: var(--color-ink-soft);
+      font-weight: 600;
+    }
+
+    .storage-value {
+      font-variant-numeric: tabular-nums;
+      color: var(--color-ink);
+    }
+
+    .storage-value.warn { color: var(--color-accent-contrast); }
+    .storage-value.critical { color: var(--color-accent-contrast); font-weight: 800; }
+
+    .storage-bar {
+      width: 100%;
+      height: 10px;
+      background: var(--color-paper-sunk);
+      border: 1.5px solid var(--color-ink);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .storage-bar-fill {
+      height: 100%;
+      background: var(--color-accent);
+      transition: width 240ms ease;
+    }
+
+    .storage-bar-fill.warn { background: var(--color-accent-contrast); }
+    .storage-bar-fill.critical { background: var(--color-accent-contrast); }
+
+    .storage-note {
+      margin: 0;
+      font-size: 13px;
+      color: var(--color-ink-soft);
+    }
+
+    .storage-note.critical { color: var(--color-accent-contrast); font-weight: 700; }
   `
 })
 export class MediaPageComponent implements OnInit {
@@ -765,6 +848,8 @@ export class MediaPageComponent implements OnInit {
 
   isLoggingOut = false;
 
+  storage: StorageUsage | null = null;
+
   async ngOnInit(): Promise<void> {
     try {
       const response = await fetch(this.auth.apiUrl('/api/admin/overview'), {
@@ -773,13 +858,56 @@ export class MediaPageComponent implements OnInit {
       if (!response.ok) {
         throw new Error('Unauthorized session');
       }
-      await Promise.all([this.loadMediaItems(), this.loadStoryPosts()]);
+      await Promise.all([this.loadMediaItems(), this.loadStoryPosts(), this.loadStorageUsage()]);
     } catch {
       await this.auth.logout();
       await this.router.navigate(['/login']);
     } finally {
       this.cdr.detectChanges();
     }
+  }
+
+  async loadStorageUsage(): Promise<void> {
+    try {
+      const response = await fetch(this.auth.apiUrl('/api/admin/storage/usage'), {
+        headers: this.auth.authHeaders()
+      });
+      if (!response.ok) {
+        this.storage = null;
+        return;
+      }
+      const payload = (await response.json()) as Partial<StorageUsage>;
+      if (
+        typeof payload.usedBytes !== 'number' ||
+        typeof payload.hardLimitBytes !== 'number'
+      ) {
+        this.storage = null;
+        return;
+      }
+      this.storage = {
+        usedBytes: payload.usedBytes,
+        softLimitBytes: Number(payload.softLimitBytes) || 0,
+        hardLimitBytes: payload.hardLimitBytes,
+        percentOfHard: Number(payload.percentOfHard) || 0,
+        trackedItems: Number(payload.trackedItems) || 0,
+        status: payload.status === 'critical' || payload.status === 'warn' ? payload.status : 'ok'
+      };
+    } catch {
+      this.storage = null;
+    }
+  }
+
+  get storageBarPercent(): number {
+    if (!this.storage || this.storage.hardLimitBytes <= 0) return 0;
+    return Math.max(0, Math.min(100, (this.storage.usedBytes / this.storage.hardLimitBytes) * 100));
+  }
+
+  formatBytes(bytes: number): string {
+    if (!Number.isFinite(bytes) || bytes <= 0) return '0 MB';
+    const mb = bytes / (1024 * 1024);
+    if (mb >= 1024) return `${(mb / 1024).toFixed(2)} GB`;
+    if (mb >= 10) return `${Math.round(mb)} MB`;
+    return `${mb.toFixed(1)} MB`;
   }
 
   trackById(index: number, item: MediaItem): number | string {
@@ -956,6 +1084,7 @@ export class MediaPageComponent implements OnInit {
       this.uploadDisplayDate = MediaPageComponent.todayIso();
       this.selectedFile = null;
       this.uploadSuccess = 'Upload completed.';
+      await this.loadStorageUsage();
     } catch (error) {
       this.uploadError = error instanceof Error ? error.message : 'Upload failed.';
     } finally {
@@ -1080,6 +1209,7 @@ export class MediaPageComponent implements OnInit {
       }
 
       this.mediaItems = this.mediaItems.filter((current) => current.id !== item.id);
+      await this.loadStorageUsage();
     } catch (error) {
       this.deleteError = error instanceof Error ? error.message : 'Failed to delete media.';
     } finally {

@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { StoryTimelineComponent } from './story-timeline.component';
+import { AuthService } from '../core/auth.service';
 
 function makeComponent(): StoryTimelineComponent {
   return TestBed.runInInjectionContext(() => new StoryTimelineComponent());
@@ -13,7 +14,17 @@ describe('StoryTimelineComponent logic', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [provideZonelessChangeDetection()]
+      providers: [
+        provideZonelessChangeDetection(),
+        {
+          provide: AuthService,
+          useValue: {
+            username: 'tester@nanami.local',
+            isAdmin: false,
+            authHeaders: () => ({})
+          }
+        }
+      ]
     });
     originalFetch = globalThis.fetch;
     originalWindowFetch = window.fetch;
@@ -103,7 +114,7 @@ describe('StoryTimelineComponent logic', () => {
     expect(component.entries.map((e) => e.id)).toEqual([2, 3]);
   });
 
-  it('toggles likes against the typed endpoint and namespaces localStorage by type', async () => {
+  it('toggles likes against the typed endpoint', async () => {
     const calls: Array<{ url: string; method: string }> = [];
     const mockedFetch: typeof fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -141,8 +152,6 @@ describe('StoryTimelineComponent logic', () => {
     });
     expect(entry.likesCount).toBe(3);
     expect(component.isLiked(entry)).toBe(true);
-    expect(localStorage.getItem('nanami.story.likes')).toContain('text');
-
     await component.onToggleLike(entry);
     expect(calls[1]).toEqual({
       url: 'http://localhost:4000/api/story/text/5/like',
@@ -150,6 +159,130 @@ describe('StoryTimelineComponent logic', () => {
     });
     expect(entry.likesCount).toBe(2);
     expect(component.isLiked(entry)).toBe(false);
+  });
+
+  it('initial likedByMe from the server marks entry as liked and persists to localStorage', async () => {
+    const mockedFetch: typeof fetch = async () =>
+      new Response(
+        JSON.stringify({
+          ok: true,
+          items: [
+            {
+              type: 'image',
+              id: 42,
+              title: 'Previously liked',
+              mediaUrl: 'https://cdn.example.com/a.jpg',
+              likesCount: 4,
+              likedByMe: true
+            }
+          ],
+          total: 1,
+          page: 1,
+          pageSize: 10,
+          totalPages: 1
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    globalThis.fetch = mockedFetch;
+    window.fetch = mockedFetch;
+
+    const component = makeComponent();
+    await component.ngOnInit();
+
+    const entry = component.entries[0];
+    expect(component.isLiked(entry)).toBe(true);
+    const stored = localStorage.getItem('nanami.story.likes');
+    expect(stored).toContain('"image"');
+    expect(stored).toContain('"42"');
+  });
+
+  it('comment modal submits POST and appends the response item', async () => {
+    const calls: Array<{ url: string; method: string }> = [];
+    const mockedFetch: typeof fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = String(init?.method || 'GET').toUpperCase();
+      if (url.includes('/comments?limit')) {
+        calls.push({ url, method });
+        return new Response(
+          JSON.stringify({ ok: true, items: [], total: 0 }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      if (url.endsWith('/comments') && method === 'POST') {
+        calls.push({ url, method });
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            item: {
+              id: 1001,
+              entry_type: 'text',
+              entry_id: 5,
+              author_name: 'tester@nanami.local',
+              message: 'hello',
+              created_at: '2026-04-19T12:00:00Z'
+            }
+          }),
+          { status: 201, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          items: [{ type: 'text', id: 5, title: 'T', body: 'b', commentsCount: 0 }],
+          total: 1,
+          page: 1,
+          pageSize: 10,
+          totalPages: 1
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    };
+    globalThis.fetch = mockedFetch;
+    window.fetch = mockedFetch;
+
+    const component = makeComponent();
+    await component.ngOnInit();
+
+    component.openCommentModal(component.entries[0]);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    component.commentDraft = 'hello';
+    await component.submitComment();
+
+    expect(component.activeComments.length).toBe(1);
+    expect(component.activeComments[0].message).toBe('hello');
+    expect(component.entries[0].commentsCount).toBe(1);
+    expect(calls.some((c) => c.method === 'POST' && c.url.endsWith('/comments'))).toBe(true);
+  });
+
+  it('comment modal rejects empty and over-length drafts with i18n error strings', async () => {
+    const mockedFetch: typeof fetch = async () =>
+      new Response(
+        JSON.stringify({
+          ok: true,
+          items: [{ type: 'text', id: 5, title: 'T', body: 'b' }],
+          total: 1,
+          page: 1,
+          pageSize: 10,
+          totalPages: 1
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    globalThis.fetch = mockedFetch;
+    window.fetch = mockedFetch;
+
+    const component = makeComponent();
+    await component.ngOnInit();
+    component.commentModalEntry = component.entries[0];
+
+    component.commentDraft = '   ';
+    await component.submitComment();
+    expect(component.commentError).toMatch(/1-500|1–500/);
+
+    component.commentDraft = 'a'.repeat(501);
+    await component.submitComment();
+    expect(component.commentError).toMatch(/1-500|1–500/);
   });
 
   it('opens the lightbox only for image entries and closes on escape', async () => {

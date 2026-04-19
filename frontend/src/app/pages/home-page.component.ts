@@ -549,21 +549,7 @@ export class HomePageComponent implements OnInit {
 
   async ngOnInit(): Promise<void> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/api/settings`);
-      const payload = (await response.json()) as {
-        ok?: boolean;
-        message?: string;
-        settings?: Partial<SiteSettings>;
-        source?: string;
-      };
-
-      if (!response.ok || !payload.ok) {
-        throw new Error(payload.message || 'Failed to load site settings.');
-      }
-
-      this.settings = this.mergeSettings(payload.settings);
-      this.settingsMessage =
-        payload.source === 'default' ? this.i18n.t('home.settings.defaultsNote') : '';
+      await this.loadSettings();
     } catch {
       this.settings = { ...DEFAULT_SITE_SETTINGS };
       this.settingsMessage = this.i18n.t('home.settings.loadError');
@@ -577,6 +563,24 @@ export class HomePageComponent implements OnInit {
     if (!viewRef.destroyed) {
       this.cdr.detectChanges();
     }
+  }
+
+  private async loadSettings(): Promise<void> {
+    const response = await fetch(`${this.apiBaseUrl}/api/settings`);
+    const payload = (await response.json()) as {
+      ok?: boolean;
+      message?: string;
+      settings?: Partial<SiteSettings>;
+      source?: string;
+    };
+
+    if (!response.ok || !payload.ok) {
+      throw new Error(payload.message || 'Failed to load site settings.');
+    }
+
+    this.settings = this.mergeSettings(payload.settings);
+    this.settingsMessage =
+      payload.source === 'default' ? this.i18n.t('home.settings.defaultsNote') : '';
   }
 
   private mergeSettings(raw?: Partial<SiteSettings>): SiteSettings {
@@ -602,6 +606,7 @@ export class HomePageComponent implements OnInit {
 
     return normalized;
   }
+
 }
 
 
