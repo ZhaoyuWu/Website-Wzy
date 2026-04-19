@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: nanami-backend
+    runtime: node
+    region: frankfurt
+    plan: free
+    branch: online-release
+    rootDir: backend
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: CORS_ORIGIN_ALLOWLIST
+        value: https://frontend-six-snowy-32.vercel.app
+      - key: SUPABASE_URL
+        value: https://pltveorkgsxfccyuwidk.supabase.co
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_MEDIA_TABLE
+        value: media_items
+      - key: SUPABASE_STORAGE_BUCKET
+        value: media
+      - key: SUPABASE_SETTINGS_TABLE
+        value: site_settings
+      - key: SUPABASE_SETTINGS_KEY_COLUMN
+        value: setting_key
+      - key: SUPABASE_SETTINGS_ROW_KEY
+        value: site
