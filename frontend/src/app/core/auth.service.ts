@@ -14,8 +14,6 @@ type SessionSnapshot = {
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly apiBaseUrl = resolveApiBaseUrl();
-  private readonly supabaseUrl = resolveSupabaseUrl();
-  private readonly supabaseAnonKey = resolveSupabaseAnonKey();
   private readonly storageKey = 'nanami_supabase_session';
 
   loginPayload: SessionSnapshot | null = null;
@@ -59,12 +57,12 @@ export class AuthService {
   }
 
   async login(email: string, password: string): Promise<void> {
-    this.ensureSupabaseAuthConfig();
-    const response = await fetch(`${this.supabaseUrl}/auth/v1/token?grant_type=password`, {
+    const config = this.ensureSupabaseAuthConfig();
+    const response = await fetch(`${config.supabaseUrl}/auth/v1/token?grant_type=password`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        apikey: this.supabaseAnonKey
+        apikey: config.supabaseAnonKey
       },
       body: JSON.stringify({ email, password })
     });
@@ -90,12 +88,12 @@ export class AuthService {
   }
 
   async register(username: string, email: string, password: string): Promise<void> {
-    this.ensureSupabaseAuthConfig();
-    const response = await fetch(`${this.supabaseUrl}/auth/v1/signup`, {
+    const config = this.ensureSupabaseAuthConfig();
+    const response = await fetch(`${config.supabaseUrl}/auth/v1/signup`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        apikey: this.supabaseAnonKey
+        apikey: config.supabaseAnonKey
       },
       body: JSON.stringify({
         email,
@@ -124,12 +122,14 @@ export class AuthService {
 
   async logout(): Promise<void> {
     const accessToken = this.getToken();
-    if (accessToken && this.supabaseUrl && this.supabaseAnonKey) {
+    const supabaseUrl = resolveSupabaseUrl();
+    const supabaseAnonKey = resolveSupabaseAnonKey();
+    if (accessToken && supabaseUrl && supabaseAnonKey) {
       try {
-        await fetch(`${this.supabaseUrl}/auth/v1/logout`, {
+        await fetch(`${supabaseUrl}/auth/v1/logout`, {
           method: 'POST',
           headers: {
-            apikey: this.supabaseAnonKey,
+            apikey: supabaseAnonKey,
             Authorization: `Bearer ${accessToken}`
           }
         });
@@ -173,10 +173,13 @@ export class AuthService {
     }
   }
 
-  private ensureSupabaseAuthConfig(): void {
-    if (!this.supabaseUrl || !this.supabaseAnonKey) {
+  private ensureSupabaseAuthConfig(): { supabaseUrl: string; supabaseAnonKey: string } {
+    const supabaseUrl = resolveSupabaseUrl();
+    const supabaseAnonKey = resolveSupabaseAnonKey();
+    if (!supabaseUrl || !supabaseAnonKey) {
       throw new Error('Missing Supabase config. Set SUPABASE_URL and SUPABASE_ANON_KEY.');
     }
+    return { supabaseUrl, supabaseAnonKey };
   }
 
   private parseSupabaseSession(payload: Record<string, unknown>): SessionSnapshot {

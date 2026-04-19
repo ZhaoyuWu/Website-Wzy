@@ -32,6 +32,15 @@ runCase('prefers explicit arg and trims trailing slashes', () => {
   assert.equal(apiBaseUrl, 'https://api.nanami.test');
 });
 
+runCase('parses quoted supabase args from npm/powershell tokenization', () => {
+  const apiBaseUrl = resolveApiBaseUrl({
+    argv: ['node', 'write-runtime-config.mjs', '"--api-base-url=https://api.nanami.test///"'],
+    env: {},
+    nodeEnv: 'development'
+  });
+  assert.equal(apiBaseUrl, 'https://api.nanami.test');
+});
+
 runCase('fails in production when api base url is missing', () => {
   assert.throws(
     () =>
@@ -100,6 +109,33 @@ runCase('writes escaped runtime-config content to public folder', () => {
     assert.match(content, /window\.__NANAMI_APP_CONFIG__\.apiBaseUrl = "https:\/\/api\.nanami\.test\?a=1&b=2";/);
     assert.match(content, /window\.__NANAMI_APP_CONFIG__\.supabaseUrl = "https:\/\/demo\.supabase\.co";/);
     assert.match(content, /window\.__NANAMI_APP_CONFIG__\.supabaseAnonKey = "demo-anon-key";/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+runCase('writes supabase values when args are wrapped in quotes', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nanami-runtime-config-quoted-'));
+  const publicDir = path.join(tempDir, 'public');
+  const outputPath = path.join(publicDir, 'runtime-config.js');
+  fs.mkdirSync(publicDir, { recursive: true });
+
+  try {
+    writeRuntimeConfig({
+      cwd: tempDir,
+      argv: [
+        'node',
+        'write-runtime-config.mjs',
+        '"--api-base-url=http://localhost:4000"',
+        '"--supabase-url=https://demo.supabase.co/"',
+        '"--supabase-anon-key=quoted-anon-key"'
+      ],
+      env: {},
+      nodeEnv: 'development'
+    });
+    const content = fs.readFileSync(outputPath, 'utf8');
+    assert.match(content, /window\.__NANAMI_APP_CONFIG__\.supabaseUrl = "https:\/\/demo\.supabase\.co";/);
+    assert.match(content, /window\.__NANAMI_APP_CONFIG__\.supabaseAnonKey = "quoted-anon-key";/);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

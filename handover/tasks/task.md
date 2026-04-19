@@ -38,9 +38,11 @@ Build a warm, media-first personal website to showcase the dog Nanami, with reli
 ### G3 Epics
 - `E1` Access and role boundary (admin login and route guard).
 - `E2` Public storytelling experience (homepage + showcase).
-- `E3` Content management (upload/edit media and metadata).
-- `E4` Site profile and settings.
-- `E5` Security/performance hardening and release readiness.
+- `E3` Role and privilege management (Admin/Publisher/Viewer).
+- `E4` Content management (upload/edit media and metadata).
+- `E5` Site profile and settings.
+- `E6` Security/performance hardening and release readiness.
+- `E7` Mobile-first layout and visual polish.
 
 ### G4 Task Stories (Execution Order)
 - `T-001` Login window (admin access entry via Supabase Auth).
@@ -49,6 +51,13 @@ Build a warm, media-first personal website to showcase the dog Nanami, with reli
 - `T-004` Upload and edit interface (Supabase Storage + Postgres metadata management).
 - `T-005` Info and settings page (site info/configuration persisted in Supabase Postgres).
 - `T-006` Cross-cutting hardening and deployment (validation, responsive, performance, Vercel release).
+- `T-007` Mobile experience refinement (phone layout correctness + elegant visual hierarchy).
+
+### Task Revision Policy
+- Baseline task IDs (`T-001` ... `T-007`) are immutable and must not be overwritten or repurposed.
+- Incremental updates must use child task IDs, for example: `T-001-1`, `T-001-2`, `T-007-1`.
+- Audit tasks follow the same rule: `A-001-1`, `A-007-1`, etc.
+- Every child task must reference its parent baseline task and clearly state delta scope.
 
 ### G5 Per-Task Acceptance (DoD)
 - `T-001`:
@@ -58,8 +67,11 @@ Build a warm, media-first personal website to showcase the dog Nanami, with reli
   - Homepage renders Nanami profile, intro narrative, and entry links.
   - Public access without login.
 - `T-003`:
-  - Showcase page lists image/video metadata from Supabase Postgres.
-  - Supports stable playback/viewing behavior on modern browsers.
+  - Public timeline lists image/video metadata from Supabase Postgres. Delivered pivot: the timeline is embedded on the homepage under the `#story` anchor; the legacy `/showcase` route is kept as a redirect for bookmark compatibility.
+  - Supports stable playback/viewing on modern browsers (image click opens an in-page lightbox; video uses `preload="metadata"`, `playsinline`, and controls).
+  - Timeline merges `media_items` + `story_posts` (text entries) sorted by user-authored `display_date` desc with `created_at` tiebreak; paginated 20 per page.
+  - Per-entry like counter is public and rate-limited per client IP (`LIKE_COOLDOWN_MS` per entry + `LIKE_MAX_PER_WINDOW` per window) to keep anonymous engagement possible while blocking abuse. Frontend dedupes with `localStorage` for UX only.
+  - UI strings are translated EN/DE/ZH via `I18nService` + language picker; locale is persisted to `localStorage` and auto-detected from `navigator.language`.
 - `T-004`:
   - Admin can upload image/video to Supabase Storage with title/description.
   - Admin can edit metadata and persist to Supabase Postgres.
@@ -70,15 +82,21 @@ Build a warm, media-first personal website to showcase the dog Nanami, with reli
 - `T-006`:
   - Mobile (`<=390px`) and desktop (`>=1280px`) checks pass.
   - Vercel deployment and environment configuration are validated.
+  - All DB migrations under `handover/sql/` are applied in documented order (see `README.md#database-migrations-supabase`); missing any migration must fail fast rather than silently.
   - Principles gate passes with no unresolved blocker.
+- `T-007`:
+  - Key routes (`/`, `/showcase`, `/login`, `/admin`, `/manage-media`) are fully usable on phone widths (`360px`, `390px`, `428px`).
+  - No page-level horizontal scrolling on phone widths.
+  - Primary interactive controls are touch-friendly (visually >= `44px` height where applicable).
+  - Typography and spacing keep clear hierarchy and readable rhythm on small screens.
 
 ## Definition of Done (Project)
-- Tasks `T-001` to `T-006` are implemented and demoable.
+- Tasks `T-001` to `T-007` are implemented and demoable.
 - Principles check passes with no unresolved blocker.
 - Basic test/audit evidence exists in handover outputs.
 
 ## Out of Scope (Current Phase)
-- Multi-user role system and social login providers.
+- Complex permission matrix beyond `Admin` / `Publisher` / `Viewer`, and social login providers.
 - Complex recommendation feeds.
 - Real-time chat/live streaming.
 - CDN auto-optimization pipeline (can be phase 2).

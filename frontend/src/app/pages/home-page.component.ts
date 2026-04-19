@@ -2,7 +2,10 @@ import { CommonModule } from '@angular/common';
 import { ChangeDetectorRef, Component, OnInit, ViewRef, inject } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../core/auth.service';
+import { I18nService } from '../core/i18n.service';
 import { resolveApiBaseUrl } from '../core/runtime-config';
+import { LanguagePickerComponent } from '../components/language-picker.component';
+import { StoryTimelineComponent } from '../components/story-timeline.component';
 
 type SiteSettings = {
   profileName: string;
@@ -23,66 +26,109 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
 @Component({
   selector: 'app-home-page',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, StoryTimelineComponent, LanguagePickerComponent],
   template: `
     <main class="home">
       <header class="top-nav">
-        <a class="brand" [routerLink]="['/']">{{ settings.profileName }} Journal</a>
+        <a class="brand" [routerLink]="['/']">
+          <img src="favicon-192.png" alt="" class="brand-mark" width="36" height="36" />
+          <span>{{ settings.profileName }} {{ i18n.t('brand.journal') }}</span>
+        </a>
         <nav>
-          <a [routerLink]="['/']" fragment="moments">Moments</a>
-          <a [routerLink]="['/showcase']">Showcase</a>
+          <a [routerLink]="['/']" fragment="story">{{ i18n.t('nav.story') }}</a>
           <ng-container *ngIf="!auth.isAuthenticated">
-            <a [routerLink]="['/register']">Register</a>
-            <a [routerLink]="['/login']">Login</a>
+            <a [routerLink]="['/register']">{{ i18n.t('nav.register') }}</a>
+            <a [routerLink]="['/login']">{{ i18n.t('nav.login') }}</a>
           </ng-container>
           <ng-container *ngIf="auth.isAuthenticated">
-            <a *ngIf="auth.isPublisherOrAdmin" [routerLink]="['/manage-media']">Media</a>
-            <a *ngIf="auth.isPublisherOrAdmin" [routerLink]="['/admin']">Settings</a>
-            <button type="button" class="nav-logout" (click)="logout()" [disabled]="isLoggingOut">
-              {{ isLoggingOut ? '...' : 'Logout' }}
-            </button>
+            <a *ngIf="auth.isPublisherOrAdmin" [routerLink]="['/manage-media']">{{ i18n.t('nav.media') }}</a>
+            <a *ngIf="auth.isPublisherOrAdmin" [routerLink]="['/admin']">{{ i18n.t('nav.settings') }}</a>
           </ng-container>
+          <app-language-picker></app-language-picker>
+          <button
+            type="button"
+            class="nav-logout"
+            *ngIf="auth.isAuthenticated"
+            (click)="logout()"
+            [disabled]="isLoggingOut"
+          >
+            {{ isLoggingOut ? i18n.t('nav.logout.pending') : i18n.t('nav.logout') }}
+          </button>
         </nav>
       </header>
 
-      <section class="hero">
-        <p class="eyebrow">Public Homepage</p>
-        <h1>{{ settings.heroTagline }}</h1>
-        <p>{{ settings.aboutText }}</p>
-        <div class="hero-actions">
-          <a class="primary" [routerLink]="['/']" fragment="moments">View Story Moments</a>
-          <a class="secondary" [routerLink]="['/showcase']">Open Showcase</a>
-          <ng-container *ngIf="!auth.isAuthenticated">
-            <a class="secondary" [routerLink]="['/register']">Create Account</a>
-            <a class="secondary" [routerLink]="['/login']">Member Login</a>
-          </ng-container>
-          <a *ngIf="auth.isPublisherOrAdmin" class="secondary" [routerLink]="['/manage-media']">Manage Media</a>
-          <a *ngIf="auth.isPublisherOrAdmin" class="secondary" [routerLink]="['/admin']">Settings</a>
-        </div>
+      <section class="hero hero-graffiti">
+        <svg class="doodle doodle-sun" viewBox="0 0 64 64" aria-hidden="true">
+          <circle cx="32" cy="32" r="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+          <path
+            d="M32 6 V14 M32 50 V58 M6 32 H14 M50 32 H58 M12 12 L18 18 M46 46 L52 52 M52 12 L46 18 M12 52 L18 46"
+            stroke="currentColor" stroke-width="3" stroke-linecap="round" fill="none"/>
+        </svg>
+
+        <svg class="doodle doodle-paw" viewBox="0 0 60 60" aria-hidden="true">
+          <ellipse cx="15" cy="20" rx="5" ry="7" fill="currentColor"/>
+          <ellipse cx="28" cy="12" rx="5" ry="7" fill="currentColor"/>
+          <ellipse cx="42" cy="16" rx="5" ry="7" fill="currentColor"/>
+          <ellipse cx="50" cy="30" rx="4.5" ry="6" fill="currentColor"/>
+          <path d="M18 35 Q 30 28 44 36 Q 48 46 32 50 Q 16 46 18 35 Z" fill="currentColor"/>
+        </svg>
+
+        <svg class="doodle doodle-grass" viewBox="0 0 120 40" aria-hidden="true">
+          <path
+            d="M6 38 L10 14 L14 38 M22 38 L26 20 L30 38 M38 38 L42 10 L46 38 M54 38 L58 18 L62 38 M70 38 L74 14 L78 38 M86 38 L90 22 L94 38 M102 38 L106 12 L110 38"
+            fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+
+        <svg class="doodle doodle-heart" viewBox="0 0 48 48" aria-hidden="true">
+          <path
+            d="M24 40 C 8 28, 6 14, 16 10 C 22 8, 24 14, 24 16 C 24 14, 26 8, 32 10 C 42 14, 40 28, 24 40 Z"
+            fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+        </svg>
+
+        <svg class="doodle doodle-scribble" viewBox="0 0 90 30" aria-hidden="true">
+          <path
+            d="M4 24 C 14 4, 22 28, 34 8 S 56 26, 68 10 S 86 22, 88 14"
+            fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+        </svg>
+
+        <p class="eyebrow">{{ i18n.t('home.eyebrow') }}</p>
+
+        <h1 class="hero-title" [attr.aria-label]="settings.heroTagline">
+          <span
+            *ngFor="let ch of splitChars(settings.heroTagline); let i = index"
+            class="chr"
+            [class.space]="ch === ' '"
+            aria-hidden="true"
+          >{{ ch }}</span>
+        </h1>
+
+        <p class="hero-about" [attr.aria-label]="settings.aboutText">
+          <span
+            *ngFor="let ch of splitChars(settings.aboutText); let i = index"
+            class="chr sub"
+            [class.space]="ch === ' '"
+            aria-hidden="true"
+          >{{ ch }}</span>
+          <svg class="underline-squiggle" viewBox="0 0 240 10" aria-hidden="true" preserveAspectRatio="none">
+            <path
+              d="M2 6 Q 15 2 28 6 T 54 6 T 80 6 T 106 6 T 132 6 T 158 6 T 184 6 T 210 6 T 236 6"
+              fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+          </svg>
+        </p>
       </section>
 
       <section class="profile-card">
-        <h2>About {{ settings.profileName }}</h2>
+        <h2>{{ i18n.t('home.profile.heading', { name: settings.profileName }) }}</h2>
         <p>{{ settings.aboutText }}</p>
         <p class="contact" *ngIf="settings.showContactEmail && settings.contactEmail">
-          Contact: <a [href]="'mailto:' + settings.contactEmail">{{ settings.contactEmail }}</a>
+          {{ i18n.t('home.profile.contact') }}
+          <a [href]="'mailto:' + settings.contactEmail">{{ settings.contactEmail }}</a>
         </p>
         <p class="message" *ngIf="settingsMessage">{{ settingsMessage }}</p>
       </section>
 
-      <section id="moments" class="moments">
-        <article>
-          <h2>Morning Energy</h2>
-          <p>Nanami starts the day with a quick sprint, then waits politely for breakfast.</p>
-        </article>
-        <article>
-          <h2>Afternoon Adventures</h2>
-          <p>Park time means photo-ready smiles, playful zoomies, and curious nose work.</p>
-        </article>
-        <article>
-          <h2>Evening Wind-down</h2>
-          <p>After dinner, Nanami checks every corner of home and naps near the family.</p>
-        </article>
+      <section id="story" class="story-section">
+        <app-story-timeline></app-story-timeline>
       </section>
     </main>
   `,
@@ -90,10 +136,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
     .home {
       min-height: 100vh;
       padding: 20px;
-      background:
-        radial-gradient(circle at 14% 20%, var(--fx-warm-glow-45), transparent 38%),
-        radial-gradient(circle at 84% 12%, var(--fx-cool-glow-34), transparent 34%),
-        linear-gradient(180deg, var(--clr-fff6ed) 0%, var(--clr-f6fbff) 100%);
+      background: var(--color-app-bg);
     }
 
     .top-nav {
@@ -107,157 +150,268 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
     }
 
     .brand {
-      color: var(--clr-673716);
+      color: var(--color-ink);
       font-weight: 800;
       text-decoration: none;
       letter-spacing: 0.02em;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-mark {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      object-fit: cover;
     }
 
     nav {
       display: flex;
-      gap: 12px;
+      gap: 10px;
       flex-wrap: wrap;
       justify-content: flex-end;
+      align-items: center;
     }
 
     nav a,
     .nav-logout {
-      color: var(--color-text-secondary);
+      display: inline-flex;
+      align-items: center;
+      height: 34px;
+      color: var(--color-ink-soft);
       text-decoration: none;
-      border: 1px solid var(--color-border-warm);
+      border: 1px solid var(--color-line);
       border-radius: 999px;
-      padding: 8px 12px;
-      background: var(--fx-glass-78);
+      padding: 0 14px;
+      background: var(--color-paper);
       font-size: 14px;
       font-weight: 600;
       cursor: pointer;
       font-family: inherit;
+      transition: background 120ms ease, color 120ms ease, border-color 120ms ease, transform 120ms ease;
     }
 
-    .nav-logout:disabled { opacity: 0.6; cursor: not-allowed; }
+    nav a:hover,
+    .nav-logout:hover:not(:disabled) {
+      background: var(--color-accent);
+      border-color: var(--color-ink);
+      color: var(--color-ink);
+      transform: translateY(-1px);
+    }
+
+    nav a:active,
+    .nav-logout:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    .nav-logout:disabled { opacity: 0.5; cursor: not-allowed; }
 
     .hero {
       width: min(1100px, 100%);
       margin: 0 auto;
-      border: 1px solid var(--clr-ebd7c6);
+      border: 2px solid var(--color-ink);
       border-radius: 22px;
-      padding: clamp(24px, 5vw, 44px);
-      background: var(--color-surface-glass-93);
-      box-shadow: 0 22px 46px var(--fx-shadow-warm-12);
+      padding: clamp(28px, 5vw, 48px);
+      background: var(--color-accent);
+      box-shadow: 6px 6px 0 var(--color-ink);
+    }
+
+    .hero-graffiti {
+      position: relative;
+      overflow: hidden;
     }
 
     .eyebrow {
       margin: 0;
       text-transform: uppercase;
-      letter-spacing: 0.09em;
+      letter-spacing: 0.12em;
       font-size: 12px;
+      font-weight: 800;
+      color: var(--color-ink);
+      position: relative;
+      z-index: 2;
+    }
+
+    .hero-title {
+      margin: 14px 0 22px;
+      font-family: 'Kalam', 'Caveat', 'Segoe Script', cursive;
       font-weight: 700;
-      color: var(--clr-9a5a2f);
+      font-size: clamp(34px, 5.4vw, 58px);
+      line-height: 1.05;
+      max-width: 18ch;
+      position: relative;
+      z-index: 2;
+      word-break: break-word;
+      color: var(--color-ink);
     }
 
-    h1 {
-      margin: 10px 0 10px;
-      color: var(--color-text-strong);
-      font-size: clamp(31px, 4vw, 50px);
-      line-height: 1.08;
-      max-width: 14ch;
+    .hero-title .chr {
+      display: inline-block;
+      transition: transform 240ms ease;
+      color: var(--color-ink);
     }
 
-    .hero p {
+    .hero-title .chr.space {
+      width: 0.32em;
+    }
+
+    .hero-title .chr:hover {
+      transform: translateY(-3px) rotate(-4deg) !important;
+    }
+
+    .hero-title .chr:nth-child(6n+1) { transform: rotate(-3deg) translateY(-1px); }
+    .hero-title .chr:nth-child(6n+2) { transform: rotate(2deg) translateY(1px); }
+    .hero-title .chr:nth-child(6n+3) { transform: rotate(-1deg); }
+    .hero-title .chr:nth-child(6n+4) { transform: rotate(3deg) translateY(-2px); color: var(--color-accent-contrast); }
+    .hero-title .chr:nth-child(6n+5) { transform: rotate(-2deg) translateY(2px); }
+    .hero-title .chr:nth-child(6n+6) { transform: rotate(1deg); }
+
+    .hero-about {
+      position: relative;
       margin: 0;
-      color: var(--clr-5b4534);
-      font-size: 17px;
-      max-width: 65ch;
+      max-width: 48ch;
+      font-family: 'Caveat', 'Segoe Script', cursive;
+      font-size: 22px;
+      line-height: 1.35;
+      color: var(--color-ink-soft);
+      padding-bottom: 14px;
+      z-index: 2;
     }
 
-    .hero-actions {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-      margin-top: 24px;
+    .hero-about .chr.sub {
+      display: inline-block;
+      color: var(--color-ink-soft);
+    }
+
+    .hero-about .chr.sub:nth-child(7n+3) { color: var(--color-ink); }
+    .hero-about .chr.sub:nth-child(11n+5) { color: var(--color-accent-contrast); }
+
+    .hero-about .chr.sub.space {
+      width: 0.28em;
+    }
+
+    .underline-squiggle {
+      position: absolute;
+      left: 0;
+      bottom: -2px;
+      width: min(320px, 70%);
+      height: 10px;
+      pointer-events: none;
+    }
+
+    .doodle {
+      position: absolute;
+      pointer-events: none;
+      opacity: 0.9;
+      z-index: 1;
+      color: var(--color-ink);
+    }
+
+    .doodle-sun {
+      top: 18px;
+      right: 24px;
+      width: 70px;
+      height: 70px;
+      animation: sun-spin 22s linear infinite;
+      color: var(--color-ink);
+    }
+
+    @keyframes sun-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .doodle-paw {
+      top: 30%;
+      right: 12%;
+      width: 56px;
+      height: 56px;
+      opacity: 0.75;
+      transform: rotate(-16deg);
+      color: var(--color-accent-contrast);
+    }
+
+    .doodle-grass {
+      bottom: 10px;
+      right: 18px;
+      width: 140px;
+      height: 38px;
+      opacity: 0.9;
+      color: var(--color-ink);
+    }
+
+    .doodle-heart {
+      bottom: 24px;
+      left: 26px;
+      width: 44px;
+      height: 44px;
+      opacity: 0.85;
+      transform: rotate(-8deg);
+      color: var(--color-accent-contrast);
+    }
+
+    .doodle-scribble {
+      top: 28px;
+      left: 44%;
+      width: 110px;
+      height: 30px;
+      opacity: 0.55;
+      transform: rotate(4deg);
+      color: var(--color-ink);
+    }
+
+    .underline-squiggle {
+      color: var(--color-ink);
+    }
+
+    @media (max-width: 640px) {
+      .doodle-paw,
+      .doodle-scribble {
+        display: none;
+      }
+      .doodle-sun { width: 48px; height: 48px; top: 10px; right: 12px; }
+      .doodle-grass { width: 90px; right: 10px; bottom: 6px; }
+      .doodle-heart { width: 30px; height: 30px; bottom: 12px; left: 14px; }
     }
 
     .profile-card {
       width: min(1100px, 100%);
-      margin: 16px auto 0;
-      border: 1px solid var(--clr-dbe9f5);
-      border-radius: 16px;
-      background: var(--color-surface-glass-86);
-      padding: 18px;
+      margin: 20px auto 0;
+      border: 2px solid var(--color-ink);
+      border-radius: 18px;
+      background: var(--color-paper);
+      padding: 22px;
+      box-shadow: 4px 4px 0 var(--color-ink);
     }
 
     .profile-card h2 {
       margin: 0;
-      color: var(--clr-234564);
+      color: var(--color-ink);
     }
 
     .profile-card p {
       margin: 8px 0 0;
-      color: var(--clr-3a5268);
+      color: var(--color-ink-soft);
     }
 
     .contact a {
-      color: var(--clr-184f7f);
-      text-decoration: none;
+      color: var(--color-ink);
+      text-decoration: underline;
+      text-decoration-color: var(--color-accent);
+      text-decoration-thickness: 2px;
+      text-underline-offset: 3px;
       font-weight: 700;
     }
 
     .message {
-      color: var(--clr-5b6f84);
+      color: var(--color-ink-muted);
       font-size: 14px;
     }
 
-    .hero-actions a {
-      text-decoration: none;
-      border-radius: 12px;
-      padding: 12px 16px;
-      font-weight: 700;
-    }
-
-    .primary {
-      color: var(--color-surface);
-      background: linear-gradient(92deg, var(--color-brand-warm-start) 0%, var(--color-brand-warm-end) 100%);
-    }
-
-    .secondary {
-      color: var(--clr-5f3a1e);
-      border: 1px solid var(--clr-d2b79f);
-      background: var(--color-surface-soft);
-    }
-
-    .moments {
+    .story-section {
       width: min(1100px, 100%);
-      margin: 22px auto 0;
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 14px;
-    }
-
-    article {
-      border-radius: 16px;
-      border: 1px solid var(--color-border-soft);
-      background: var(--color-surface);
-      padding: 20px;
-      content-visibility: auto;
-      contain-intrinsic-size: 220px;
-    }
-
-    h2 {
-      margin: 0;
-      color: var(--clr-224160);
-      font-size: 20px;
-    }
-
-    article p {
-      margin: 9px 0 0;
-      color: var(--clr-3a5268);
-      line-height: 1.55;
-    }
-
-    @media (max-width: 900px) {
-      .moments {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
+      margin: 28px auto 0;
     }
 
     @media (max-width: 640px) {
@@ -273,10 +427,6 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
       nav {
         justify-content: flex-start;
       }
-
-      .moments {
-        grid-template-columns: 1fr;
-      }
     }
 
     @media (max-width: 390px) {
@@ -284,32 +434,28 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
         padding: 7px 10px;
         font-size: 13px;
       }
-
-      .hero-actions a {
-        width: 100%;
-        text-align: center;
-      }
     }
 
     @media (min-width: 1280px) {
       .home {
         padding: 28px 32px;
       }
-
-      .moments {
-        gap: 18px;
-      }
     }
   `
 })
 export class HomePageComponent implements OnInit {
   readonly auth = inject(AuthService);
+  readonly i18n = inject(I18nService);
   private readonly router = inject(Router);
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly apiBaseUrl = resolveApiBaseUrl();
   settings: SiteSettings = { ...DEFAULT_SITE_SETTINGS };
   settingsMessage = '';
   isLoggingOut = false;
+
+  splitChars(input: string): string[] {
+    return Array.from(String(input || ''));
+  }
 
   async logout(): Promise<void> {
     this.isLoggingOut = true;
@@ -338,10 +484,10 @@ export class HomePageComponent implements OnInit {
 
       this.settings = this.mergeSettings(payload.settings);
       this.settingsMessage =
-        payload.source === 'default' ? 'Using default site settings. Admin can customize this page.' : '';
+        payload.source === 'default' ? this.i18n.t('home.settings.defaultsNote') : '';
     } catch {
       this.settings = { ...DEFAULT_SITE_SETTINGS };
-      this.settingsMessage = 'Unable to load custom settings right now. Showing default content.';
+      this.settingsMessage = this.i18n.t('home.settings.loadError');
     } finally {
       this.safeDetectChanges();
     }

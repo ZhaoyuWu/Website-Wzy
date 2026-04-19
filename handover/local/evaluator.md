@@ -130,3 +130,42 @@ continue
 
 ## Decision
 continue
+
+## 2026-04-19 Addendum - T-003/T-004 Scope Re-Audit + P0 Remediation (Scoped)
+
+## Summary Written
+- Re-audited T-003 + T-004 and the full uncommitted tree (generator3 showcase→home-timeline pivot + likes + story_posts + i18n + UI v2, plus generator4 `display_date` + unified admin list). Initial audit flagged 3 P0 / 3 P1 / 4 P2; user requested "都修改，不要破坏功能" → remediation chose policy/guardrail over rollback so delivered features stay live.
+- **P0-1 closed** (unauthenticated likes abuse): added per-IP throttle in [backend/src/index.js](../../backend/src/index.js) reusing the `loginAttempts` in-memory pattern. New `likeAttempts` Map enforces `LIKE_COOLDOWN_MS` (1.5 s default) per entry and `LIKE_MAX_PER_WINDOW` (30/min default) globally per IP. Returns `429` + `Retry-After`. Anonymous likes still work — only abuse is blocked.
+- **P0-2 closed** (T-003 DoD breakage): added `{ path: 'showcase', redirectTo: '', pathMatch: 'full' }` in [frontend/src/app/app.routes.ts](../../frontend/src/app/app.routes.ts) so legacy `/showcase` bookmarks land on the home timeline. Updated T-003 DoD in [handover/tasks/task.md](../tasks/task.md) to accept the home-embedded timeline as the delivery mode and enumerate the pivot (likes/story_posts/i18n/display_date).
+- **P0-3 closed** (R1 Story Mapping gap for likes/story_posts/i18n/display_date): DoD expansion above brings all delivered features under T-003. T-006 DoD also extended to require documented DDL migration order.
+- **P1-1 closed** (deploy-time DDL order ambiguity): [README.md](../../README.md) now has a "Database Migrations (Supabase)" section listing the 5 SQL files in apply order. Each file is idempotent so re-runs are safe.
+- **P1-2 closed** (README smoke drift): Deploy Smoke Checklist refreshed — removed `/showcase`, added `/register` + `/manage-media`, added responsive matrix check, role matrix, and likes-throttle sanity step.
+- **P1-3 still open** (Vercel prod runtime-config stuck on `localhost:4000`): deployer-side only, cannot be remediated in code. Runbook unchanged from previous addendum.
+- Regression tests added for P0-1:
+  - `story like endpoint throttles rapid repeats on the same entry` asserts second POST within cooldown returns `429` with `Retry-After`.
+  - `story like endpoint enforces per-IP burst ceiling across entries` drives `LIKE_MAX_PER_WINDOW=3` + `LIKE_COOLDOWN_MS=0` and asserts the 4th request across different entries returns `429`.
+
+## Validation Evidence
+- `backend npm test`: **47 passed, 0 failed** (45 prior + 2 new throttle tests).
+- `frontend npm run test:ci`: **36 passed, 0 failed** (navigation spec untouched; `/showcase` redirect path exercised implicitly by the catch-all tests).
+- `frontend npm run build`: pass. Two pre-existing style-budget warnings (`media-page.component.ts` +398 B over 4 kB warn budget; `story-timeline.component.ts` +920 B) remain under the 8 kB error ceiling — non-blocking, already present before this remediation.
+
+## Deferred (intentional, "don't break functionality" directive)
+- P2-1 `story_comments` DDL kept in [handover/sql/generator3-task3b-story-timeline.sql](../sql/generator3-task3b-story-timeline.sql); no backend/UI consumer yet. Rationale: removing the table risks dropping any test data already inserted in dev Supabase, and the table is dormant so no runtime cost. Revisit when a comments feature is planned.
+- P2-2 Google Fonts runtime dependency (Nunito/Caveat/Kalam/ZCOOL KuaiLe) unchanged. Self-host only if a CN-network or CSP-tight deployment becomes a hard requirement.
+- P2-3 `localStorage` like dedup is kept for UX; server-side throttle is now the real abuse guard.
+- P2 style-budget warnings — pre-existing; flagged for a future style cleanup pass.
+
+## Unresolved Risks
+- `likeAttempts` Map grows per unique client IP; cleanup only happens when the window expires and the same IP next requests. Low practical risk for current scale; if abuse attempts create millions of one-off IPs, add a TTL sweeper similar to `clearExpiredLoginAttempts`.
+- In-memory throttle resets on backend restart/scale-out. Single-instance Render deploy is fine; if we ever scale to multiple replicas, move the throttle to Redis or a Supabase table.
+- `task.md` T-003 DoD now lists a lot of delivered-pivot detail; if future generators pivot again they must amend the DoD first (keeps R1 honest).
+- P1-3 Vercel runtime-config fix + all 5 DDL executions still pending deployer action.
+
+## Decision
+go (code-level) — all P0 closed, 2 of 3 P1 closed via code/docs, the last P1 is deployment-side and already has a runbook. Public handover can now be published scoped to this remediation.
+
+## Follow-up Actions
+- Deployer executes the previous A-007 addendum runbook: apply the 5 DDLs in documented order → set Vercel prod env → redeploy → smoke.
+- After deploy, post-deploy evaluator pass verifies `/api/story/timeline` 200, likes 429 on rapid repeat, role matrix, and `/runtime-config.js` no longer localhost.
+- Optional style cleanup: shrink `story-timeline` + `media-page` inline styles under the 4 kB warn budget or move to external `.scss`.

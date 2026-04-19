@@ -3,6 +3,8 @@ import { ChangeDetectorRef, Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../core/auth.service';
+import { I18nService } from '../core/i18n.service';
+import { LanguagePickerComponent } from '../components/language-picker.component';
 
 type MediaItem = {
   id: number | string;
@@ -10,6 +12,7 @@ type MediaItem = {
   description?: string;
   media_type?: 'image' | 'video' | string;
   public_url?: string;
+  display_date?: string;
   created_at?: string;
   updated_at?: string;
 };
@@ -17,7 +20,29 @@ type MediaItem = {
 type EditDraft = {
   title: string;
   description: string;
+  displayDate: string;
 };
+
+type StoryPost = {
+  id: number | string;
+  title: string;
+  body: string;
+  author_id?: string | null;
+  likes_count?: number;
+  display_date?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+type StoryEditDraft = {
+  title: string;
+  body: string;
+  displayDate: string;
+};
+
+type UnifiedEntry =
+  | { kind: 'media'; id: number | string; displayDate: string; item: MediaItem }
+  | { kind: 'story'; id: number | string; displayDate: string; post: StoryPost };
 
 const IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 const VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime']);
@@ -27,35 +52,36 @@ const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
 @Component({
   selector: 'app-media-page',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, LanguagePickerComponent],
   template: `
     <main class="media-layout">
       <section class="media-card">
         <div class="header">
           <div>
-            <p class="eyebrow">Media Management</p>
-            <h1>Manage Media</h1>
+            <p class="eyebrow">{{ i18n.t('media.eyebrow') }}</p>
+            <h1>{{ i18n.t('media.heading') }}</h1>
             <p class="desc">
-              Signed in as {{ auth.username ?? 'unknown' }}
+              {{ i18n.t('media.signedIn', { name: auth.username ?? 'unknown' }) }}
               <span class="role-badge role-{{ auth.userRole.toLowerCase() }}">{{ auth.userRole }}</span>
             </p>
           </div>
           <div class="header-actions">
-            <a class="back-home" [routerLink]="['/']"><- Home</a>
+            <a class="back-home" [routerLink]="['/']">{{ i18n.t('nav.home') }}</a>
+            <app-language-picker></app-language-picker>
             <button type="button" class="logout" (click)="logout()" [disabled]="isLoggingOut">
-              {{ isLoggingOut ? 'Signing out...' : 'Logout' }}
+              {{ isLoggingOut ? i18n.t('common.logout.pending') : i18n.t('common.logout') }}
             </button>
           </div>
         </div>
       </section>
 
       <section class="media-card">
-        <h2>Upload New Media</h2>
-        <p class="hint">Allowed: JPG/PNG/WEBP/GIF up to 10MB, MP4/WEBM/MOV up to 50MB.</p>
+        <h2>{{ i18n.t('media.section.upload') }}</h2>
+        <p class="hint">{{ i18n.t('media.upload.hint2') }}</p>
 
         <form class="form-grid" (ngSubmit)="uploadMedia()">
           <label>
-            <span>Title</span>
+            <span>{{ i18n.t('media.field.title') }}</span>
             <input
               type="text"
               [(ngModel)]="uploadTitle"
@@ -67,7 +93,18 @@ const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
           </label>
 
           <label>
-            <span>Description (optional)</span>
+            <span>{{ i18n.t('media.field.displayDate') }}</span>
+            <input
+              type="date"
+              [(ngModel)]="uploadDisplayDate"
+              name="uploadDisplayDate"
+              required
+              [disabled]="isUploading"
+            />
+          </label>
+
+          <label>
+            <span>{{ i18n.t('media.field.description') }}</span>
             <textarea
               [(ngModel)]="uploadDescription"
               name="uploadDescription"
@@ -78,7 +115,7 @@ const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
           </label>
 
           <label>
-            <span>File</span>
+            <span>{{ i18n.t('media.field.file') }}</span>
             <input
               type="file"
               accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
@@ -95,82 +132,224 @@ const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
           <p class="success" *ngIf="uploadSuccess">{{ uploadSuccess }}</p>
 
           <button type="submit" [disabled]="isUploading">
-            {{ isUploading ? 'Uploading...' : 'Upload' }}
+            {{ isUploading ? i18n.t('media.upload.submitting') : i18n.t('media.upload.submit') }}
+          </button>
+        </form>
+      </section>
+
+
+      <section class="media-card">
+        <h2>{{ i18n.t('story.section.new') }}</h2>
+        <p class="hint">{{ i18n.t('story.new.hint') }}</p>
+
+        <form class="form-grid" (ngSubmit)="createStoryPost()">
+          <label>
+            <span>{{ i18n.t('media.field.title') }}</span>
+            <input
+              type="text"
+              [(ngModel)]="storyTitle"
+              name="storyTitle"
+              maxlength="120"
+              required
+              [disabled]="isSavingStory"
+            />
+          </label>
+
+          <label>
+            <span>{{ i18n.t('media.field.displayDate') }}</span>
+            <input
+              type="date"
+              [(ngModel)]="storyDisplayDate"
+              name="storyDisplayDate"
+              required
+              [disabled]="isSavingStory"
+            />
+          </label>
+
+          <label>
+            <span>{{ i18n.t('story.field.body') }}</span>
+            <textarea
+              [(ngModel)]="storyBody"
+              name="storyBody"
+              maxlength="4000"
+              rows="5"
+              required
+              [disabled]="isSavingStory"
+            ></textarea>
+          </label>
+
+          <p class="error" *ngIf="storyError">{{ storyError }}</p>
+          <p class="success" *ngIf="storySuccess">{{ storySuccess }}</p>
+
+          <button type="submit" [disabled]="isSavingStory">
+            {{ isSavingStory ? i18n.t('story.publishing') : i18n.t('story.publish') }}
           </button>
         </form>
       </section>
 
       <section class="media-card">
         <div class="list-header">
-          <h2>Existing Media</h2>
-          <button type="button" class="secondary" (click)="loadMediaItems()" [disabled]="isRefreshing">
-            {{ isRefreshing ? 'Refreshing...' : 'Refresh' }}
+          <h2>{{ i18n.t('media.section.existingUnified') }}</h2>
+          <button type="button" class="secondary" (click)="refreshAll()" [disabled]="isRefreshing || isRefreshingStories">
+            {{ (isRefreshing || isRefreshingStories) ? i18n.t('media.refreshing') : i18n.t('media.refresh') }}
           </button>
         </div>
 
-        <p class="hint">Edit title or description; delete removes the file and its metadata.</p>
+        <p class="hint">{{ i18n.t('media.existing.unifiedHint') }}</p>
         <p class="error" *ngIf="listError">{{ listError }}</p>
+        <p class="error" *ngIf="storyListError">{{ storyListError }}</p>
         <p class="error" *ngIf="deleteError">{{ deleteError }}</p>
         <p class="error" *ngIf="editError">{{ editError }}</p>
-        <p class="hint" *ngIf="!isRefreshing && mediaItems.length === 0 && !listError">
-          No media items yet.
+        <p class="error" *ngIf="storyEditError">{{ storyEditError }}</p>
+        <p
+          class="hint"
+          *ngIf="!isRefreshing && !isRefreshingStories && unifiedEntries.length === 0 && !listError && !storyListError"
+        >
+          {{ i18n.t('media.empty.unified') }}
         </p>
 
-        <ul class="media-list" *ngIf="mediaItems.length > 0">
-          <li class="media-row" *ngFor="let item of mediaItems; trackBy: trackById">
-            <ng-container *ngIf="editingId !== item.id">
-              <strong class="title">{{ item.title }}</strong>
-              <span class="timestamp">Uploaded {{ formatDateTime(item.created_at) }}</span>
-              <span class="timestamp muted" *ngIf="hasBeenEdited(item)">
-                &middot; Updated {{ formatDateTime(item.updated_at) }}
-              </span>
-              <div class="row-actions">
-                <button type="button" class="secondary compact" (click)="startEdit(item)">
-                  Edit
-                </button>
-                <button
-                  type="button"
-                  class="danger compact"
-                  (click)="deleteItem(item)"
-                  [disabled]="deletingId === item.id"
-                >
-                  {{ deletingId === item.id ? 'Deleting...' : 'Delete' }}
-                </button>
-              </div>
-            </ng-container>
-
-            <ng-container *ngIf="editingId === item.id && editDraft">
-              <div class="edit-form">
-                <label>
-                  <span>Title</span>
-                  <input
-                    type="text"
-                    [(ngModel)]="editDraft.title"
-                    name="editTitle-{{ item.id }}"
-                    maxlength="120"
-                    required
-                    [disabled]="isSavingEdit"
-                  />
-                </label>
-                <label>
-                  <span>Description</span>
-                  <textarea
-                    [(ngModel)]="editDraft.description"
-                    name="editDescription-{{ item.id }}"
-                    maxlength="500"
-                    rows="3"
-                    [disabled]="isSavingEdit"
-                  ></textarea>
-                </label>
+        <ul class="media-list" *ngIf="unifiedEntries.length > 0">
+          <li class="media-row" *ngFor="let entry of unifiedEntries; trackBy: trackByUnified">
+            <ng-container *ngIf="entry.kind === 'media'">
+              <ng-container *ngIf="editingId !== entry.item.id">
+                <span class="kind-badge kind-{{ entry.item.media_type }}">{{ entry.item.media_type | uppercase }}</span>
+                <strong class="title">{{ entry.item.title }}</strong>
+                <span class="timestamp">{{ i18n.t('media.displayDate') }} {{ formatDisplayDate(entry.item.display_date) }}</span>
+                <span class="timestamp muted" *ngIf="hasBeenEdited(entry.item)">
+                  &middot; {{ i18n.t('media.updated', { time: formatDateTime(entry.item.updated_at) }) }}
+                </span>
                 <div class="row-actions">
-                  <button type="button" (click)="saveEdit(item)" [disabled]="isSavingEdit">
-                    {{ isSavingEdit ? 'Saving...' : 'Save' }}
+                  <button type="button" class="secondary compact" (click)="startEdit(entry.item)">
+                    {{ i18n.t('media.edit') }}
                   </button>
-                  <button type="button" class="secondary" (click)="cancelEdit()" [disabled]="isSavingEdit">
-                    Cancel
+                  <button
+                    type="button"
+                    class="danger compact"
+                    (click)="deleteItem(entry.item)"
+                    [disabled]="deletingId === entry.item.id"
+                  >
+                    {{ deletingId === entry.item.id ? i18n.t('media.deleting') : i18n.t('media.delete') }}
                   </button>
                 </div>
-              </div>
+              </ng-container>
+
+              <ng-container *ngIf="editingId === entry.item.id && editDraft">
+                <div class="edit-form">
+                  <label>
+                    <span>{{ i18n.t('media.field.title') }}</span>
+                    <input
+                      type="text"
+                      [(ngModel)]="editDraft.title"
+                      name="editTitle-{{ entry.item.id }}"
+                      maxlength="120"
+                      required
+                      [disabled]="isSavingEdit"
+                    />
+                  </label>
+                  <label>
+                    <span>{{ i18n.t('media.field.displayDate') }}</span>
+                    <input
+                      type="date"
+                      [(ngModel)]="editDraft.displayDate"
+                      name="editDate-{{ entry.item.id }}"
+                      required
+                      [disabled]="isSavingEdit"
+                    />
+                  </label>
+                  <label>
+                    <span>{{ i18n.t('media.field.description') }}</span>
+                    <textarea
+                      [(ngModel)]="editDraft.description"
+                      name="editDescription-{{ entry.item.id }}"
+                      maxlength="500"
+                      rows="3"
+                      [disabled]="isSavingEdit"
+                    ></textarea>
+                  </label>
+                  <div class="row-actions">
+                    <button type="button" (click)="saveEdit(entry.item)" [disabled]="isSavingEdit">
+                      {{ isSavingEdit ? i18n.t('media.saving') : i18n.t('media.save') }}
+                    </button>
+                    <button type="button" class="secondary" (click)="cancelEdit()" [disabled]="isSavingEdit">
+                      {{ i18n.t('media.cancel') }}
+                    </button>
+                  </div>
+                </div>
+              </ng-container>
+            </ng-container>
+
+            <ng-container *ngIf="entry.kind === 'story'">
+              <ng-container *ngIf="editingStoryId !== entry.post.id">
+                <span class="kind-badge kind-text">TEXT</span>
+                <strong class="title">{{ entry.post.title }}</strong>
+                <span class="timestamp">{{ i18n.t('media.displayDate') }} {{ formatDisplayDate(entry.post.display_date) }}</span>
+                <span class="timestamp muted" *ngIf="hasStoryBeenEdited(entry.post)">
+                  &middot; {{ i18n.t('media.updated', { time: formatDateTime(entry.post.updated_at) }) }}
+                </span>
+                <div class="row-actions">
+                  <button type="button" class="secondary compact" (click)="startEditStory(entry.post)">
+                    {{ i18n.t('media.edit') }}
+                  </button>
+                  <button
+                    type="button"
+                    class="danger compact"
+                    (click)="deleteStoryPost(entry.post)"
+                    [disabled]="deletingStoryId === entry.post.id"
+                  >
+                    {{ deletingStoryId === entry.post.id ? i18n.t('media.deleting') : i18n.t('media.delete') }}
+                  </button>
+                </div>
+              </ng-container>
+
+              <ng-container *ngIf="editingStoryId === entry.post.id && storyEditDraft">
+                <div class="edit-form">
+                  <label>
+                    <span>{{ i18n.t('media.field.title') }}</span>
+                    <input
+                      type="text"
+                      [(ngModel)]="storyEditDraft.title"
+                      name="storyEditTitle-{{ entry.post.id }}"
+                      maxlength="120"
+                      required
+                      [disabled]="isSavingStoryEdit"
+                    />
+                  </label>
+                  <label>
+                    <span>{{ i18n.t('media.field.displayDate') }}</span>
+                    <input
+                      type="date"
+                      [(ngModel)]="storyEditDraft.displayDate"
+                      name="storyEditDate-{{ entry.post.id }}"
+                      required
+                      [disabled]="isSavingStoryEdit"
+                    />
+                  </label>
+                  <label>
+                    <span>{{ i18n.t('story.field.body') }}</span>
+                    <textarea
+                      [(ngModel)]="storyEditDraft.body"
+                      name="storyEditBody-{{ entry.post.id }}"
+                      maxlength="4000"
+                      rows="5"
+                      required
+                      [disabled]="isSavingStoryEdit"
+                    ></textarea>
+                  </label>
+                  <div class="row-actions">
+                    <button type="button" (click)="saveStoryEdit(entry.post)" [disabled]="isSavingStoryEdit">
+                      {{ isSavingStoryEdit ? i18n.t('media.saving') : i18n.t('media.save') }}
+                    </button>
+                    <button
+                      type="button"
+                      class="secondary"
+                      (click)="cancelStoryEdit()"
+                      [disabled]="isSavingStoryEdit"
+                    >
+                      {{ i18n.t('media.cancel') }}
+                    </button>
+                  </div>
+                </div>
+              </ng-container>
             </ng-container>
           </li>
         </ul>
@@ -184,20 +363,17 @@ const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
       display: grid;
       gap: 16px;
       align-content: start;
-      background:
-        radial-gradient(circle at 22% 20%, var(--fx-admin-warm-glow), transparent 36%),
-        radial-gradient(circle at 90% 10%, var(--fx-admin-green-glow), transparent 32%),
-        var(--clr-f4fbf8);
+      background: var(--color-app-bg);
     }
 
     .media-card {
       width: min(980px, 100%);
       margin: 0 auto;
       border-radius: 18px;
-      border: 1px solid var(--clr-c7e5d8);
-      background: var(--color-surface);
+      border: 2px solid var(--color-ink);
+      background: var(--color-paper);
       padding: 22px;
-      box-shadow: 0 14px 36px var(--fx-shadow-admin);
+      box-shadow: 4px 4px 0 var(--color-ink);
     }
 
     .header {
@@ -211,7 +387,7 @@ const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
 
     .eyebrow {
       margin: 0;
-      color: var(--clr-257b58);
+      color: var(--color-ink);
       font-size: 12px;
       font-weight: 700;
       text-transform: uppercase;
@@ -221,12 +397,12 @@ const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
     h1,
     h2 {
       margin: 6px 0;
-      color: var(--clr-163526);
+      color: var(--color-ink);
     }
 
     .desc {
       margin: 0;
-      color: var(--clr-3b5e4d);
+      color: var(--color-ink-soft);
     }
 
     .role-badge {
@@ -241,42 +417,64 @@ const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
     }
 
     .role-admin {
-      background: var(--clr-d4edda);
-      color: var(--clr-1a5c33);
+      background: var(--color-accent);
+      color: var(--color-ink);
     }
 
     .role-publisher {
-      background: var(--clr-cce5ff);
-      color: var(--clr-1a3a6c);
+      background: var(--color-cool-wash);
+      color: var(--color-ink);
     }
 
     .role-viewer {
-      background: var(--clr-ececec);
-      color: var(--clr-555);
+      background: var(--color-paper-sunk);
+      color: var(--color-ink-muted);
     }
 
     button {
-      border: 0;
+      border: 1.5px solid var(--color-ink);
       border-radius: 10px;
       min-width: 140px;
       min-height: 40px;
-      color: var(--clr-fff);
-      background: linear-gradient(90deg, var(--color-brand-green-start) 0%, var(--color-brand-green-end) 100%);
+      color: var(--color-ink);
+      background: var(--color-accent);
       font-weight: 700;
       cursor: pointer;
       padding: 8px 14px;
+      transition: background 120ms ease, color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+      font-family: inherit;
+    }
+
+    button:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 3px 3px 0 var(--color-ink);
+    }
+
+    button:active:not(:disabled) {
+      transform: translateY(0);
+      box-shadow: none;
     }
 
     button.secondary {
-      background: var(--clr-eef6f2);
-      color: var(--clr-206346);
-      border: 1px solid var(--color-border-success);
+      background: var(--color-cool-wash);
+      color: var(--color-ink);
+      border: 1.5px solid var(--color-ink);
+    }
+
+    button.secondary:hover:not(:disabled) {
+      background: var(--color-cool);
+      color: var(--color-paper);
     }
 
     button.danger {
-      background: var(--color-state-error);
-      color: var(--color-surface);
+      background: var(--color-accent-contrast);
+      color: var(--color-paper);
       min-width: 100px;
+    }
+
+    button.danger:hover:not(:disabled) {
+      background: var(--color-ink);
+      color: var(--color-accent-contrast);
     }
 
     button[disabled] {
@@ -293,13 +491,19 @@ const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
 
     .back-home {
       text-decoration: none;
-      color: var(--clr-206346);
+      color: var(--color-ink);
       font-weight: 600;
       font-size: 14px;
       padding: 8px 14px;
-      border: 1px solid var(--color-border-success);
+      border: 1px solid var(--color-ink);
       border-radius: 10px;
-      background: var(--clr-eef6f2);
+      background: var(--color-paper);
+      transition: background 120ms ease, transform 120ms ease;
+    }
+
+    .back-home:hover {
+      background: var(--color-accent);
+      transform: translateY(-1px);
     }
 
     .logout {
@@ -314,14 +518,14 @@ const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
     label {
       display: grid;
       gap: 6px;
-      color: var(--clr-1f4e37);
+      color: var(--color-ink-soft);
       font-weight: 600;
       font-size: 14px;
     }
 
     input,
     textarea {
-      border: 1px solid var(--color-border-success);
+      border: 1px solid var(--color-ink);
       border-radius: 10px;
       padding: 10px;
       font: inherit;
@@ -330,18 +534,18 @@ const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
     .file-meta,
     .hint {
       margin: 0;
-      color: var(--clr-416654);
+      color: var(--color-ink-muted);
     }
 
     .error {
       margin: 0;
-      color: var(--clr-9b2e2e);
+      color: var(--color-accent-contrast);
       font-weight: 600;
     }
 
     .success {
       margin: 0;
-      color: var(--color-state-success);
+      color: var(--color-ink);
       font-weight: 600;
     }
 
@@ -363,18 +567,18 @@ const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
     }
 
     .media-row {
-      border: 1px solid var(--clr-ddede5);
+      border: 1px solid var(--color-line);
       border-radius: 10px;
       padding: 8px 12px;
       display: flex;
       align-items: center;
       gap: 12px;
       flex-wrap: wrap;
-      background: var(--clr-fbfefc);
+      background: var(--color-paper);
     }
 
     .title {
-      color: var(--clr-163526);
+      color: var(--color-ink);
       font-size: 14px;
       min-width: 0;
       flex: 0 1 auto;
@@ -382,13 +586,24 @@ const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
     }
 
     .timestamp {
-      color: var(--clr-4a6b5d);
+      color: var(--color-ink-muted);
       font-size: 12px;
       white-space: nowrap;
     }
 
-    .timestamp.muted {
-      color: var(--clr-5b6f84);
+    .timestamp.muted,
+    .muted {
+      color: var(--color-ink-muted);
+    }
+
+    .story-preview {
+      width: 100%;
+      margin: 6px 0 0;
+      color: var(--color-ink-soft);
+      font-size: 13.5px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
     }
 
     .row-actions {
@@ -405,6 +620,20 @@ const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
       padding: 4px 12px;
       font-size: 13px;
     }
+
+    .kind-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .kind-image { background: var(--color-cool-wash); color: var(--color-ink); }
+    .kind-video { background: var(--color-paper-sunk); color: var(--color-ink); }
+    .kind-text { background: var(--color-accent-wash); color: var(--color-ink); }
 
     .edit-form {
       display: grid;
@@ -461,6 +690,7 @@ const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
 })
 export class MediaPageComponent implements OnInit {
   readonly auth = inject(AuthService);
+  readonly i18n = inject(I18nService);
   private readonly router = inject(Router);
   private readonly cdr = inject(ChangeDetectorRef);
 
@@ -477,10 +707,28 @@ export class MediaPageComponent implements OnInit {
 
   uploadTitle = '';
   uploadDescription = '';
+  uploadDisplayDate = MediaPageComponent.todayIso();
   selectedFile: File | null = null;
   uploadError = '';
   uploadSuccess = '';
   isUploading = false;
+
+  storyPosts: StoryPost[] = [];
+  storyListError = '';
+  isRefreshingStories = false;
+
+  storyTitle = '';
+  storyBody = '';
+  storyDisplayDate = MediaPageComponent.todayIso();
+  storyError = '';
+  storySuccess = '';
+  isSavingStory = false;
+
+  editingStoryId: number | string | null = null;
+  storyEditDraft: StoryEditDraft | null = null;
+  storyEditError = '';
+  isSavingStoryEdit = false;
+  deletingStoryId: number | string | null = null;
 
   isLoggingOut = false;
 
@@ -492,7 +740,7 @@ export class MediaPageComponent implements OnInit {
       if (!response.ok) {
         throw new Error('Unauthorized session');
       }
-      await this.loadMediaItems();
+      await Promise.all([this.loadMediaItems(), this.loadStoryPosts()]);
     } catch {
       await this.auth.logout();
       await this.router.navigate(['/login']);
@@ -503,6 +751,45 @@ export class MediaPageComponent implements OnInit {
 
   trackById(index: number, item: MediaItem): number | string {
     return item.id ?? index;
+  }
+
+  trackByUnified = (_index: number, entry: UnifiedEntry): string => `${entry.kind}:${entry.id}`;
+
+  get unifiedEntries(): UnifiedEntry[] {
+    const mediaEntries: UnifiedEntry[] = this.mediaItems.map((item) => ({
+      kind: 'media',
+      id: item.id,
+      displayDate: item.display_date ?? item.created_at ?? '',
+      item
+    }));
+    const storyEntries: UnifiedEntry[] = this.storyPosts.map((post) => ({
+      kind: 'story',
+      id: post.id,
+      displayDate: post.display_date ?? post.created_at ?? '',
+      post
+    }));
+    return [...mediaEntries, ...storyEntries].sort((a, b) => {
+      if (a.displayDate === b.displayDate) {
+        const aCreated =
+          a.kind === 'media' ? a.item.created_at ?? '' : a.post.created_at ?? '';
+        const bCreated =
+          b.kind === 'media' ? b.item.created_at ?? '' : b.post.created_at ?? '';
+        return bCreated.localeCompare(aCreated);
+      }
+      return b.displayDate.localeCompare(a.displayDate);
+    });
+  }
+
+  async refreshAll(): Promise<void> {
+    await Promise.all([this.loadMediaItems(), this.loadStoryPosts()]);
+  }
+
+  private static todayIso(): string {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
   }
 
   async loadMediaItems(): Promise<void> {
@@ -565,6 +852,7 @@ export class MediaPageComponent implements OnInit {
 
     const title = this.uploadTitle.trim();
     const description = this.uploadDescription.trim();
+    const displayDate = this.uploadDisplayDate.trim();
     const file = this.selectedFile;
 
     if (!title || title.length > 120) {
@@ -574,6 +862,11 @@ export class MediaPageComponent implements OnInit {
 
     if (description.length > 500) {
       this.uploadError = 'Description must be at most 500 characters.';
+      return;
+    }
+
+    if (!MediaPageComponent.isIsoDate(displayDate)) {
+      this.uploadError = 'Display date is required (YYYY-MM-DD).';
       return;
     }
 
@@ -606,6 +899,7 @@ export class MediaPageComponent implements OnInit {
         body: JSON.stringify({
           title,
           description,
+          displayDate,
           fileName: file.name,
           fileType: file.type,
           fileSize: file.size,
@@ -626,6 +920,7 @@ export class MediaPageComponent implements OnInit {
       this.mediaItems = [payload.item, ...this.mediaItems];
       this.uploadTitle = '';
       this.uploadDescription = '';
+      this.uploadDisplayDate = MediaPageComponent.todayIso();
       this.selectedFile = null;
       this.uploadSuccess = 'Upload completed.';
     } catch (error) {
@@ -648,7 +943,8 @@ export class MediaPageComponent implements OnInit {
     this.editingId = item.id;
     this.editDraft = {
       title: item.title,
-      description: item.description ?? ''
+      description: item.description ?? '',
+      displayDate: item.display_date ?? MediaPageComponent.todayIso()
     };
   }
 
@@ -665,6 +961,7 @@ export class MediaPageComponent implements OnInit {
 
     const title = this.editDraft.title.trim();
     const description = this.editDraft.description.trim();
+    const displayDate = this.editDraft.displayDate.trim();
 
     if (!title || title.length > 120) {
       this.editError = 'Title is required and must be at most 120 characters.';
@@ -673,6 +970,11 @@ export class MediaPageComponent implements OnInit {
 
     if (description.length > 500) {
       this.editError = 'Description must be at most 500 characters.';
+      return;
+    }
+
+    if (!MediaPageComponent.isIsoDate(displayDate)) {
+      this.editError = 'Display date must be a valid YYYY-MM-DD.';
       return;
     }
 
@@ -687,7 +989,7 @@ export class MediaPageComponent implements OnInit {
             'Content-Type': 'application/json',
             ...this.auth.authHeaders()
           },
-          body: JSON.stringify({ title, description })
+          body: JSON.stringify({ title, description, displayDate })
         }
       );
 
@@ -753,6 +1055,197 @@ export class MediaPageComponent implements OnInit {
     }
   }
 
+  trackByStoryId(index: number, post: StoryPost): number | string {
+    return post.id ?? index;
+  }
+
+  hasStoryBeenEdited(post: StoryPost): boolean {
+    if (!post.updated_at || !post.created_at) return false;
+    return post.updated_at !== post.created_at;
+  }
+
+  async loadStoryPosts(): Promise<void> {
+    this.isRefreshingStories = true;
+    this.storyListError = '';
+    try {
+      const response = await fetch(this.auth.apiUrl('/api/admin/story-posts'), {
+        headers: this.auth.authHeaders()
+      });
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        message?: string;
+        items?: StoryPost[];
+      };
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.message || 'Failed to load story posts.');
+      }
+      this.storyPosts = Array.isArray(payload.items) ? payload.items : [];
+    } catch (error) {
+      this.storyListError =
+        error instanceof Error ? error.message : 'Failed to load story posts.';
+    } finally {
+      this.isRefreshingStories = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  async createStoryPost(): Promise<void> {
+    this.storyError = '';
+    this.storySuccess = '';
+    const title = this.storyTitle.trim();
+    const body = this.storyBody.trim();
+    const displayDate = this.storyDisplayDate.trim();
+
+    if (!title || title.length > 120) {
+      this.storyError = 'Title is required and must be at most 120 characters.';
+      return;
+    }
+    if (!body || body.length > 4000) {
+      this.storyError = 'Body is required and must be at most 4000 characters.';
+      return;
+    }
+    if (!MediaPageComponent.isIsoDate(displayDate)) {
+      this.storyError = 'Display date is required (YYYY-MM-DD).';
+      return;
+    }
+
+    this.isSavingStory = true;
+    try {
+      const response = await fetch(this.auth.apiUrl('/api/admin/story-posts'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...this.auth.authHeaders()
+        },
+        body: JSON.stringify({ title, body, displayDate })
+      });
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        message?: string;
+        item?: StoryPost;
+      };
+      if (!response.ok || !payload.ok || !payload.item) {
+        throw new Error(payload.message || 'Failed to publish story post.');
+      }
+      this.storyPosts = [payload.item, ...this.storyPosts];
+      this.storyTitle = '';
+      this.storyBody = '';
+      this.storyDisplayDate = MediaPageComponent.todayIso();
+      this.storySuccess = 'Story post published.';
+    } catch (error) {
+      this.storyError =
+        error instanceof Error ? error.message : 'Failed to publish story post.';
+    } finally {
+      this.isSavingStory = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  startEditStory(post: StoryPost): void {
+    this.storyEditError = '';
+    this.editingStoryId = post.id;
+    this.storyEditDraft = {
+      title: post.title,
+      body: post.body,
+      displayDate: post.display_date ?? MediaPageComponent.todayIso()
+    };
+  }
+
+  cancelStoryEdit(): void {
+    this.editingStoryId = null;
+    this.storyEditDraft = null;
+    this.storyEditError = '';
+  }
+
+  async saveStoryEdit(post: StoryPost): Promise<void> {
+    if (!this.storyEditDraft) return;
+    const title = this.storyEditDraft.title.trim();
+    const body = this.storyEditDraft.body.trim();
+    const displayDate = this.storyEditDraft.displayDate.trim();
+
+    if (!title || title.length > 120) {
+      this.storyEditError = 'Title is required and must be at most 120 characters.';
+      return;
+    }
+    if (!body || body.length > 4000) {
+      this.storyEditError = 'Body is required and must be at most 4000 characters.';
+      return;
+    }
+    if (!MediaPageComponent.isIsoDate(displayDate)) {
+      this.storyEditError = 'Display date must be a valid YYYY-MM-DD.';
+      return;
+    }
+
+    this.isSavingStoryEdit = true;
+    this.storyEditError = '';
+    try {
+      const response = await fetch(
+        this.auth.apiUrl(`/api/admin/story-posts/${encodeURIComponent(String(post.id))}`),
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            ...this.auth.authHeaders()
+          },
+          body: JSON.stringify({ title, body, displayDate })
+        }
+      );
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        message?: string;
+        item?: StoryPost;
+      };
+      if (!response.ok || !payload.ok || !payload.item) {
+        throw new Error(payload.message || 'Failed to save story post.');
+      }
+      const saved = payload.item;
+      this.storyPosts = this.storyPosts.map((current) =>
+        current.id === post.id ? { ...current, ...saved } : current
+      );
+      this.editingStoryId = null;
+      this.storyEditDraft = null;
+    } catch (error) {
+      this.storyEditError =
+        error instanceof Error ? error.message : 'Failed to save story post.';
+    } finally {
+      this.isSavingStoryEdit = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  async deleteStoryPost(post: StoryPost): Promise<void> {
+    const confirmed =
+      typeof window !== 'undefined' && typeof window.confirm === 'function'
+        ? window.confirm(`Delete "${post.title}"? This cannot be undone.`)
+        : true;
+    if (!confirmed) return;
+
+    this.deletingStoryId = post.id;
+    try {
+      const response = await fetch(
+        this.auth.apiUrl(`/api/admin/story-posts/${encodeURIComponent(String(post.id))}`),
+        {
+          method: 'DELETE',
+          headers: this.auth.authHeaders()
+        }
+      );
+      const payload = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        message?: string;
+      };
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.message || 'Failed to delete story post.');
+      }
+      this.storyPosts = this.storyPosts.filter((current) => current.id !== post.id);
+    } catch (error) {
+      this.storyListError =
+        error instanceof Error ? error.message : 'Failed to delete story post.';
+    } finally {
+      this.deletingStoryId = null;
+      this.cdr.detectChanges();
+    }
+  }
+
   async logout(): Promise<void> {
     this.isLoggingOut = true;
     await this.auth.logout();
@@ -768,6 +1261,25 @@ export class MediaPageComponent implements OnInit {
       return `${(bytes / 1024).toFixed(1)} KB`;
     }
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  formatDisplayDate(raw: string | undefined): string {
+    if (!raw) return '--';
+    const iso = String(raw).slice(0, 10);
+    if (!MediaPageComponent.isIsoDate(iso)) return String(raw);
+    return iso;
+  }
+
+  private static isIsoDate(value: string): boolean {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const [y, m, d] = value.split('-').map(Number);
+    if (m < 1 || m > 12 || d < 1 || d > 31) return false;
+    const asDate = new Date(Date.UTC(y, m - 1, d));
+    return (
+      asDate.getUTCFullYear() === y &&
+      asDate.getUTCMonth() + 1 === m &&
+      asDate.getUTCDate() === d
+    );
   }
 
   formatDateTime(rawDate: string | undefined): string {

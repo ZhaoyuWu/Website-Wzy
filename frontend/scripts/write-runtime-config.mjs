@@ -7,27 +7,44 @@ const DEFAULT_DEV_SUPABASE_URL = 'https://pltveorkgsxfccyuwidk.supabase.co';
 const DEFAULT_DEV_SUPABASE_ANON_KEY = 'sb_publishable_ESrIEMrD1MFDAe_0rJ93Hw_2UNRaxJS';
 
 export function readArgApiBaseUrl(argv = process.argv) {
-  const match = argv.find((arg) => arg.startsWith('--api-base-url='));
+  const match = argv.find((arg) => normalizeArgToken(arg).startsWith('--api-base-url='));
   if (!match) {
     return '';
   }
-  return match.slice('--api-base-url='.length).trim();
+  return normalizeArgToken(match).slice('--api-base-url='.length).trim();
 }
 
 export function readArgSupabaseUrl(argv = process.argv) {
-  const match = argv.find((arg) => arg.startsWith('--supabase-url='));
+  const match = argv.find((arg) => normalizeArgToken(arg).startsWith('--supabase-url='));
   if (!match) {
     return '';
   }
-  return match.slice('--supabase-url='.length).trim();
+  return normalizeArgToken(match).slice('--supabase-url='.length).trim();
 }
 
 export function readArgSupabaseAnonKey(argv = process.argv) {
-  const match = argv.find((arg) => arg.startsWith('--supabase-anon-key='));
+  const match = argv.find((arg) => normalizeArgToken(arg).startsWith('--supabase-anon-key='));
   if (!match) {
     return '';
   }
-  return match.slice('--supabase-anon-key='.length).trim();
+  return normalizeArgToken(match).slice('--supabase-anon-key='.length).trim();
+}
+
+function normalizeArgToken(arg) {
+  const raw = String(arg || '').trim();
+  if (!raw) {
+    return '';
+  }
+
+  // npm/powershell can pass quoted args; strip one pair of wrapping quotes.
+  if (
+    (raw.startsWith('"') && raw.endsWith('"')) ||
+    (raw.startsWith("'") && raw.endsWith("'"))
+  ) {
+    return raw.slice(1, -1).trim();
+  }
+
+  return raw;
 }
 
 function pickApiBaseUrl(argv = process.argv, env = process.env) {

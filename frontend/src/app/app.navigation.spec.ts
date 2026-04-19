@@ -84,7 +84,7 @@ describe('Navigation (functional + performance)', () => {
     const auth = TestBed.inject(AuthService) as unknown as MockAuthService;
     const router = TestBed.inject(Router);
 
-    const button = harness.routeNativeElement?.querySelector('button') as HTMLButtonElement | null;
+    const button = harness.routeNativeElement?.querySelector('button.logout') as HTMLButtonElement | null;
     expect(button).toBeTruthy();
 
     button?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));

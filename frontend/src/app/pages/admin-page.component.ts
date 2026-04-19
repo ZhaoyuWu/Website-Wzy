@@ -3,6 +3,8 @@ import { ChangeDetectorRef, Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../core/auth.service';
+import { I18nService } from '../core/i18n.service';
+import { LanguagePickerComponent } from '../components/language-picker.component';
 
 type SiteSettings = {
   profileName: string;
@@ -34,29 +36,30 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
 @Component({
   selector: 'app-admin-page',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, LanguagePickerComponent],
   template: `
     <main class="admin-layout">
       <section class="admin-card">
         <div class="header">
           <div>
-            <p class="eyebrow">Protected Route</p>
-            <h1>Nanami Admin Panel</h1>
+            <p class="eyebrow">{{ i18n.t('admin.eyebrow') }}</p>
+            <h1>{{ i18n.t('admin.heading') }}</h1>
             <p class="desc">
-              Logged in as {{ auth.username ?? 'unknown' }}
+              {{ i18n.t('admin.loggedIn', { name: auth.username ?? 'unknown' }) }}
               <span class="role-badge role-{{ auth.userRole.toLowerCase() }}">{{ auth.userRole }}</span>
             </p>
           </div>
           <div class="header-actions">
-            <a class="back-home" [routerLink]="['/']"><- Home</a>
+            <a class="back-home" [routerLink]="['/']">{{ i18n.t('nav.home') }}</a>
+            <app-language-picker></app-language-picker>
             <button type="button" class="logout" (click)="logout()" [disabled]="isLoggingOut">
-              {{ isLoggingOut ? 'Signing out...' : 'Logout' }}
+              {{ isLoggingOut ? i18n.t('common.logout.pending') : i18n.t('common.logout') }}
             </button>
           </div>
         </div>
 
         <div class="status-row">
-          <span>Auth Check</span>
+          <span>{{ i18n.t('admin.authCheck') }}</span>
           <strong>{{ authCheckStatus }}</strong>
         </div>
         <p class="message" *ngIf="serverMessage">{{ serverMessage }}</p>
@@ -64,14 +67,14 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
 
       <section class="admin-card" *ngIf="auth.isAdmin">
         <div class="list-header">
-          <h2>User Management (Role)</h2>
+          <h2>{{ i18n.t('admin.section.users') }}</h2>
           <button type="button" class="secondary" (click)="loadUsers()" [disabled]="isLoadingUsers">
-            {{ isLoadingUsers ? 'Loading...' : 'Refresh' }}
+            {{ isLoadingUsers ? i18n.t('admin.users.loading') : i18n.t('admin.users.refresh') }}
           </button>
         </div>
-        <p class="hint">Admin can assign roles for registered users.</p>
+        <p class="hint">{{ i18n.t('admin.users.hint') }}</p>
         <p class="error" *ngIf="usersError">{{ usersError }}</p>
-        <p class="hint" *ngIf="!isLoadingUsers && users.length === 0 && !usersError">No users found.</p>
+        <p class="hint" *ngIf="!isLoadingUsers && users.length === 0 && !usersError">{{ i18n.t('admin.users.empty') }}</p>
 
         <article class="user-row" *ngFor="let user of users; trackBy: trackByUserId">
           <strong>{{ user.email }}</strong>
@@ -84,32 +87,30 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
             >
               <option *ngFor="let role of assignableRoles" [value]="role">{{ role }}</option>
             </select>
-            <span class="message" *ngIf="savingRoleId === user.id">Saving...</span>
-            <span class="success" *ngIf="savedRoleId === user.id">Saved</span>
+            <span class="message" *ngIf="savingRoleId === user.id">{{ i18n.t('admin.users.savingRole') }}</span>
+            <span class="success" *ngIf="savedRoleId === user.id">{{ i18n.t('admin.users.savedRole') }}</span>
           </div>
         </article>
         <p class="error" *ngIf="roleUpdateError">{{ roleUpdateError }}</p>
       </section>
 
       <section class="admin-card" *ngIf="!auth.isAdmin && canClaimAdmin">
-        <h2>Bootstrap Admin</h2>
-        <p class="hint">
-          No admin account exists yet. You can claim the first Admin role for project bootstrap.
-        </p>
+        <h2>{{ i18n.t('admin.section.bootstrap') }}</h2>
+        <p class="hint">{{ i18n.t('admin.bootstrap.hint') }}</p>
         <p class="error" *ngIf="claimAdminError">{{ claimAdminError }}</p>
         <p class="success" *ngIf="claimAdminSuccess">{{ claimAdminSuccess }}</p>
         <button type="button" (click)="claimAdminRole()" [disabled]="isClaimingAdmin">
-          {{ isClaimingAdmin ? 'Claiming...' : 'Claim Admin Role' }}
+          {{ isClaimingAdmin ? i18n.t('admin.bootstrap.claiming') : i18n.t('admin.bootstrap.claim') }}
         </button>
       </section>
 
       <section class="admin-card" *ngIf="auth.isAdmin">
-        <h2>Information & Settings (T-005)</h2>
-        <p class="hint">Manage public profile text and contact preference shown on the homepage.</p>
+        <h2>{{ i18n.t('admin.section.settings') }}</h2>
+        <p class="hint">{{ i18n.t('admin.settings.hint') }}</p>
 
         <form class="form-grid" (ngSubmit)="saveSettings()">
           <label>
-            <span>Profile Name</span>
+            <span>{{ i18n.t('admin.field.profileName') }}</span>
             <input
               type="text"
               [(ngModel)]="settingsForm.profileName"
@@ -121,7 +122,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
           </label>
 
           <label>
-            <span>Hero Tagline</span>
+            <span>{{ i18n.t('admin.field.heroTagline') }}</span>
             <input
               type="text"
               [(ngModel)]="settingsForm.heroTagline"
@@ -133,7 +134,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
           </label>
 
           <label>
-            <span>About Text</span>
+            <span>{{ i18n.t('admin.field.aboutText') }}</span>
             <textarea
               [(ngModel)]="settingsForm.aboutText"
               name="aboutText"
@@ -145,7 +146,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
           </label>
 
           <label>
-            <span>Contact Email (optional)</span>
+            <span>{{ i18n.t('admin.field.contactEmail') }}</span>
             <input
               type="email"
               [(ngModel)]="settingsForm.contactEmail"
@@ -162,18 +163,18 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
               name="showContactEmail"
               [disabled]="isSavingSettings || isLoadingSettings"
             />
-            <span>Show contact email on homepage</span>
+            <span>{{ i18n.t('admin.field.showContact') }}</span>
           </label>
 
           <p class="message" *ngIf="settingsForm.updatedAt">
-            Last updated: {{ formatDateTime(settingsForm.updatedAt) }}
+            {{ i18n.t('admin.settings.lastUpdated', { time: formatDateTime(settingsForm.updatedAt) }) }}
           </p>
           <p class="error" *ngIf="settingsError">{{ settingsError }}</p>
           <p class="success" *ngIf="settingsSuccess">{{ settingsSuccess }}</p>
 
           <div class="row-actions">
             <button type="submit" [disabled]="isSavingSettings || isLoadingSettings">
-              {{ isSavingSettings ? 'Saving...' : 'Save Settings' }}
+              {{ isSavingSettings ? i18n.t('admin.savingSettings') : i18n.t('admin.saveSettings') }}
             </button>
             <button
               type="button"
@@ -181,17 +182,17 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
               (click)="loadSettings()"
               [disabled]="isSavingSettings || isLoadingSettings"
             >
-              {{ isLoadingSettings ? 'Loading...' : 'Reload Settings' }}
+              {{ isLoadingSettings ? i18n.t('admin.loadingSettings') : i18n.t('admin.reloadSettings') }}
             </button>
           </div>
         </form>
       </section>
 
       <section class="admin-card" *ngIf="auth.isPublisherOrAdmin">
-        <h2>Media Uploads</h2>
+        <h2>{{ i18n.t('admin.section.media') }}</h2>
         <p class="hint">
-          Upload and manage Nanami media on the dedicated page:
-          <a class="inline-link" [routerLink]="['/manage-media']">Manage Media -></a>
+          {{ i18n.t('admin.media.hint') }}
+          <a class="inline-link" [routerLink]="['/manage-media']">{{ i18n.t('admin.media.link') }}</a>
         </p>
       </section>
     </main>
@@ -203,20 +204,17 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
       display: grid;
       gap: 16px;
       align-content: start;
-      background:
-        radial-gradient(circle at 22% 20%, var(--fx-admin-warm-glow), transparent 36%),
-        radial-gradient(circle at 90% 10%, var(--fx-admin-green-glow), transparent 32%),
-        var(--clr-f4fbf8);
+      background: var(--color-app-bg);
     }
 
     .admin-card {
       width: min(980px, 100%);
       margin: 0 auto;
       border-radius: 18px;
-      border: 1px solid var(--clr-c7e5d8);
-      background: var(--color-surface);
+      border: 2px solid var(--color-ink);
+      background: var(--color-paper);
       padding: 22px;
-      box-shadow: 0 14px 36px var(--fx-shadow-admin);
+      box-shadow: 4px 4px 0 var(--color-ink);
     }
 
     .header {
@@ -230,7 +228,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
 
     .eyebrow {
       margin: 0;
-      color: var(--clr-257b58);
+      color: var(--color-ink);
       font-size: 12px;
       font-weight: 700;
       text-transform: uppercase;
@@ -240,12 +238,12 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
     h1,
     h2 {
       margin: 6px 0;
-      color: var(--clr-163526);
+      color: var(--color-ink);
     }
 
     .desc {
       margin: 0;
-      color: var(--clr-3b5e4d);
+      color: var(--color-ink-soft);
     }
 
     .role-badge {
@@ -260,50 +258,67 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
     }
 
     .role-admin {
-      background: var(--clr-d4edda);
-      color: var(--clr-1a5c33);
+      background: var(--color-accent);
+      color: var(--color-ink);
     }
 
     .role-publisher {
-      background: var(--clr-cce5ff);
-      color: var(--clr-1a3a6c);
+      background: var(--color-cool-wash);
+      color: var(--color-ink);
     }
 
     .role-viewer {
-      background: var(--clr-ececec);
-      color: var(--clr-555);
+      background: var(--color-paper-sunk);
+      color: var(--color-ink-muted);
     }
 
     .status-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      border-top: 1px solid var(--clr-e5f3ec);
+      border-top: 1px solid var(--color-line);
       padding-top: 12px;
       margin-top: 4px;
     }
 
     button {
-      border: 0;
+      border: 1.5px solid var(--color-ink);
       border-radius: 10px;
       min-width: 140px;
       min-height: 40px;
-      color: var(--clr-fff);
-      background: linear-gradient(90deg, var(--color-brand-green-start) 0%, var(--color-brand-green-end) 100%);
+      color: var(--color-ink);
+      background: var(--color-accent);
       font-weight: 700;
       cursor: pointer;
       padding: 8px 14px;
+      transition: background 120ms ease, color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+      font-family: inherit;
+    }
+
+    button:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 3px 3px 0 var(--color-ink);
+    }
+
+    button:active:not(:disabled) {
+      transform: translateY(0);
+      box-shadow: none;
     }
 
     button.secondary {
-      background: var(--clr-eef6f2);
-      color: var(--clr-206346);
-      border: 1px solid var(--color-border-success);
+      background: var(--color-cool-wash);
+      color: var(--color-ink);
+      border: 1.5px solid var(--color-ink);
+    }
+
+    button.secondary:hover:not(:disabled) {
+      background: var(--color-cool);
+      color: var(--color-paper);
     }
 
     button[disabled] {
       cursor: not-allowed;
-      opacity: 0.7;
+      opacity: 0.5;
     }
 
     .header-actions {
@@ -315,13 +330,19 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
 
     .back-home {
       text-decoration: none;
-      color: var(--clr-206346);
+      color: var(--color-ink);
       font-weight: 600;
       font-size: 14px;
       padding: 8px 14px;
-      border: 1px solid var(--color-border-success);
+      border: 1px solid var(--color-ink);
       border-radius: 10px;
-      background: var(--clr-eef6f2);
+      background: var(--color-paper);
+      transition: background 120ms ease, transform 120ms ease;
+    }
+
+    .back-home:hover {
+      background: var(--color-accent);
+      transform: translateY(-1px);
     }
 
     .logout {
@@ -336,7 +357,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
     label {
       display: grid;
       gap: 6px;
-      color: var(--clr-1f4e37);
+      color: var(--color-ink-soft);
       font-weight: 600;
       font-size: 14px;
     }
@@ -344,7 +365,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
     input,
     textarea,
     select {
-      border: 1px solid var(--color-border-success);
+      border: 1px solid var(--color-ink);
       border-radius: 10px;
       padding: 10px;
       font: inherit;
@@ -354,18 +375,18 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
     .hint,
     .message {
       margin: 0;
-      color: var(--clr-416654);
+      color: var(--color-ink-muted);
     }
 
     .error {
       margin: 0;
-      color: var(--clr-9b2e2e);
+      color: var(--color-accent-contrast);
       font-weight: 600;
     }
 
     .success {
       margin: 0;
-      color: var(--color-state-success);
+      color: var(--color-ink);
       font-weight: 600;
     }
 
@@ -379,7 +400,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
     }
 
     .user-row {
-      border-top: 1px solid var(--clr-ddede5);
+      border-top: 1px solid var(--color-line);
       padding: 10px 0;
       display: flex;
       align-items: center;
@@ -416,7 +437,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
     }
 
     .inline-link {
-      color: var(--clr-1f6a49);
+      color: var(--color-ink);
       font-weight: 600;
       text-decoration: none;
       margin-left: 4px;
@@ -457,6 +478,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
 })
 export class AdminPageComponent implements OnInit {
   readonly auth = inject(AuthService);
+  readonly i18n = inject(I18nService);
   private readonly router = inject(Router);
   private readonly cdr = inject(ChangeDetectorRef);
 

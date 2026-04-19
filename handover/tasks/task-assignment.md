@@ -4,6 +4,7 @@
 - Assign implementation by `T-xxx` to generator.
 - Assign corresponding audit by `A-xxx` to evaluator.
 - Keep IDs in commit notes and handover outputs.
+- Never overwrite baseline tasks. Use child IDs for updates (e.g., `T-001-1`, `A-001-1`).
 
 ## Assignment Matrix
 
@@ -74,3 +75,16 @@
   - Vercel deployment can serve expected pages/routes.
   - No unresolved blocker findings.
   - Release recommendation (`go/no-go`) is justified.
+
+### T-007 / A-007
+- Task: Mobile layout correctness and elegance polish.
+- Generator deliverables:
+  - Phone-first layout pass for `/`, `/showcase`, `/login`, `/admin`, `/manage-media`.
+  - Remove page-level horizontal overflow on `360px`, `390px`, `428px`.
+  - Ensure touch-friendly controls and consistent small-screen spacing rhythm.
+  - Refine typography hierarchy for readability on phone.
+- Evaluator checks:
+  - No clipping/overlap/horizontal scroll on key pages.
+  - Main actions are easy to tap and not crowded.
+  - Visual hierarchy remains clear and consistent on mobile.
+  - Regression check passes on desktop after mobile polish.
