@@ -189,3 +189,38 @@ Verified production Supabase already has every column/RPC/table the new feature 
 2. **Tech-debt cleanup ticket** — fully remove the legacy PG-only routes, refactor `media.test.js` / `settings.test.js` `loginAndGetToken` helpers to use a Supabase-mocked auth fixture.
 3. **Custom domain** — when DNS for a real `nanami` domain is set up, point Vercel at the apex/subdomain and Render at `api.<domain>`, update `NANAMI_API_BASE_URL` + `CORS_ORIGIN_ALLOWLIST`, redeploy.
 4. **Rotate admin password** before sharing this handover externally.
+
+---
+
+## Operational Gotcha — `vercel --prod` does NOT rebind the public alias
+
+**Symptom observed during the T-007-1 release:** after `npx vercel --prod --yes` from `.release-worktree/frontend`, the new deployment shipped READY (e.g. `nanami-live-keewsdyde-zhaoyu-privat.vercel.app`) but `https://nanami-live.vercel.app` kept serving the **previous** production deployment for ~30 minutes. The new deploy auto-aliased to `nanami-live-zhaoyu-privat.vercel.app` and `nanami-live-zhaoyuwu1993-2713-zhaoyu-privat.vercel.app`, but **not** to the `nanami-live.vercel.app` short alias users actually visit.
+
+**Root cause:** `nanami-live.vercel.app` is a custom alias (set via `vercel alias set`) and Vercel does not automatically re-point custom aliases on subsequent prod deploys — only the auto-generated team/project aliases follow.
+
+**Fix every time after `vercel --prod`:**
+```bash
+# 1. Find the deployment id from `vercel ls --prod` (top row)
+# 2. Rebind the public alias
+npx vercel alias set <new-deployment>.vercel.app nanami-live.vercel.app
+```
+
+**Side effect to clean up:** Each prod deploy also resurrects the `frontend-six-snowy-32.vercel.app` legacy alias (Vercel re-creates it from the original project slug). If keeping the brand clean, run after every deploy:
+```bash
+npx vercel alias rm frontend-six-snowy-32.vercel.app --yes
+```
+
+**Suggested deploy script (manual until automated):**
+```bash
+cd .release-worktree/frontend
+npx vercel --prod --yes
+DEP=$(npx vercel ls --prod 2>&1 | awk '/Production/ && NR<8 {print $4; exit}')
+npx vercel alias set "$DEP" nanami-live.vercel.app
+npx vercel alias rm frontend-six-snowy-32.vercel.app --yes 2>/dev/null || true
+```
+
+**Verification one-liner:**
+```bash
+curl -s "https://nanami-live.vercel.app/runtime-config.js?t=$(date +%s)" | head -2
+npx vercel alias ls | head -5   # confirm nanami-live.vercel.app source = new deployment
+```
