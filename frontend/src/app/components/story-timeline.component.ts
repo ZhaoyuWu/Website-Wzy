@@ -526,6 +526,38 @@ type LikedKey = { type: TimelineEntryType; id: string | number };
         margin: 0;
       }
     }
+
+    @media (max-width: 428px) {
+      .like-button {
+        min-height: 44px;
+        padding: 10px 14px;
+      }
+
+      .pager-num,
+      .pager-edge {
+        min-width: 44px;
+        height: 44px;
+      }
+
+      .meta {
+        padding: 14px;
+      }
+
+      .lightbox-close {
+        width: 44px;
+        height: 44px;
+      }
+    }
+
+    @media (max-width: 360px) {
+      .entry {
+        grid-template-columns: 32px 1fr;
+      }
+
+      .timeline::before {
+        left: 16px;
+      }
+    }
   `
 })
 export class StoryTimelineComponent implements OnInit {

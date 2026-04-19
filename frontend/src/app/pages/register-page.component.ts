@@ -69,6 +69,7 @@ import { LanguagePickerComponent } from '../components/language-picker.component
       place-items: center;
       padding: 24px;
       background: var(--color-app-bg);
+      overflow-x: clip;
     }
 
     .auth-card {
@@ -167,11 +168,19 @@ import { LanguagePickerComponent } from '../components/language-picker.component
       font-weight: 600;
     }
 
+    @media (max-width: 428px) {
+      input { height: 44px; }
+    }
+
     @media (max-width: 390px) {
       .auth-layout { padding: 16px; }
       .auth-card { padding: 20px; border-radius: 14px; }
       h1 { font-size: 26px; }
       button { height: 46px; }
+    }
+
+    @media (max-width: 360px) {
+      .auth-card { padding: 16px; }
     }
 
     @media (min-width: 1280px) {

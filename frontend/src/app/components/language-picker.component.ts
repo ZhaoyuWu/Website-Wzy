@@ -167,6 +167,16 @@ const OPTIONS: Option[] = [
       font-size: 14px;
       font-weight: 800;
     }
+
+    @media (max-width: 428px) {
+      .picker-btn {
+        height: 44px;
+      }
+
+      .menu-item {
+        padding: 12px 10px;
+      }
+    }
   `
 })
 export class LanguagePickerComponent {
