@@ -205,6 +205,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
       gap: 16px;
       align-content: start;
       background: var(--color-app-bg);
+      overflow-x: clip;
     }
 
     .admin-card {
@@ -455,6 +456,39 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
       }
     }
 
+    @media (max-width: 428px) {
+      button {
+        min-height: 44px;
+      }
+
+      input,
+      textarea,
+      select {
+        padding: 12px;
+      }
+
+      .back-home {
+        padding: 10px 16px;
+      }
+
+      .admin-card {
+        padding: 18px;
+      }
+
+      .user-row {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .role-wrap {
+        width: 100%;
+      }
+
+      .role-wrap select {
+        flex: 1;
+      }
+    }
+
     @media (max-width: 390px) {
       .admin-card {
         padding: 16px;
@@ -463,6 +497,11 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
       button {
         min-width: 100%;
       }
+    }
+
+    @media (max-width: 360px) {
+      .admin-layout { padding: 10px; }
+      .admin-card { padding: 14px; }
     }
 
     @media (min-width: 1280px) {

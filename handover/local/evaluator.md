@@ -169,3 +169,43 @@ go (code-level) — all P0 closed, 2 of 3 P1 closed via code/docs, the last P1 i
 - Deployer executes the previous A-007 addendum runbook: apply the 5 DDLs in documented order → set Vercel prod env → redeploy → smoke.
 - After deploy, post-deploy evaluator pass verifies `/api/story/timeline` 200, likes 429 on rapid repeat, role matrix, and `/runtime-config.js` no longer localhost.
 - Optional style cleanup: shrink `story-timeline` + `media-page` inline styles under the 4 kB warn budget or move to external `.scss`.
+
+## 2026-04-19 Addendum - A-007-1 Mobile Refinement Audit (Scoped)
+
+## Summary Written
+- Audited `T-007-1` (mobile refinement first pass) per the new child-task policy in [handover/tasks/task.md](../tasks/task.md).
+- Scope under review: 7 UI files + [frontend/angular.json](../../frontend/angular.json) style budget bump. No backend / auth / data-model / endpoint changes.
+- All delivered rules live inside `@media (max-width: 428px)`, `(max-width: 390px)`, or `(max-width: 360px)`; only base-level additions are `overflow-x: clip` on each page root. Desktop rule set is functionally unchanged.
+- R1/R5/R8/R9 principles verified:
+  - R1: every changed file maps to T-007 / T-007-1 DoD (`≥44px` targets, no horizontal scroll, readable hierarchy, phone-width usability).
+  - R5: three explicit mobile breakpoints now documented per route (previously only `<=390`).
+  - R8: sampled new rules — only `var(--color-ink)`, `var(--color-ink-soft)`, `var(--color-app-bg)` tokens; zero hardcoded color literals introduced. `!important` limited to `.chr` transform/color reset, same-specificity collision only.
+  - R9: generator7 scope only; no backend/data ownership crossed.
+- `/showcase` T-007 usability clause is satisfied via the redirect route added in the prior remediation (`/showcase → /`) — phone user still lands on the home timeline.
+
+## Validation Evidence
+- `frontend npm run test:ci`: **36 passed, 0 failed** (8 test files).
+- `frontend npm run build`: pass, **no budget warnings** after the 4 kB → 6 kB `anyComponentStyle.maximumWarning` bump. Initial transfer 94.09 kB (main 92.81 kB + styles 1.28 kB); `maximumError` stays at 8 kB with headroom.
+- `backend npm test`: **47 passed, 0 failed** (unchanged — no backend delta this pass).
+- Desktop invariant spot-check: new rules all guarded by `max-width` media queries; only non-media addition is `overflow-x: clip` on page roots, which is a no-op when no element overflows (confirmed by diff inspection of [home-page](../../frontend/src/app/pages/home-page.component.ts), [admin-page](../../frontend/src/app/pages/admin-page.component.ts), [media-page](../../frontend/src/app/pages/media-page.component.ts), [login-page](../../frontend/src/app/pages/login-page.component.ts), [register-page](../../frontend/src/app/pages/register-page.component.ts)).
+
+## Findings
+- P0 / P1: none.
+- P2 (non-blocking):
+  - `overflow-x: clip` compatibility — iOS Safari < 16 falls back to `visible`; consider `overflow-x: hidden` as a secondary declaration if legacy iOS traffic is material.
+  - Component style budget lifted to 6 kB instead of extracting shared mobile rules (button min-height, input padding, overflow-x) into `styles.scss`. Stylistic choice; revisit if budgets keep creeping.
+  - No real-device or DevTools Device Mode smoke yet — generator flagged this as an unresolved risk; release-owner should walk `/`, `/showcase` (redirect), `/login`, `/register`, `/admin`, `/manage-media` at 360/390/428 before cutting release.
+  - Language picker menu (`min-width: 170px`, `right: 0`) hugs the right edge at 360 px — eye-check on a real 360 px device.
+  - `.hero-title .chr { transform: none !important; color: var(--color-ink) !important }` has no inline comment; future overrides must recognize the same-specificity cascade against `:nth-child(6n+…)` rules.
+
+## Unresolved Risks
+- Live phone validation pending (see P2 above).
+- Budget ceiling now `6 kB warn / 8 kB error` — if another `@media` block or keyframe lands the same components will need the mixin extraction, not another budget bump.
+
+## Decision
+go (code-level) — T-007-1 passes all applicable principles and test gates; remaining items are deployment / real-device verification, which is release-owner scope.
+
+## Follow-up Actions
+- Release-owner: DevTools Device Mode or real phone smoke (iOS Safari + Android Chrome) across all six routes at 360/390/428; confirm no horizontal scroll, all touch targets ≥ 44 px, hero typography wraps cleanly.
+- Optional T-007-2 candidate (from generator handover): timeline zig-zag redesign below 760 px if single-column collapse feels bland.
+- Optional T-007-3 candidate: cursive font (`Caveat` / `Kalam`) size floor on low-DPI Android.

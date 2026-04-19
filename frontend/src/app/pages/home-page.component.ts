@@ -137,6 +137,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
       min-height: 100vh;
       padding: 20px;
       background: var(--color-app-bg);
+      overflow-x: clip;
     }
 
     .top-nav {
@@ -429,11 +430,89 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
       }
     }
 
+    @media (max-width: 428px) {
+      .home { padding: 16px; }
+
+      .top-nav {
+        padding: 6px 0 14px;
+      }
+
+      nav {
+        gap: 8px;
+      }
+
+      nav a,
+      .nav-logout {
+        height: 44px;
+        padding: 0 14px;
+        font-size: 14px;
+      }
+
+      .hero {
+        padding: clamp(20px, 5vw, 32px);
+        box-shadow: 4px 4px 0 var(--color-ink);
+      }
+
+      .hero-title {
+        font-size: clamp(28px, 8vw, 38px);
+        line-height: 1.15;
+        margin: 12px 0 18px;
+        max-width: 100%;
+        word-break: break-word;
+      }
+
+      .hero-title .chr {
+        transform: none !important;
+        color: var(--color-ink) !important;
+      }
+
+      .hero-about {
+        font-size: 19px;
+        line-height: 1.4;
+        max-width: 100%;
+        word-break: break-word;
+        hyphens: auto;
+      }
+
+      .hero-about .chr.sub {
+        color: var(--color-ink-soft) !important;
+      }
+
+      .underline-squiggle {
+        width: min(260px, 80%);
+      }
+
+      .profile-card {
+        padding: 18px;
+      }
+    }
+
     @media (max-width: 390px) {
-      nav a {
-        padding: 7px 10px;
+      .home { padding: 14px; }
+
+      nav a,
+      .nav-logout {
+        padding: 0 12px;
         font-size: 13px;
       }
+
+      .doodle-grass { width: 72px; right: 8px; }
+      .doodle-sun { width: 40px; height: 40px; }
+    }
+
+    @media (max-width: 360px) {
+      .brand-mark {
+        width: 30px;
+        height: 30px;
+      }
+
+      .doodle-grass,
+      .doodle-heart {
+        display: none;
+      }
+
+      .hero-title { font-size: 26px; }
+      .hero-about { font-size: 17px; }
     }
 
     @media (min-width: 1280px) {

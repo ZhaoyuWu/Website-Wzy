@@ -364,6 +364,7 @@ const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
       gap: 16px;
       align-content: start;
       background: var(--color-app-bg);
+      overflow-x: clip;
     }
 
     .media-card {
@@ -667,6 +668,33 @@ const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
       }
     }
 
+    @media (max-width: 428px) {
+      button {
+        min-height: 44px;
+      }
+
+      button.compact {
+        min-height: 40px;
+      }
+
+      input,
+      textarea {
+        padding: 12px;
+      }
+
+      .back-home {
+        padding: 10px 16px;
+      }
+
+      .media-card {
+        padding: 18px;
+      }
+
+      .edit-form {
+        gap: 12px;
+      }
+    }
+
     @media (max-width: 390px) {
       .media-card {
         padding: 16px;
@@ -675,6 +703,11 @@ const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
       button {
         min-width: 100%;
       }
+    }
+
+    @media (max-width: 360px) {
+      .media-layout { padding: 10px; }
+      .media-card { padding: 14px; }
     }
 
     @media (min-width: 1280px) {
