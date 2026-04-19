@@ -1,5 +1,19 @@
 # Handover History
 
+## 2026-04-19 - Generator7 Audit Remediation (A-007 Scoped)
+- Type: public handover update (scoped)
+- Scope: generator7 follow-up audit fix for release-blocking runtime safety + env contract alignment
+- Source docs:
+  - `handover/local/evaluator.md`
+  - `handover/public.md`
+- Key outcomes:
+  - Hardened async UI flows (home/login/register) against destroyed-view change-detection errors by guarding `detectChanges()` with `ViewRef.destroyed`.
+  - Added backend `DATABASE_URL` compatibility while preserving `DB_*` fallback.
+  - Cleared evaluator `A-007` blockers without expanding product scope.
+  - Validation passed: backend `39/39`, frontend CI tests pass (`36/36`).
+- Decision: continue
+- Next owner: release-owner
+
 ## 2026-04-19 - Generator4 Media Safety + Test Expansion (Scoped)
 - Type: public handover update (scoped)
 - Scope: generator4 `T-004` follow-up audit remediation (media delete safety, principle cleanup, test expansion)

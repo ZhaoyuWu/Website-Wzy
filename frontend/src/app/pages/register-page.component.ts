@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, ViewRef, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../core/auth.service';
@@ -157,12 +157,24 @@ import { AuthService } from '../core/auth.service';
       color: var(--clr-74530e);
       font-weight: 600;
     }
+
+    @media (max-width: 390px) {
+      .auth-layout { padding: 16px; }
+      .auth-card { padding: 20px; border-radius: 14px; }
+      h1 { font-size: 26px; }
+      button { height: 46px; }
+    }
+
+    @media (min-width: 1280px) {
+      .auth-card { padding: 32px; }
+    }
   `
 })
 export class RegisterPageComponent {
   private readonly fb = inject(FormBuilder);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly cdr = inject(ChangeDetectorRef);
 
   readonly form = this.fb.nonNullable.group({
     username: ['', [Validators.required, Validators.pattern(/^[A-Za-z0-9_.-]{3,32}$/)]],
@@ -212,10 +224,17 @@ export class RegisterPageComponent {
         error instanceof Error ? error.message : 'Unable to register at the moment.';
     } finally {
       this.isSubmitting = false;
+      this.safeDetectChanges();
+    }
+  }
+
+  private safeDetectChanges(): void {
+    const viewRef = this.cdr as ViewRef;
+    if (!viewRef.destroyed) {
+      this.cdr.detectChanges();
     }
   }
 }
-
 
 
 

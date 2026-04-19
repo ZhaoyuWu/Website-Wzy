@@ -97,6 +97,24 @@ continue
 - Publish generator5 scoped public handover and history entry.
 - Run post-deploy smoke on role matrix: Viewer, Publisher, Admin.
 
+## 2026-04-19 Addendum - Generator7 Audit Fixes (A-007 Scoped)
+
+## Summary Written
+- Completed requested remediation for generator7 audit findings.
+- Fixed runtime safety issue in zoneless async UI paths:
+  - `home-page`, `login-page`, `register-page` no longer call `detectChanges()` unconditionally after async navigation/submit flows,
+  - added guarded `safeDetectChanges()` helper that checks `ViewRef.destroyed` before detection.
+- Fixed env contract drift:
+  - backend DB client now supports `DATABASE_URL` priority when present, then falls back to `DB_*`,
+  - aligns implementation with documented deploy env matrix.
+
+## Validation Evidence
+- `npm.cmd test` (backend): passed (`39 passed, 0 failed`).
+- `npm.cmd run test:ci` (frontend): passed (`runtime-config + 36 Angular tests`).
+
+## Decision
+continue
+
 ## 2026-04-18 Addendum - Runtime Supabase Fallback Safety Fix (Scoped)
 
 ## Summary Written

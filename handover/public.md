@@ -28,6 +28,41 @@ release-owner
 
 ---
 
+## 2026-04-19 Scoped Update - Generator7 Audit Remediation (A-007)
+
+## Source Files
+- frontend/src/app/pages/home-page.component.ts
+- frontend/src/app/pages/register-page.component.ts
+- frontend/src/app/pages/login-page.component.ts
+- backend/src/db.js
+- handover/local/evaluator.md
+
+## Preconditions Check
+pass (scoped): evaluator audit found release-blocking runtime safety issues and one env-contract mismatch that required immediate remediation.
+
+## Shared Summary
+- Fixed zoneless/runtime safety blocker for auth/home flows:
+  - previous pattern called `ChangeDetectorRef.detectChanges()` unconditionally in async `finally` blocks after navigation,
+  - this can hit a destroyed view and throw runtime errors,
+  - all affected pages now use a guarded `safeDetectChanges()` that checks `ViewRef.destroyed` before running detection.
+- Fixed deployment/env contract mismatch:
+  - README env matrix already documented `DATABASE_URL`,
+  - backend DB bootstrap now supports `DATABASE_URL` as first-priority connection source, with `DB_*` fallback preserved.
+- Scope note:
+  - no new endpoint/schema/role behavior was introduced,
+  - only safety hardening and runtime-config compatibility were changed.
+- Validation passed:
+  - `backend npm test`: `39/39` pass
+  - `frontend npm run test:ci`: pass (`runtime-config + 36 Angular tests`)
+
+## Final Status
+done (scoped)
+
+## Next Owner
+release-owner
+
+---
+
 ## 2026-04-19 Scoped Update - Generator4 Media Safety + Test Expansion
 
 ## Source Files

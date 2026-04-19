@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, OnInit, ViewRef, inject } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../core/auth.service';
 import { resolveApiBaseUrl } from '../core/runtime-config';
@@ -36,6 +36,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
             <a [routerLink]="['/login']">Login</a>
           </ng-container>
           <ng-container *ngIf="auth.isAuthenticated">
+            <a *ngIf="auth.isPublisherOrAdmin" [routerLink]="['/manage-media']">Media</a>
             <a *ngIf="auth.isPublisherOrAdmin" [routerLink]="['/admin']">Settings</a>
             <button type="button" class="nav-logout" (click)="logout()" [disabled]="isLoggingOut">
               {{ isLoggingOut ? '...' : 'Logout' }}
@@ -55,6 +56,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
             <a class="secondary" [routerLink]="['/register']">Create Account</a>
             <a class="secondary" [routerLink]="['/login']">Member Login</a>
           </ng-container>
+          <a *ngIf="auth.isPublisherOrAdmin" class="secondary" [routerLink]="['/manage-media']">Manage Media</a>
           <a *ngIf="auth.isPublisherOrAdmin" class="secondary" [routerLink]="['/admin']">Settings</a>
         </div>
       </section>
@@ -303,6 +305,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
 export class HomePageComponent implements OnInit {
   readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly cdr = inject(ChangeDetectorRef);
   private readonly apiBaseUrl = resolveApiBaseUrl();
   settings: SiteSettings = { ...DEFAULT_SITE_SETTINGS };
   settingsMessage = '';
@@ -310,9 +313,13 @@ export class HomePageComponent implements OnInit {
 
   async logout(): Promise<void> {
     this.isLoggingOut = true;
-    await this.auth.logout();
-    await this.router.navigate(['/login']);
-    this.isLoggingOut = false;
+    try {
+      await this.auth.logout();
+      await this.router.navigate(['/login']);
+    } finally {
+      this.isLoggingOut = false;
+      this.safeDetectChanges();
+    }
   }
 
   async ngOnInit(): Promise<void> {
@@ -335,6 +342,15 @@ export class HomePageComponent implements OnInit {
     } catch {
       this.settings = { ...DEFAULT_SITE_SETTINGS };
       this.settingsMessage = 'Unable to load custom settings right now. Showing default content.';
+    } finally {
+      this.safeDetectChanges();
+    }
+  }
+
+  private safeDetectChanges(): void {
+    const viewRef = this.cdr as ViewRef;
+    if (!viewRef.destroyed) {
+      this.cdr.detectChanges();
     }
   }
 
@@ -362,7 +378,6 @@ export class HomePageComponent implements OnInit {
     return normalized;
   }
 }
-
 
 
 

@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectorRef, Component, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, ViewRef, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AuthService } from '../core/auth.service';
@@ -156,6 +156,16 @@ import { AuthService } from '../core/auth.service';
       color: var(--clr-b59883);
     }
 
+    @media (max-width: 390px) {
+      .auth-layout { padding: 16px; }
+      .auth-card { padding: 20px; border-radius: 14px; }
+      h1 { font-size: 26px; }
+      button { height: 46px; }
+    }
+
+    @media (min-width: 1280px) {
+      .auth-card { padding: 32px; }
+    }
   `
 })
 export class LoginPageComponent {
@@ -202,11 +212,17 @@ export class LoginPageComponent {
         error instanceof Error ? error.message : 'Unable to login at the moment.';
     } finally {
       this.isSubmitting = false;
+      this.safeDetectChanges();
+    }
+  }
+
+  private safeDetectChanges(): void {
+    const viewRef = this.cdr as ViewRef;
+    if (!viewRef.destroyed) {
       this.cdr.detectChanges();
     }
   }
 }
-
 
 
 
