@@ -209,3 +209,52 @@ go (code-level) — T-007-1 passes all applicable principles and test gates; rem
 - Release-owner: DevTools Device Mode or real phone smoke (iOS Safari + Android Chrome) across all six routes at 360/390/428; confirm no horizontal scroll, all touch targets ≥ 44 px, hero typography wraps cleanly.
 - Optional T-007-2 candidate (from generator handover): timeline zig-zag redesign below 760 px if single-column collapse feels bland.
 - Optional T-007-3 candidate: cursive font (`Caveat` / `Kalam`) size floor on low-DPI Android.
+
+## 2026-04-19 Addendum - A-001-1 / A-003 Remediation (Likes + Comments + Sync-Profile)
+
+## Summary Written
+- Closed the three P1 findings flagged in the preceding generator1 + generator3 audit:
+  - **P1-1 Gmail plus-address bug** — [backend/src/index.js sync-profile](../../backend/src/index.js) now splits the input: user-supplied `suggestedUsername` keeps the strict `isValidUsername` gate, while `metadataUsername` / email-local fallbacks go through a new `sanitizeDerivedUsername()` helper that maps any non-`[A-Za-z0-9_.-]` char (including `+`) to `-`, collapses repeats, and trims edges. Fallback only 400s when the cleaned name is still outside 3–32 chars.
+  - **P1-2 missing showcase_comments DDL** — new migration [handover/sql/generator3-task3-showcase-comments.sql](../sql/generator3-task3-showcase-comments.sql) creates the table the legacy `/api/showcase/comments` endpoints already query. README migrations table gains row 7 with apply-order and a note on the breakage without it.
+  - **P1-3 in-memory likes dedup lost on restart** — restored `localStorage` dedup in [frontend/src/app/components/story-timeline.component.ts](../../frontend/src/app/components/story-timeline.component.ts): `loadLikedKeysFromStorage()` seeds the set at `ngOnInit`, `persistLikedKeys()` writes after every toggle and after every timeline refresh, and server-returned `likedByMe` now *unions* with the local set instead of clearing it. Backend in-memory Map is kept as per-IP short-term assist; localStorage is now the durable side so restart no longer wipes honest-user dedup.
+- Per user request, also shipped **page-size 10** (from 20) to cut the `/api/story/timeline` N+1 comments-count overhead roughly in half and reduce perceived scroll length on mobile: `STORY_PAGE_SIZE = 10` in backend, `pageSize` default + fallback in the timeline component, timeline test assertion, and T-003 DoD copy updated.
+- **P2-2 i18n gap** closed: every hardcoded string in the comment modal (`"Leave a Comment"`, button labels, error copy, login hint, aria labels, placeholder) moved to 20 new `story.comment.*` keys with EN / DE / ZH translations. Component code paths (`submitComment`, `loadCommentsForEntry`, `deleteComment`, like-401 branch) use `i18n.t()`.
+- **Test coverage** backfilled:
+  - Backend added 9 tests (51 → 60):
+    - sync-profile happy / Gmail plus-address sanitization / explicit bad username 400 / missing bearer 401
+    - story like idempotency (`alreadyLiked: true` on second POST, no extra RPC)
+    - comment DELETE role gates (Publisher 403) + 404 on empty Supabase response
+    - admin `/api/story/:type/:id/likes` returns the recorded viewer list
+    - timeline page-size 10 with 25-row fixture → 3 totalPages, items.length = 10
+  - Frontend added 5 tests (36 → 41):
+    - AuthService `register` email-confirmation branch (no session, no profile sync call)
+    - AuthService login order: sync-profile precedes role refresh
+    - timeline `likedByMe:true` seeds `likedKeys` + persists to `localStorage`
+    - comment modal submit appends returned item and increments count
+    - comment modal rejects empty and >500-char drafts with localized error
+
+## Validation Evidence
+- `backend npm test`: **60 passed, 0 failed**.
+- `frontend npm run test:ci`: **41 passed, 0 failed**.
+- `frontend npm run build`: pass. `story-timeline.component.ts` inline style now at **8 kB = budget ceiling**; future CSS additions will fail the build. Flagged P2.
+
+## Deferred (documented, not blocking)
+- **P2-1 `/api/story/timeline` N+1 per-entry `count=exact`**: mitigated to 10 hits/page; full fix requires either materialized `comments_count` on `media_items` + `story_posts` (preferred, mirrors `likes_count` pattern) or a single batch `group by` query. Not done this pass.
+- **P2-3 anon liker IP key collisions under NAT** — unchanged; localStorage layer mostly shields honest users, backend throttle caps attack rate.
+- **P2-4 admin likes list exposes raw IP/username** — unchanged; single-user deploy has no GDPR obligation. Revisit when public-facing.
+- **P2-5 comments POST is anonymous-writable** — unchanged; matches the existing showcase-comments design. Length limits remain the abuse brake.
+- **P2-8 new** — `story-timeline.component.ts` style budget at 8 kB ceiling; either extract to external `.scss` or raise budget to 10 kB in the next hardening pass.
+- **P2-6 localStorage cleanup** — naturally resolved: `LIKED_STORAGE_KEY` is live again.
+
+## Unresolved Risks
+- Backend in-memory `likeRecordsByEntry` still resets on restart; durable dedup now sits in browser localStorage. Attacker who clears localStorage and waits for a backend restart can still re-like, but is rate-capped by the existing throttle (≤30/min/IP).
+- Sync-profile derived username may collide if two email-locals sanitize to the same string (e.g. `foo+a@x.com` and `foo-a@x.com` both → `foo-a`). Supabase `profiles.username` unique constraint will reject the later upsert with a 409; acceptable — user can pick a different explicit username.
+- Page-size 10 is a UX change and a perf mitigation; release-owner should eyeball whether a 10-item page feels sparse on desktop at 1280 px+.
+
+## Decision
+go (code-level) — all three P1 closed in this branch, P2 items enumerated and deferred, test coverage grew across every new and previously-missing endpoint/method. Release-owner still needs to apply the 7 migrations in order and run the smoke checklist.
+
+## Follow-up Actions
+- Deployer: apply [handover/sql/generator3-task3-showcase-comments.sql](../sql/generator3-task3-showcase-comments.sql) as migration row 7 (after row 6 storage-quota).
+- Evaluator next pass: verify materialized `comments_count` if P2-1 performance becomes visible.
+- Optional: shrink `story-timeline.component.ts` inline styles (move to `.scss` file) to clear the 8 kB budget ceiling before the next style addition.

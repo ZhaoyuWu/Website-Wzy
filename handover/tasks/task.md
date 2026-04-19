@@ -69,7 +69,7 @@ Build a warm, media-first personal website to showcase the dog Nanami, with reli
 - `T-003`:
   - Public timeline lists image/video metadata from Supabase Postgres. Delivered pivot: the timeline is embedded on the homepage under the `#story` anchor; the legacy `/showcase` route is kept as a redirect for bookmark compatibility.
   - Supports stable playback/viewing on modern browsers (image click opens an in-page lightbox; video uses `preload="metadata"`, `playsinline`, and controls).
-  - Timeline merges `media_items` + `story_posts` (text entries) sorted by user-authored `display_date` desc with `created_at` tiebreak; paginated 20 per page.
+  - Timeline merges `media_items` + `story_posts` (text entries) sorted by user-authored `display_date` desc with `created_at` tiebreak; paginated 10 per page.
   - Per-entry like counter is public and rate-limited per client IP (`LIKE_COOLDOWN_MS` per entry + `LIKE_MAX_PER_WINDOW` per window) to keep anonymous engagement possible while blocking abuse. Frontend dedupes with `localStorage` for UX only.
   - UI strings are translated EN/DE/ZH via `I18nService` + language picker; locale is persisted to `localStorage` and auto-detected from `navigator.language`.
 - `T-004`:

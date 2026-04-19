@@ -118,5 +118,6 @@ Apply the SQL files in `handover/sql/` in this order before a fresh deploy or wh
 | 4 | `generator3-task3b-story-timeline.sql` | Adds `story_posts` (+ RPCs) and forward-compatible `story_comments`. |
 | 5 | `generator4-task4-display-date.sql` | Adds `display_date` to `media_items` and `story_posts` for user-authored timeline ordering. |
 | 6 | `generator7-task7-2-storage-quota.sql` | Adds `media_items.file_size` so the storage-usage banner on `/manage-media` can warn before the Supabase Free 1 GB ceiling. Old rows stay `NULL` and are excluded from the sum. |
+| 7 | `generator3-task3-showcase-comments.sql` | Creates `showcase_comments` table backing the legacy `/api/showcase/comments` endpoints. Story-timeline comments live in `story_comments` (row 4) — two separate tables. |
 
-Missing any of 2–5 will cause `/api/story/timeline`, `POST /api/admin/media`, or admin story-post CRUD to 500 in production. Missing 6 will not break anything functionally — the usage banner will just report `0 MB used` until the column exists.
+Missing any of 2–5 will cause `/api/story/timeline`, `POST /api/admin/media`, or admin story-post CRUD to 500 in production. Missing 6 is non-breaking (banner reports `0 MB used` until the column exists). Missing 7 will cause `/api/showcase/comments` to 500; apply it or remove the legacy endpoint from frontend references.
