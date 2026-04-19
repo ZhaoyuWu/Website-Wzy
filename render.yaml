@@ -13,7 +13,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: CORS_ORIGIN_ALLOWLIST
-        value: https://frontend-six-snowy-32.vercel.app
+        value: https://nanami-live.vercel.app
       - key: SUPABASE_URL
         value: https://pltveorkgsxfccyuwidk.supabase.co
       - key: SUPABASE_SERVICE_ROLE_KEY
