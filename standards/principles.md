@@ -21,6 +21,7 @@
 
 ### R1 Story Mapping Rule
 - Each code change must map to at least one task (`T-001` to `T-007`) in `handover/tasks/task.md`.
+- Baseline task IDs are immutable; deltas must use child IDs (`T-001-1`, `T-001-2`, etc.).
 
 ### R2 Data Contract Rule
 - Supabase data operations and table/bucket contracts must be explicit and traceable.
@@ -35,6 +36,10 @@
 
 ### R5 Responsive Rule
 - No feature is complete unless verified on both mobile and desktop breakpoints.
+
+### R5.1 Mobile Elegance Rule
+- Mobile layout must not only fit; it must remain readable and intentional in spacing/typography hierarchy.
+- Primary actions on phone must be comfortably tappable and visually discoverable.
 
 ### R6 Security Rule
 - Never trust client-provided filenames or media metadata.
