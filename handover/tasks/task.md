@@ -58,8 +58,11 @@ Build a warm, media-first personal website to showcase the dog Nanami, with reli
   - Homepage renders Nanami profile, intro narrative, and entry links.
   - Public access without login.
 - `T-003`:
-  - Showcase page lists image/video metadata from Supabase Postgres.
-  - Supports stable playback/viewing behavior on modern browsers.
+  - Public timeline lists image/video metadata from Supabase Postgres. Delivered pivot: the timeline is embedded on the homepage under the `#story` anchor; the legacy `/showcase` route is kept as a redirect for bookmark compatibility.
+  - Supports stable playback/viewing on modern browsers (image click opens an in-page lightbox; video uses `preload="metadata"`, `playsinline`, and controls).
+  - Timeline merges `media_items` + `story_posts` (text entries) sorted by user-authored `display_date` desc with `created_at` tiebreak; paginated 20 per page.
+  - Per-entry like counter is public and rate-limited per client IP (`LIKE_COOLDOWN_MS` per entry + `LIKE_MAX_PER_WINDOW` per window) to keep anonymous engagement possible while blocking abuse. Frontend dedupes with `localStorage` for UX only.
+  - UI strings are translated EN/DE/ZH via `I18nService` + language picker; locale is persisted to `localStorage` and auto-detected from `navigator.language`.
 - `T-004`:
   - Admin can upload image/video to Supabase Storage with title/description.
   - Admin can edit metadata and persist to Supabase Postgres.
@@ -70,6 +73,7 @@ Build a warm, media-first personal website to showcase the dog Nanami, with reli
 - `T-006`:
   - Mobile (`<=390px`) and desktop (`>=1280px`) checks pass.
   - Vercel deployment and environment configuration are validated.
+  - All DB migrations under `handover/sql/` are applied in documented order (see `README.md#database-migrations-supabase`); missing any migration must fail fast rather than silently.
   - Principles gate passes with no unresolved blocker.
 
 ## Definition of Done (Project)

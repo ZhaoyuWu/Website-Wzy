@@ -99,6 +99,23 @@ Frontend API base priority:
 4. fallback `http://localhost:4000`
 
 ## Deploy Smoke Checklist
-1. Open `/`, `/showcase`, `/login`, `/admin` directly with hard refresh.
-2. Confirm homepage `/api/settings` call goes to production backend domain.
-3. Confirm admin login, upload, metadata edit, and settings save all work.
+1. Open `/`, `/login`, `/register`, `/admin`, `/manage-media` directly with hard refresh. The homepage renders the story timeline inline (anchor `#story`); `/showcase` is kept as a legacy redirect to `/`.
+2. Confirm homepage `/api/settings` and `/api/story/timeline` calls go to the production backend domain.
+3. Confirm admin login, media upload with required display date, metadata edit, settings save, and story-text post publish all work.
+4. Responsive check: verify homepage, timeline, login, register at `<=390px` and `>=1280px` breakpoints.
+5. Role matrix: Viewer blocked from `/admin` and `/manage-media`; Publisher/Admin can reach media; Admin can reach settings.
+6. Likes throttle sanity: rapidly toggling the same entry returns `429` with a `Retry-After` header after the cooldown/window ceiling.
+
+## Database Migrations (Supabase)
+
+Apply the SQL files in `handover/sql/` in this order before a fresh deploy or when pulling a new release. Each file is idempotent (`IF NOT EXISTS` / defensive updates).
+
+| Order | File | Purpose |
+| --- | --- | --- |
+| 1 | `generator1-task1-supabase-ddl.sql` | Base schema: `profiles`, `media_items`, `site_settings`. |
+| 2 | `generator4-task4-media-updated-at.sql` | Adds `media_items.updated_at` for edit-time display. |
+| 3 | `generator3-task3-media-likes.sql` | Adds `media_items.likes_count` + increment/decrement RPCs. |
+| 4 | `generator3-task3b-story-timeline.sql` | Adds `story_posts` (+ RPCs) and forward-compatible `story_comments`. |
+| 5 | `generator4-task4-display-date.sql` | Adds `display_date` to `media_items` and `story_posts` for user-authored timeline ordering. |
+
+Missing any of 2–5 will cause `/api/story/timeline`, `POST /api/admin/media`, or admin story-post CRUD to 500 in production.
