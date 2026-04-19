@@ -84,7 +84,9 @@ export class AuthService {
       throw new Error(message);
     }
 
-    this.writeSession(this.parseSupabaseSession(payload));
+    const session = this.parseSupabaseSession(payload);
+    this.writeSession(session);
+    await this.refreshRoleFromBackend();
   }
 
   async register(username: string, email: string, password: string): Promise<void> {
@@ -151,6 +153,24 @@ export class AuthService {
   apiUrl(path: string): string {
     const cleanPath = path.startsWith('/') ? path : `/${path}`;
     return `${this.apiBaseUrl}${cleanPath}`;
+  }
+
+  private async refreshRoleFromBackend(): Promise<void> {
+    try {
+      const response = await fetch(`${this.apiBaseUrl}/api/admin/overview`, {
+        headers: this.authHeaders()
+      });
+      if (!response.ok) return;
+      const data = (await response.json()) as { role?: string };
+      if (typeof data.role === 'string' && data.role) {
+        const session = this.readSession();
+        if (session) {
+          this.writeSession({ ...session, role: data.role });
+        }
+      }
+    } catch {
+      // Ignore — session still valid, role stays as Viewer fallback
+    }
   }
 
   private ensureSupabaseAuthConfig(): void {

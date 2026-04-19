@@ -28,6 +28,43 @@ release-owner
 
 ---
 
+## 2026-04-19 Scoped Update - Generator3 Fix + No-Hardcoded-Style Principle
+
+## Source Files
+- backend/src/index.js
+- backend/test/media.test.js
+- frontend/src/styles.scss
+- frontend/src/app/pages/home-page.component.ts
+- frontend/src/app/pages/showcase-page.component.ts
+- frontend/src/app/pages/login-page.component.ts
+- frontend/src/app/pages/register-page.component.ts
+- frontend/src/app/pages/admin-page.component.ts
+- standards/principles.md
+- handover/local/evaluator.md
+
+## Preconditions Check
+pass (scoped): generator3 audit found a medium functional regression and style-governance gap requiring policy-level guardrail.
+
+## Shared Summary
+- Fixed generator3 follow-up functional regression:
+  - admin media endpoint now preserves configured admin list ceiling instead of being clipped by public showcase cap.
+- Added backend regression coverage to keep admin/public list cap behavior separated.
+- Added global reusable style-token layer and migrated major pages to token references, removing page-level hardcoded color literals.
+- Principles contract updated with explicit styling governance rule:
+  - `R8 Style Reuse Rule` in `standards/principles.md` now forbids hardcoded visual values in feature pages unless explicitly approved and documented.
+- Validation passed:
+  - `backend npm test`: `35/35` pass
+  - `frontend npm run test:ci`: pass (`runtime-config + 28 Angular tests`)
+  - `frontend npm run build`: pass
+
+## Final Status
+done (scoped)
+
+## Next Owner
+release-owner
+
+---
+
 ## 2026-04-19 Scoped Update - Generator4 Role Consistency Remediation
 
 ## Source Files

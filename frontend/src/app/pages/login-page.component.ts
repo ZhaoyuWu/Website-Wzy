@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AuthService } from '../core/auth.service';
@@ -56,23 +56,23 @@ import { AuthService } from '../core/auth.service';
       place-items: center;
       padding: 24px;
       background:
-        radial-gradient(circle at 10% 20%, rgba(244, 214, 180, 0.45), transparent 48%),
-        radial-gradient(circle at 85% 80%, rgba(180, 216, 247, 0.5), transparent 40%),
-        linear-gradient(160deg, #fff5ea 0%, #f7fbff 100%);
+        radial-gradient(circle at 10% 20%, var(--fx-login-warm-glow), transparent 48%),
+        radial-gradient(circle at 85% 80%, var(--fx-login-cool-glow), transparent 40%),
+        linear-gradient(160deg, var(--clr-fff5ea) 0%, var(--clr-f7fbff) 100%);
     }
 
     .auth-card {
       width: min(420px, 100%);
-      background: #ffffff;
+      background: var(--color-surface);
       border-radius: 18px;
-      border: 1px solid #ecd8c5;
+      border: 1px solid var(--clr-ecd8c5);
       padding: 28px;
-      box-shadow: 0 20px 45px rgba(47, 28, 7, 0.12);
+      box-shadow: 0 20px 45px var(--fx-shadow-auth);
     }
 
     .eyebrow {
       margin: 0;
-      color: #885935;
+      color: var(--clr-885935);
       font-size: 12px;
       text-transform: uppercase;
       letter-spacing: 0.09em;
@@ -81,13 +81,13 @@ import { AuthService } from '../core/auth.service';
 
     h1 {
       margin: 8px 0 0;
-      color: #372217;
+      color: var(--clr-372217);
       font-size: 30px;
     }
 
     .subtitle {
       margin: 10px 0 18px;
-      color: #6e5443;
+      color: var(--color-text-muted);
     }
 
     form {
@@ -98,21 +98,21 @@ import { AuthService } from '../core/auth.service';
     label {
       margin-top: 8px;
       font-weight: 600;
-      color: #4b3020;
+      color: var(--clr-4b3020);
     }
 
     input {
       height: 42px;
-      border: 1px solid #dbc5b3;
+      border: 1px solid var(--clr-dbc5b3);
       border-radius: 10px;
       padding: 0 12px;
       font-size: 15px;
-      background: #fffdfb;
+      background: var(--clr-fffdfb);
     }
 
     input:focus {
-      outline: 2px solid #f3b88b;
-      border-color: #d88f58;
+      outline: 2px solid var(--clr-f3b88b);
+      border-color: var(--clr-d88f58);
       outline-offset: 1px;
     }
 
@@ -123,8 +123,8 @@ import { AuthService } from '../core/auth.service';
       border-radius: 10px;
       font-size: 15px;
       font-weight: 700;
-      color: #ffffff;
-      background: linear-gradient(90deg, #cc6f2d 0%, #d98d53 100%);
+      color: var(--color-surface);
+      background: linear-gradient(90deg, var(--clr-cc6f2d) 0%, var(--clr-d98d53) 100%);
       cursor: pointer;
     }
 
@@ -137,23 +137,23 @@ import { AuthService } from '../core/auth.service';
     .status-error {
       margin: 0;
       font-size: 13px;
-      color: #b02222;
+      color: var(--color-state-error);
     }
 
     .hint {
       margin: 18px 0 0;
-      color: #6e5443;
+      color: var(--color-text-muted);
       font-size: 13px;
     }
 
     .hint a {
-      color: #8d4e25;
+      color: var(--color-link);
       font-weight: 600;
     }
 
     .divider {
       margin: 0 8px;
-      color: #b59883;
+      color: var(--clr-b59883);
     }
 
   `
@@ -163,6 +163,7 @@ export class LoginPageComponent {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+  private readonly cdr = inject(ChangeDetectorRef);
 
   readonly form = this.fb.nonNullable.group({
     email: ['', [Validators.required, Validators.email]],
@@ -194,13 +195,19 @@ export class LoginPageComponent {
     const { email, password } = this.form.getRawValue();
     try {
       await this.auth.login(email.trim(), password);
-      const redirect = this.route.snapshot.queryParamMap.get('redirect') || '/admin';
+      const redirect = this.route.snapshot.queryParamMap.get('redirect') || '/';
       await this.router.navigateByUrl(redirect);
     } catch (error) {
       this.submitError =
         error instanceof Error ? error.message : 'Unable to login at the moment.';
     } finally {
       this.isSubmitting = false;
+      this.cdr.detectChanges();
     }
   }
 }
+
+
+
+
+

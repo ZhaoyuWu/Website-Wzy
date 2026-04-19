@@ -1,5 +1,21 @@
 # Handover History
 
+## 2026-04-19 - Generator3 Remediation and Style Principle Hardening (Scoped)
+- Type: public handover update (scoped)
+- Scope: generator3 `T-003` follow-up functional fix + principle update for style governance
+- Source docs:
+  - `handover/local/evaluator.md`
+  - `handover/public.md`
+  - `standards/principles.md`
+- Key outcomes:
+  - Fixed admin media list cap regression introduced by shared listing helper (`admin` no longer inherits showcase cap).
+  - Added backend regression test to lock admin/public cap separation behavior.
+  - Migrated major page styles to reusable global tokens and removed page-level hardcoded color literals.
+  - Added `R8 Style Reuse Rule` to principles: no hardcoded visual design values in feature pages.
+  - Validation passed: backend `35/35`, frontend CI tests pass (`28/28`), frontend build pass.
+- Decision: continue
+- Next owner: release-owner
+
 ## 2026-04-19 - Generator4 Role Consistency Remediation (Scoped)
 - Type: public handover update (scoped)
 - Scope: generator4 `T-004` follow-up audit blocker fix (`profiles` role consistency)

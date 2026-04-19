@@ -27,6 +27,25 @@ handover/local/evaluator.md
 ## Decision
 continue
 
+## 2026-04-19 Addendum - Generator3 Audit Remediation + Styling Principle Update (Scoped)
+
+## Summary Written
+- Completed generator3 follow-up remediation for `T-003` and cross-page styling principle hardening.
+- Fixed media listing regression where admin media list inherited public cap (`120`) after helper extraction:
+  - kept public `/api/showcase/media` bounded behavior,
+  - restored admin `/api/admin/media` to honor configured admin upper limit.
+- Added backend regression test to prevent admin-list cap regression.
+- Implemented global style-token baseline and migrated key pages (home/showcase/login/register/admin) away from page-level hardcoded color literals.
+- Updated principles contract: added explicit no-hardcoded-style rule in `standards/principles.md` (`R8 Style Reuse Rule`).
+
+## Validation Evidence
+- `npm.cmd test` (backend): passed (`35 passed, 0 failed`).
+- `npm.cmd run test:ci` (frontend): passed (`runtime-config tests + 28 Angular tests`).
+- `npm.cmd run build` (frontend): passed.
+
+## Decision
+continue
+
 ## 2026-04-19 Addendum - Generator4 Role Source-of-Truth Fix (Scoped)
 
 ## Summary Written

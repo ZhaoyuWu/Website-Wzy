@@ -449,8 +449,48 @@ function createApp(options = {}) {
     return response;
   }
 
+  async function listMediaItems(limit, maxLimit = 120) {
+    const selectColumns = "id,title,description,media_type,public_url,thumbnail_url,created_at";
+    const hardMax = Math.max(1, Number(maxLimit) || 120);
+    const effectiveLimit = Math.max(1, Math.min(Number(limit) || mediaConfig.adminListLimit, hardMax));
+    const endpoint =
+      `/rest/v1/${encodeURIComponent(mediaConfig.mediaTable)}` +
+      `?select=${encodeURIComponent(selectColumns)}` +
+      `&order=created_at.desc&limit=${effectiveLimit}`;
+    const response = await callSupabase(endpoint, { method: "GET" });
+    const payload = await response.json();
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        message: "Failed to load media list from Supabase.",
+        details: payload,
+      };
+    }
+
+    return { ok: true, items: Array.isArray(payload) ? payload : [] };
+  }
+
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true, service: "backend", timestamp: new Date().toISOString() });
+  });
+
+  app.get("/api/showcase/media", async (req, res) => {
+    try {
+      const requestedLimit = toPositiveInt(req.query?.limit, 24);
+      const result = await listMediaItems(requestedLimit);
+      if (!result.ok) {
+        return res.status(result.status).json({
+          ok: false,
+          message: result.message,
+          details: result.details,
+        });
+      }
+      return res.json({ ok: true, items: result.items });
+    } catch (error) {
+      return res.status(500).json({ ok: false, message: error.message || "Unable to load showcase media." });
+    }
   });
 
   app.post("/api/auth/register", async (req, res) => {
@@ -683,23 +723,15 @@ function createApp(options = {}) {
 
   app.get("/api/admin/media", requireAuth, requireRole("Admin", "Publisher"), async (_req, res) => {
     try {
-      const selectColumns = "id,title,description,media_type,public_url,thumbnail_url,created_at";
-      const endpoint =
-        `/rest/v1/${encodeURIComponent(mediaConfig.mediaTable)}` +
-        `?select=${encodeURIComponent(selectColumns)}` +
-        `&order=created_at.desc&limit=${mediaConfig.adminListLimit}`;
-      const response = await callSupabase(endpoint, { method: "GET" });
-      const payload = await response.json();
-
-      if (!response.ok) {
-        return res.status(response.status).json({
+      const result = await listMediaItems(mediaConfig.adminListLimit, mediaConfig.adminListLimit);
+      if (!result.ok) {
+        return res.status(result.status).json({
           ok: false,
-          message: "Failed to load media list from Supabase.",
-          details: payload,
+          message: result.message,
+          details: result.details,
         });
       }
-
-      return res.json({ ok: true, items: Array.isArray(payload) ? payload : [] });
+      return res.json({ ok: true, items: result.items });
     } catch (error) {
       return res.status(500).json({ ok: false, message: error.message || "Unable to load media list" });
     }
@@ -862,6 +894,69 @@ function createApp(options = {}) {
       return res.json({ ok: true, item });
     } catch (error) {
       return res.status(500).json({ ok: false, message: error.message || "Media update failed" });
+    }
+  });
+
+  app.delete("/api/admin/media/:id", requireAuth, requireRole("Admin", "Publisher"), async (req, res) => {
+    const id = String(req.params.id || "").trim();
+    if (!id) {
+      return res.status(400).json({ ok: false, message: "Media id is required." });
+    }
+
+    try {
+      const lookupResponse = await callSupabase(
+        `/rest/v1/${encodeURIComponent(mediaConfig.mediaTable)}?id=eq.${encodeURIComponent(id)}&select=id,public_url&limit=1`,
+        { method: "GET" }
+      );
+      const lookupPayload = await lookupResponse.json();
+      if (!lookupResponse.ok) {
+        return res.status(lookupResponse.status).json({
+          ok: false,
+          message: "Failed to look up media item.",
+          details: lookupPayload,
+        });
+      }
+      const existing = Array.isArray(lookupPayload) ? lookupPayload[0] : null;
+      if (!existing) {
+        return res.status(404).json({ ok: false, message: "Media item not found." });
+      }
+
+      const publicUrl = typeof existing.public_url === "string" ? existing.public_url : "";
+      const storageMarker = "/storage/v1/object/public/";
+      const markerIndex = publicUrl.indexOf(storageMarker);
+      if (markerIndex >= 0) {
+        const rawObjectPath = publicUrl.slice(markerIndex + storageMarker.length);
+        if (rawObjectPath) {
+          const storageResponse = await callSupabase(`/storage/v1/object/${rawObjectPath}`, {
+            method: "DELETE",
+          });
+          if (!storageResponse.ok && storageResponse.status !== 404) {
+            const storageError = await storageResponse.text();
+            return res.status(storageResponse.status).json({
+              ok: false,
+              message: "Failed to delete storage object.",
+              details: storageError,
+            });
+          }
+        }
+      }
+
+      const deleteResponse = await callSupabase(
+        `/rest/v1/${encodeURIComponent(mediaConfig.mediaTable)}?id=eq.${encodeURIComponent(id)}`,
+        { method: "DELETE", headers: { Prefer: "return=representation" } }
+      );
+      const deletePayload = await deleteResponse.json().catch(() => null);
+      if (!deleteResponse.ok) {
+        return res.status(deleteResponse.status).json({
+          ok: false,
+          message: "Failed to delete media metadata.",
+          details: deletePayload,
+        });
+      }
+
+      return res.json({ ok: true, id });
+    } catch (error) {
+      return res.status(500).json({ ok: false, message: error.message || "Media delete failed" });
     }
   });
 

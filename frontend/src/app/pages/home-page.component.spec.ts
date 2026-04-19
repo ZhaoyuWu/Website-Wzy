@@ -97,3 +97,6 @@ describe('HomePageComponent logic (T-005)', () => {
     expect(calledUrl).toBe('https://api.nanami.test/api/settings');
   });
 });
+
+
+

@@ -63,23 +63,23 @@ import { AuthService } from '../core/auth.service';
       place-items: center;
       padding: 24px;
       background:
-        radial-gradient(circle at 12% 18%, rgba(247, 225, 174, 0.45), transparent 45%),
-        radial-gradient(circle at 86% 82%, rgba(188, 227, 245, 0.48), transparent 40%),
-        linear-gradient(160deg, #fff7ef 0%, #f4fbff 100%);
+        radial-gradient(circle at 12% 18%, var(--fx-register-warm-glow), transparent 45%),
+        radial-gradient(circle at 86% 82%, var(--fx-register-cool-glow), transparent 40%),
+        linear-gradient(160deg, var(--clr-fff7ef) 0%, var(--clr-f4fbff) 100%);
     }
 
     .auth-card {
       width: min(460px, 100%);
-      background: #ffffff;
+      background: var(--color-surface);
       border-radius: 18px;
-      border: 1px solid #e7d9cc;
+      border: 1px solid var(--clr-e7d9cc);
       padding: 28px;
-      box-shadow: 0 20px 45px rgba(47, 28, 7, 0.12);
+      box-shadow: 0 20px 45px var(--fx-shadow-auth);
     }
 
     .eyebrow {
       margin: 0;
-      color: #7e5a1a;
+      color: var(--clr-7e5a1a);
       font-size: 12px;
       text-transform: uppercase;
       letter-spacing: 0.09em;
@@ -88,13 +88,13 @@ import { AuthService } from '../core/auth.service';
 
     h1 {
       margin: 8px 0 0;
-      color: #2f2716;
+      color: var(--clr-2f2716);
       font-size: 30px;
     }
 
     .subtitle {
       margin: 10px 0 18px;
-      color: #675b47;
+      color: var(--clr-675b47);
     }
 
     form {
@@ -105,21 +105,21 @@ import { AuthService } from '../core/auth.service';
     label {
       margin-top: 8px;
       font-weight: 600;
-      color: #443824;
+      color: var(--clr-443824);
     }
 
     input {
       height: 42px;
-      border: 1px solid #d9ccbf;
+      border: 1px solid var(--clr-d9ccbf);
       border-radius: 10px;
       padding: 0 12px;
       font-size: 15px;
-      background: #fffefc;
+      background: var(--clr-fffefc);
     }
 
     input:focus {
-      outline: 2px solid #d5c085;
-      border-color: #b89d5f;
+      outline: 2px solid var(--clr-d5c085);
+      border-color: var(--clr-b89d5f);
       outline-offset: 1px;
     }
 
@@ -130,8 +130,8 @@ import { AuthService } from '../core/auth.service';
       border-radius: 10px;
       font-size: 15px;
       font-weight: 700;
-      color: #ffffff;
-      background: linear-gradient(90deg, #87682a 0%, #ac8740 100%);
+      color: var(--color-surface);
+      background: linear-gradient(90deg, var(--clr-87682a) 0%, var(--clr-ac8740) 100%);
       cursor: pointer;
     }
 
@@ -144,17 +144,17 @@ import { AuthService } from '../core/auth.service';
     .status-error {
       margin: 0;
       font-size: 13px;
-      color: #b02222;
+      color: var(--color-state-error);
     }
 
     .hint {
       margin: 18px 0 0;
-      color: #6e6352;
+      color: var(--clr-6e6352);
       font-size: 13px;
     }
 
     .hint a {
-      color: #74530e;
+      color: var(--clr-74530e);
       font-weight: 600;
     }
   `
@@ -215,4 +215,9 @@ export class RegisterPageComponent {
     }
   }
 }
+
+
+
+
+
 

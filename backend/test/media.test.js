@@ -379,3 +379,203 @@ test("metadata patch endpoint rejects control characters in title", async () => 
     ctx.server.close();
   }
 });
+
+test("public showcase endpoint returns media list without authentication", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+  process.env.SUPABASE_MEDIA_TABLE = "media_items";
+
+  const fetchImpl = async (url) => {
+    if (String(url).includes("/rest/v1/media_items")) {
+      return new Response(
+        JSON.stringify([
+          {
+            id: 1,
+            title: "Nanami Public",
+            description: "Visible on showcase",
+            media_type: "image",
+            public_url: "https://example.supabase.co/storage/v1/object/public/media/nanami.jpg",
+            created_at: new Date().toISOString(),
+          },
+        ]),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    return new Response(JSON.stringify([]), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+
+  const ctx = await startTestServer({ fetchImpl });
+  try {
+    const response = await fetch(`${ctx.baseUrl}/api/showcase/media?limit=24`);
+    const payload = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(payload.ok, true);
+    assert.equal(Array.isArray(payload.items), true);
+    assert.equal(payload.items.length, 1);
+    assert.equal(payload.items[0].title, "Nanami Public");
+  } finally {
+    ctx.server.close();
+  }
+});
+
+test("admin media endpoint keeps configured upper limit above showcase cap", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+  process.env.SUPABASE_MEDIA_TABLE = "media_items";
+  process.env.SUPABASE_ADMIN_MEDIA_LIMIT = "180";
+
+  let requestedUrl = "";
+  const fetchImpl = async (url) => {
+    const urlText = String(url);
+    requestedUrl = urlText;
+
+    if (urlText.includes("/rest/v1/media_items")) {
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify([]), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+
+  const dbPool = {
+    query: async () => ({
+      rowCount: 1,
+      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
+    }),
+  };
+
+  const ctx = await startTestServer({ fetchImpl, dbPool });
+  try {
+    const token = await loginAndGetToken(ctx.baseUrl);
+    const response = await fetch(`${ctx.baseUrl}/api/admin/media`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const payload = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(payload.ok, true);
+    assert.match(requestedUrl, /limit=180/);
+  } finally {
+    delete process.env.SUPABASE_ADMIN_MEDIA_LIMIT;
+    ctx.server.close();
+  }
+});
+
+test("delete endpoint removes storage object and metadata row", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+  process.env.SUPABASE_STORAGE_BUCKET = "media";
+  process.env.SUPABASE_MEDIA_TABLE = "media_items";
+
+  const dbPool = {
+    query: async () => ({
+      rowCount: 1,
+      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
+    }),
+  };
+
+  const fetchCalls = [];
+  const fetchImpl = async (url, init = {}) => {
+    const urlText = String(url);
+    const method = String(init.method || "GET");
+    fetchCalls.push({ url: urlText, method });
+
+    if (urlText.includes("/rest/v1/media_items") && method === "GET") {
+      return new Response(
+        JSON.stringify([
+          {
+            id: 42,
+            public_url:
+              "https://example.supabase.co/storage/v1/object/public/media/uploads/42-abc.jpg",
+          },
+        ]),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    if (urlText.includes("/storage/v1/object/media/uploads/") && method === "DELETE") {
+      return new Response(JSON.stringify({ message: "Successfully deleted" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    if (urlText.includes("/rest/v1/media_items") && method === "DELETE") {
+      return new Response(JSON.stringify([{ id: 42 }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify([]), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  const ctx = await startTestServer({ dbPool, fetchImpl });
+  try {
+    const token = await loginAndGetToken(ctx.baseUrl);
+    const response = await fetch(`${ctx.baseUrl}/api/admin/media/42`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const payload = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.id, "42");
+    assert.ok(
+      fetchCalls.some(
+        (entry) =>
+          entry.method === "DELETE" && entry.url.includes("/storage/v1/object/media/uploads/")
+      ),
+      "expected storage DELETE call"
+    );
+    assert.ok(
+      fetchCalls.some(
+        (entry) => entry.method === "DELETE" && entry.url.includes("/rest/v1/media_items")
+      ),
+      "expected metadata DELETE call"
+    );
+  } finally {
+    ctx.server.close();
+  }
+});
+
+test("delete endpoint returns 404 when media id is missing", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+  process.env.SUPABASE_MEDIA_TABLE = "media_items";
+
+  const dbPool = {
+    query: async () => ({
+      rowCount: 1,
+      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
+    }),
+  };
+
+  const fetchImpl = async () =>
+    new Response(JSON.stringify([]), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+
+  const ctx = await startTestServer({ dbPool, fetchImpl });
+  try {
+    const token = await loginAndGetToken(ctx.baseUrl);
+    const response = await fetch(`${ctx.baseUrl}/api/admin/media/99999`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const payload = await response.json();
+
+    assert.equal(response.status, 404);
+    assert.equal(payload.ok, false);
+  } finally {
+    ctx.server.close();
+  }
+});

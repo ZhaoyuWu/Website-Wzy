@@ -21,8 +21,7 @@ describe('ShowcasePageComponent logic (T-003)', () => {
 
   it('loads showcase rows and maps image/video items with configured limit', async () => {
     window.__NANAMI_SHOWCASE_CONFIG__ = {
-      supabaseUrl: 'https://demo.supabase.co',
-      supabaseAnonKey: 'anon-key',
+      apiBaseUrl: 'http://localhost:4000',
       mediaLimit: '30'
     };
 
@@ -30,23 +29,26 @@ describe('ShowcasePageComponent logic (T-003)', () => {
     const mockedFetch: typeof fetch = async (input: RequestInfo | URL) => {
       calledUrl = String(input);
       return new Response(
-        JSON.stringify([
-          {
-            id: 1,
-            title: 'Nanami Morning',
-            description: 'Sunrise walk',
-            media_type: 'image',
-            public_url: 'https://cdn.example.com/n1.jpg'
-          },
-          {
-            id: 2,
-            title: 'Nanami Zoomies',
-            description: 'Park run',
-            media_type: 'video',
-            public_url: 'https://cdn.example.com/n2.mp4',
-            thumbnail_url: 'https://cdn.example.com/n2.jpg'
-          }
-        ]),
+        JSON.stringify({
+          ok: true,
+          items: [
+            {
+              id: 1,
+              title: 'Nanami Morning',
+              description: 'Sunrise walk',
+              media_type: 'image',
+              public_url: 'https://cdn.example.com/n1.jpg'
+            },
+            {
+              id: 2,
+              title: 'Nanami Zoomies',
+              description: 'Park run',
+              media_type: 'video',
+              public_url: 'https://cdn.example.com/n2.mp4',
+              thumbnail_url: 'https://cdn.example.com/n2.jpg'
+            }
+          ]
+        }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }
       );
     };
@@ -56,8 +58,7 @@ describe('ShowcasePageComponent logic (T-003)', () => {
     const component = new ShowcasePageComponent();
     await component.ngOnInit();
 
-    expect(calledUrl).toContain('/rest/v1/media_items');
-    expect(calledUrl).toContain('order=created_at.desc');
+    expect(calledUrl).toContain('/api/showcase/media');
     expect(calledUrl).toContain('limit=30');
     expect(component.errorMessage).toBe('');
     expect(component.items.length).toBe(2);
@@ -68,11 +69,13 @@ describe('ShowcasePageComponent logic (T-003)', () => {
 
   it('shows empty state data when Supabase returns no rows', async () => {
     window.__NANAMI_SHOWCASE_CONFIG__ = {
-      supabaseUrl: 'https://demo.supabase.co',
-      supabaseAnonKey: 'anon-key'
+      apiBaseUrl: 'http://localhost:4000'
     };
     const mockedFetch: typeof fetch = async () =>
-      new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      new Response(JSON.stringify({ ok: true, items: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
     globalThis.fetch = mockedFetch;
     window.fetch = mockedFetch;
 
@@ -84,33 +87,36 @@ describe('ShowcasePageComponent logic (T-003)', () => {
     expect(component.isLoading).toBe(false);
   });
 
-  it('sets readable error when config is missing', async () => {
-    window.__NANAMI_SHOWCASE_CONFIG__ = undefined;
-    const mockedFetch: typeof fetch = async () => {
-      throw new Error('fetch should not be called');
+  it('sets readable error when showcase endpoint is unavailable', async () => {
+    window.__NANAMI_SHOWCASE_CONFIG__ = {
+      apiBaseUrl: 'http://localhost:4000'
     };
+    const mockedFetch: typeof fetch = async () =>
+      new Response(JSON.stringify({ ok: false }), { status: 503, headers: { 'Content-Type': 'application/json' } });
     globalThis.fetch = mockedFetch;
     window.fetch = mockedFetch;
 
     const component = new ShowcasePageComponent();
     await component.ngOnInit();
 
-    expect(component.errorMessage).toContain('Missing Supabase config');
+    expect(component.errorMessage).toContain('Showcase request failed');
     expect(component.items.length).toBe(0);
     expect(component.isLoading).toBe(false);
   });
 
   it('filters unsafe URLs and keeps only http/https media items', async () => {
     window.__NANAMI_SHOWCASE_CONFIG__ = {
-      supabaseUrl: 'https://demo.supabase.co',
-      supabaseAnonKey: 'anon-key'
+      apiBaseUrl: 'http://localhost:4000'
     };
     const mockedFetch: typeof fetch = async () =>
       new Response(
-        JSON.stringify([
-          { id: 1, title: 'Unsafe', media_type: 'image', public_url: 'javascript:alert(1)' },
-          { id: 2, title: 'Safe', media_type: 'image', public_url: 'https://cdn.example.com/safe.jpg' }
-        ]),
+        JSON.stringify({
+          ok: true,
+          items: [
+            { id: 1, title: 'Unsafe', media_type: 'image', public_url: 'javascript:alert(1)' },
+            { id: 2, title: 'Safe', media_type: 'image', public_url: 'https://cdn.example.com/safe.jpg' }
+          ]
+        }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }
       );
     globalThis.fetch = mockedFetch;
@@ -123,3 +129,6 @@ describe('ShowcasePageComponent logic (T-003)', () => {
     expect(component.items[0].title).toBe('Safe');
   });
 });
+
+
+

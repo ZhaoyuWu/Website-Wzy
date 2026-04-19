@@ -36,7 +36,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
             <a [routerLink]="['/login']">Login</a>
           </ng-container>
           <ng-container *ngIf="auth.isAuthenticated">
-            <a *ngIf="auth.isPublisherOrAdmin" [routerLink]="['/admin']">Admin</a>
+            <a *ngIf="auth.isPublisherOrAdmin" [routerLink]="['/admin']">Settings</a>
             <button type="button" class="nav-logout" (click)="logout()" [disabled]="isLoggingOut">
               {{ isLoggingOut ? '...' : 'Logout' }}
             </button>
@@ -55,7 +55,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
             <a class="secondary" [routerLink]="['/register']">Create Account</a>
             <a class="secondary" [routerLink]="['/login']">Member Login</a>
           </ng-container>
-          <a *ngIf="auth.isPublisherOrAdmin" class="secondary" [routerLink]="['/admin']">Admin Panel</a>
+          <a *ngIf="auth.isPublisherOrAdmin" class="secondary" [routerLink]="['/admin']">Settings</a>
         </div>
       </section>
 
@@ -89,9 +89,9 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
       min-height: 100vh;
       padding: 20px;
       background:
-        radial-gradient(circle at 14% 20%, rgba(255, 205, 157, 0.45), transparent 38%),
-        radial-gradient(circle at 84% 12%, rgba(160, 214, 255, 0.34), transparent 34%),
-        linear-gradient(180deg, #fff6ed 0%, #f6fbff 100%);
+        radial-gradient(circle at 14% 20%, var(--fx-warm-glow-45), transparent 38%),
+        radial-gradient(circle at 84% 12%, var(--fx-cool-glow-34), transparent 34%),
+        linear-gradient(180deg, var(--clr-fff6ed) 0%, var(--clr-f6fbff) 100%);
     }
 
     .top-nav {
@@ -105,7 +105,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
     }
 
     .brand {
-      color: #673716;
+      color: var(--clr-673716);
       font-weight: 800;
       text-decoration: none;
       letter-spacing: 0.02em;
@@ -120,12 +120,12 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
 
     nav a,
     .nav-logout {
-      color: #5f412b;
+      color: var(--color-text-secondary);
       text-decoration: none;
-      border: 1px solid #e4ccb8;
+      border: 1px solid var(--color-border-warm);
       border-radius: 999px;
       padding: 8px 12px;
-      background: rgba(255, 255, 255, 0.78);
+      background: var(--fx-glass-78);
       font-size: 14px;
       font-weight: 600;
       cursor: pointer;
@@ -137,11 +137,11 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
     .hero {
       width: min(1100px, 100%);
       margin: 0 auto;
-      border: 1px solid #ebd7c6;
+      border: 1px solid var(--clr-ebd7c6);
       border-radius: 22px;
       padding: clamp(24px, 5vw, 44px);
-      background: #ffffffee;
-      box-shadow: 0 22px 46px rgba(46, 27, 10, 0.12);
+      background: var(--color-surface-glass-93);
+      box-shadow: 0 22px 46px var(--fx-shadow-warm-12);
     }
 
     .eyebrow {
@@ -150,12 +150,12 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
       letter-spacing: 0.09em;
       font-size: 12px;
       font-weight: 700;
-      color: #9a5a2f;
+      color: var(--clr-9a5a2f);
     }
 
     h1 {
       margin: 10px 0 10px;
-      color: #331f13;
+      color: var(--color-text-strong);
       font-size: clamp(31px, 4vw, 50px);
       line-height: 1.08;
       max-width: 14ch;
@@ -163,7 +163,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
 
     .hero p {
       margin: 0;
-      color: #5b4534;
+      color: var(--clr-5b4534);
       font-size: 17px;
       max-width: 65ch;
     }
@@ -178,30 +178,30 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
     .profile-card {
       width: min(1100px, 100%);
       margin: 16px auto 0;
-      border: 1px solid #dbe9f5;
+      border: 1px solid var(--clr-dbe9f5);
       border-radius: 16px;
-      background: #ffffffdb;
+      background: var(--color-surface-glass-86);
       padding: 18px;
     }
 
     .profile-card h2 {
       margin: 0;
-      color: #234564;
+      color: var(--clr-234564);
     }
 
     .profile-card p {
       margin: 8px 0 0;
-      color: #3a5268;
+      color: var(--clr-3a5268);
     }
 
     .contact a {
-      color: #184f7f;
+      color: var(--clr-184f7f);
       text-decoration: none;
       font-weight: 700;
     }
 
     .message {
-      color: #5b6f84;
+      color: var(--clr-5b6f84);
       font-size: 14px;
     }
 
@@ -213,14 +213,14 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
     }
 
     .primary {
-      color: #ffffff;
-      background: linear-gradient(92deg, #c8682d 0%, #de975f 100%);
+      color: var(--color-surface);
+      background: linear-gradient(92deg, var(--color-brand-warm-start) 0%, var(--color-brand-warm-end) 100%);
     }
 
     .secondary {
-      color: #5f3a1e;
-      border: 1px solid #d2b79f;
-      background: #fffaf5;
+      color: var(--clr-5f3a1e);
+      border: 1px solid var(--clr-d2b79f);
+      background: var(--color-surface-soft);
     }
 
     .moments {
@@ -233,8 +233,8 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
 
     article {
       border-radius: 16px;
-      border: 1px solid #d9e8f5;
-      background: #ffffff;
+      border: 1px solid var(--color-border-soft);
+      background: var(--color-surface);
       padding: 20px;
       content-visibility: auto;
       contain-intrinsic-size: 220px;
@@ -242,13 +242,13 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
 
     h2 {
       margin: 0;
-      color: #224160;
+      color: var(--clr-224160);
       font-size: 20px;
     }
 
     article p {
       margin: 9px 0 0;
-      color: #3a5268;
+      color: var(--clr-3a5268);
       line-height: 1.55;
     }
 
@@ -362,3 +362,8 @@ export class HomePageComponent implements OnInit {
     return normalized;
   }
 }
+
+
+
+
+

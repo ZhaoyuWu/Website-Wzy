@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { ChangeDetectorRef, Component, OnInit } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { resolveApiBaseUrl } from '../core/runtime-config';
 
 type MediaType = 'image' | 'video';
 
@@ -28,18 +29,12 @@ type RawMediaRow = {
 };
 
 type ShowcaseConfig = {
-  supabaseUrl: string;
-  supabaseAnonKey: string;
-  mediaTable: string;
-  selectColumns: string;
+  apiBaseUrl: string;
   mediaLimit: number;
 };
 
 type ShowcaseRuntimeConfig = {
-  supabaseUrl?: string;
-  supabaseAnonKey?: string;
-  mediaTable?: string;
-  selectColumns?: string;
+  apiBaseUrl?: string;
   mediaLimit?: string;
 };
 
@@ -112,9 +107,9 @@ declare global {
       min-height: 100vh;
       padding: 20px;
       background:
-        radial-gradient(circle at 12% 22%, rgba(255, 205, 157, 0.4), transparent 36%),
-        radial-gradient(circle at 88% 10%, rgba(149, 210, 255, 0.35), transparent 32%),
-        linear-gradient(180deg, #fff7ee 0%, #f1f8ff 100%);
+        radial-gradient(circle at 12% 22%, var(--fx-warm-glow-40), transparent 36%),
+        radial-gradient(circle at 88% 10%, var(--fx-cool-glow-35), transparent 32%),
+        linear-gradient(180deg, var(--clr-fff7ee) 0%, var(--clr-f1f8ff) 100%);
     }
 
     .top-nav {
@@ -128,7 +123,7 @@ declare global {
     }
 
     .brand {
-      color: #673716;
+      color: var(--clr-673716);
       font-weight: 800;
       text-decoration: none;
       letter-spacing: 0.02em;
@@ -142,29 +137,29 @@ declare global {
     }
 
     nav a {
-      color: #5f412b;
+      color: var(--color-text-secondary);
       text-decoration: none;
-      border: 1px solid #e4ccb8;
+      border: 1px solid var(--color-border-warm);
       border-radius: 999px;
       padding: 8px 12px;
-      background: rgba(255, 255, 255, 0.78);
+      background: var(--fx-glass-78);
       font-size: 14px;
       font-weight: 600;
     }
 
     nav a[aria-current='page'] {
-      border-color: #bf7a49;
-      background: #fff0e2;
+      border-color: var(--clr-bf7a49);
+      background: var(--clr-fff0e2);
     }
 
     .hero {
       width: min(1100px, 100%);
       margin: 0 auto 20px;
-      border: 1px solid #ebd7c6;
+      border: 1px solid var(--clr-ebd7c6);
       border-radius: 22px;
       padding: clamp(20px, 4vw, 34px);
-      background: #ffffffed;
-      box-shadow: 0 18px 40px rgba(46, 27, 10, 0.1);
+      background: var(--color-surface-glass-93);
+      box-shadow: 0 18px 40px var(--fx-shadow-warm-10);
     }
 
     .eyebrow {
@@ -173,12 +168,12 @@ declare global {
       letter-spacing: 0.09em;
       font-size: 12px;
       font-weight: 700;
-      color: #9a5a2f;
+      color: var(--clr-9a5a2f);
     }
 
     h1 {
       margin: 10px 0;
-      color: #331f13;
+      color: var(--color-text-strong);
       font-size: clamp(28px, 4vw, 42px);
       line-height: 1.1;
       max-width: 18ch;
@@ -186,7 +181,7 @@ declare global {
 
     .hero p {
       margin: 0;
-      color: #5b4534;
+      color: var(--clr-5b4534);
     }
 
     .state {
@@ -198,21 +193,21 @@ declare global {
     }
 
     .state-loading {
-      color: #4c4d52;
-      background: #ffffffcf;
-      border: 1px solid #dcdfe7;
+      color: var(--clr-4c4d52);
+      background: var(--color-surface-glass-81);
+      border: 1px solid var(--color-border-neutral);
     }
 
     .state-error {
-      color: #8d2a2a;
-      background: #fff0ef;
-      border: 1px solid #efc4c2;
+      color: var(--clr-8d2a2a);
+      background: var(--clr-fff0ef);
+      border: 1px solid var(--color-border-error);
     }
 
     .state-empty {
-      color: #4f5f70;
-      background: #f4f9ff;
-      border: 1px solid #cfe0f2;
+      color: var(--clr-4f5f70);
+      background: var(--color-surface-muted);
+      border: 1px solid var(--clr-cfe0f2);
     }
 
     .grid {
@@ -226,17 +221,17 @@ declare global {
     .card {
       overflow: hidden;
       border-radius: 16px;
-      border: 1px solid #d9e8f5;
-      background: #ffffff;
-      box-shadow: 0 12px 28px rgba(24, 55, 82, 0.08);
+      border: 1px solid var(--color-border-soft);
+      background: var(--color-surface);
+      box-shadow: 0 12px 28px var(--fx-shadow-cool-08);
       content-visibility: auto;
       contain-intrinsic-size: 360px;
     }
 
     .media-frame {
-      background: #f4f8fc;
+      background: var(--clr-f4f8fc);
       aspect-ratio: 16 / 10;
-      border-bottom: 1px solid #e7eef7;
+      border-bottom: 1px solid var(--clr-e7eef7);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -258,18 +253,18 @@ declare global {
     .meta h2 {
       margin: 0;
       font-size: 20px;
-      color: #1f3d5a;
+      color: var(--clr-1f3d5a);
     }
 
     .desc {
       margin: 8px 0 0;
-      color: #3a5268;
+      color: var(--clr-3a5268);
       line-height: 1.5;
     }
 
     .time {
       margin: 10px 0 0;
-      color: #60758a;
+      color: var(--clr-60758a);
       font-size: 13px;
     }
 
@@ -316,6 +311,7 @@ export class ShowcasePageComponent implements OnInit {
   items: ShowcaseItem[] = [];
   isLoading = true;
   errorMessage = '';
+  constructor(private readonly cdr?: ChangeDetectorRef) {}
 
   async ngOnInit(): Promise<void> {
     this.isLoading = true;
@@ -332,6 +328,7 @@ export class ShowcasePageComponent implements OnInit {
         error instanceof Error ? error.message : 'Unable to load showcase media right now.';
     } finally {
       this.isLoading = false;
+      this.cdr?.markForCheck();
     }
   }
 
@@ -348,7 +345,7 @@ export class ShowcasePageComponent implements OnInit {
     target.alt = `${target.alt} (failed to load)`;
     target.style.objectFit = 'contain';
     target.style.padding = '20px';
-    target.style.background = '#eef3f8';
+    target.style.background = 'var(--clr-eef3f8)';
   }
 
   formatDate(rawDate: string): string {
@@ -361,26 +358,15 @@ export class ShowcasePageComponent implements OnInit {
 
   private readConfig(): ShowcaseConfig {
     const runtimeConfig = window.__NANAMI_SHOWCASE_CONFIG__ ?? {};
-    const envConfig = {
-      supabaseUrl: this.getWindowEnv('SUPABASE_URL'),
-      supabaseAnonKey: this.getWindowEnv('SUPABASE_ANON_KEY'),
-      mediaTable: this.getWindowEnv('SUPABASE_MEDIA_TABLE'),
-      selectColumns: this.getWindowEnv('SUPABASE_MEDIA_SELECT'),
-      mediaLimit: this.getWindowEnv('SUPABASE_MEDIA_LIMIT')
-    };
+    const envConfig = { mediaLimit: this.getWindowEnv('SUPABASE_MEDIA_LIMIT') };
 
     const config: ShowcaseConfig = {
-      supabaseUrl: this.pickConfigValue(runtimeConfig.supabaseUrl, envConfig.supabaseUrl),
-      supabaseAnonKey: this.pickConfigValue(runtimeConfig.supabaseAnonKey, envConfig.supabaseAnonKey),
-      mediaTable: this.pickConfigValue(runtimeConfig.mediaTable, envConfig.mediaTable) || 'media_items',
-      selectColumns:
-        this.pickConfigValue(runtimeConfig.selectColumns, envConfig.selectColumns) ||
-        'id,title,description,media_type,public_url,thumbnail_url,created_at',
+      apiBaseUrl: this.pickConfigValue(runtimeConfig.apiBaseUrl, resolveApiBaseUrl()),
       mediaLimit: this.parseMediaLimit(this.pickConfigValue(runtimeConfig.mediaLimit, envConfig.mediaLimit))
     };
 
-    if (!config.supabaseUrl || !config.supabaseAnonKey) {
-      throw new Error('Missing Supabase config. Set SUPABASE_URL and SUPABASE_ANON_KEY at runtime.');
+    if (!config.apiBaseUrl) {
+      throw new Error('Missing API base URL. Set NANAMI_API_BASE_URL or API_BASE_URL.');
     }
 
     return config;
@@ -417,26 +403,29 @@ export class ShowcasePageComponent implements OnInit {
   }
 
   private async fetchRows(config: ShowcaseConfig): Promise<RawMediaRow[]> {
-    const cleanedBase = config.supabaseUrl.replace(/\/+$/, '');
-    const endpoint = `${cleanedBase}/rest/v1/${encodeURIComponent(config.mediaTable)}?select=${encodeURIComponent(config.selectColumns)}&order=created_at.desc&limit=${config.mediaLimit}`;
+    const cleanedBase = config.apiBaseUrl.replace(/\/+$/, '');
+    const endpoint = `${cleanedBase}/api/showcase/media?limit=${config.mediaLimit}`;
     const response = await fetch(endpoint, {
-      method: 'GET',
-      headers: {
-        apikey: config.supabaseAnonKey,
-        Authorization: `Bearer ${config.supabaseAnonKey}`
-      }
+      method: 'GET'
     });
 
     if (!response.ok) {
-      throw new Error(`Supabase request failed (${response.status}).`);
+      throw new Error(`Showcase request failed (${response.status}).`);
     }
 
     const payload = (await response.json()) as unknown;
-    if (!Array.isArray(payload)) {
+    const items =
+      payload &&
+      typeof payload === 'object' &&
+      Array.isArray((payload as { items?: unknown[] }).items)
+        ? (payload as { items: unknown[] }).items
+        : null;
+
+    if (!items) {
       throw new Error('Unexpected Supabase response format.');
     }
 
-    return payload as RawMediaRow[];
+    return items as RawMediaRow[];
   }
 
   private mapRowToItem(row: RawMediaRow): ShowcaseItem | null {
@@ -477,3 +466,8 @@ export class ShowcasePageComponent implements OnInit {
     }
   }
 }
+
+
+
+
+

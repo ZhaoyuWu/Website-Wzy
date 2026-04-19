@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../core/auth.service';
 
 type MediaItem = {
@@ -47,7 +47,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
 @Component({
   selector: 'app-admin-page',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterLink],
   template: `
     <main class="admin-layout">
       <section class="admin-card">
@@ -60,9 +60,12 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
               <span class="role-badge role-{{ auth.userRole.toLowerCase() }}">{{ auth.userRole }}</span>
             </p>
           </div>
-          <button type="button" class="logout" (click)="logout()" [disabled]="isLoggingOut">
-            {{ isLoggingOut ? 'Signing out...' : 'Logout' }}
-          </button>
+          <div class="header-actions">
+            <a class="back-home" [routerLink]="['/']">← Home</a>
+            <button type="button" class="logout" (click)="logout()" [disabled]="isLoggingOut">
+              {{ isLoggingOut ? 'Signing out...' : 'Logout' }}
+            </button>
+          </div>
         </div>
 
         <div class="status-row">
@@ -227,7 +230,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
 
           <label>
             <span>File</span>
-            <input type="file" (change)="onFileSelected($event)" [disabled]="isUploading" required />
+            <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime" (change)="onFileSelected($event)" [disabled]="isUploading" />
           </label>
 
           <p class="file-meta" *ngIf="selectedFile">
@@ -296,19 +299,19 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
       gap: 16px;
       align-content: start;
       background:
-        radial-gradient(circle at 22% 20%, rgba(255, 204, 147, 0.35), transparent 36%),
-        radial-gradient(circle at 90% 10%, rgba(148, 226, 199, 0.34), transparent 32%),
-        #f4fbf8;
+        radial-gradient(circle at 22% 20%, var(--fx-admin-warm-glow), transparent 36%),
+        radial-gradient(circle at 90% 10%, var(--fx-admin-green-glow), transparent 32%),
+        var(--clr-f4fbf8);
     }
 
     .admin-card {
       width: min(980px, 100%);
       margin: 0 auto;
       border-radius: 18px;
-      border: 1px solid #c7e5d8;
-      background: #ffffff;
+      border: 1px solid var(--clr-c7e5d8);
+      background: var(--color-surface);
       padding: 22px;
-      box-shadow: 0 14px 36px rgba(8, 68, 42, 0.12);
+      box-shadow: 0 14px 36px var(--fx-shadow-admin);
     }
 
     .header {
@@ -322,7 +325,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
 
     .eyebrow {
       margin: 0;
-      color: #257b58;
+      color: var(--clr-257b58);
       font-size: 12px;
       font-weight: 700;
       text-transform: uppercase;
@@ -332,12 +335,12 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
     h1,
     h2 {
       margin: 6px 0;
-      color: #163526;
+      color: var(--clr-163526);
     }
 
     .desc {
       margin: 0;
-      color: #3b5e4d;
+      color: var(--clr-3b5e4d);
     }
 
     .role-badge {
@@ -352,25 +355,25 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
     }
 
     .role-admin {
-      background: #d4edda;
-      color: #1a5c33;
+      background: var(--clr-d4edda);
+      color: var(--clr-1a5c33);
     }
 
     .role-publisher {
-      background: #cce5ff;
-      color: #1a3a6c;
+      background: var(--clr-cce5ff);
+      color: var(--clr-1a3a6c);
     }
 
     .role-viewer {
-      background: #ececec;
-      color: #555;
+      background: var(--clr-ececec);
+      color: var(--clr-555);
     }
 
     .status-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      border-top: 1px solid #e5f3ec;
+      border-top: 1px solid var(--clr-e5f3ec);
       padding-top: 12px;
       margin-top: 4px;
     }
@@ -380,22 +383,40 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
       border-radius: 10px;
       min-width: 140px;
       min-height: 40px;
-      color: #fff;
-      background: linear-gradient(90deg, #20865b 0%, #2b9b6d 100%);
+      color: var(--clr-fff);
+      background: linear-gradient(90deg, var(--color-brand-green-start) 0%, var(--color-brand-green-end) 100%);
       font-weight: 700;
       cursor: pointer;
       padding: 8px 14px;
     }
 
     button.secondary {
-      background: #eef6f2;
-      color: #206346;
-      border: 1px solid #cce5d8;
+      background: var(--clr-eef6f2);
+      color: var(--clr-206346);
+      border: 1px solid var(--color-border-success);
     }
 
     button[disabled] {
       cursor: not-allowed;
       opacity: 0.7;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .back-home {
+      text-decoration: none;
+      color: var(--clr-206346);
+      font-weight: 600;
+      font-size: 14px;
+      padding: 8px 14px;
+      border: 1px solid var(--color-border-success);
+      border-radius: 10px;
+      background: var(--clr-eef6f2);
     }
 
     .logout {
@@ -410,7 +431,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
     label {
       display: grid;
       gap: 6px;
-      color: #1f4e37;
+      color: var(--clr-1f4e37);
       font-weight: 600;
       font-size: 14px;
     }
@@ -418,7 +439,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
     input,
     textarea,
     select {
-      border: 1px solid #cce5d8;
+      border: 1px solid var(--color-border-success);
       border-radius: 10px;
       padding: 10px;
       font: inherit;
@@ -428,18 +449,18 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
     .hint,
     .message {
       margin: 0;
-      color: #416654;
+      color: var(--clr-416654);
     }
 
     .error {
       margin: 0;
-      color: #9b2e2e;
+      color: var(--clr-9b2e2e);
       font-weight: 600;
     }
 
     .success {
       margin: 0;
-      color: #1f754f;
+      color: var(--color-state-success);
       font-weight: 600;
     }
 
@@ -453,7 +474,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
     }
 
     .user-row {
-      border-top: 1px solid #ddede5;
+      border-top: 1px solid var(--clr-ddede5);
       padding: 10px 0;
       display: flex;
       align-items: center;
@@ -470,14 +491,14 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
     }
 
     .media-row {
-      border: 1px solid #ddede5;
+      border: 1px solid var(--clr-ddede5);
       border-radius: 12px;
       padding: 12px;
       display: grid;
       grid-template-columns: 170px minmax(0, 1fr);
       gap: 12px;
       margin-top: 10px;
-      background: #fbfefc;
+      background: var(--clr-fbfefc);
       content-visibility: auto;
       contain-intrinsic-size: 260px;
     }
@@ -487,8 +508,8 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
       aspect-ratio: 16 / 10;
       border-radius: 10px;
       overflow: hidden;
-      border: 1px solid #d8e9e0;
-      background: #f1f6f3;
+      border: 1px solid var(--clr-d8e9e0);
+      background: var(--clr-f1f6f3);
     }
 
     .thumb img,
@@ -506,7 +527,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
 
     .type {
       margin: 0;
-      color: #4a6b5d;
+      color: var(--clr-4a6b5d);
       font-size: 12px;
       font-weight: 700;
       letter-spacing: 0.06em;
@@ -533,7 +554,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
     }
 
     .row-actions a {
-      color: #1f6a49;
+      color: var(--clr-1f6a49);
       text-decoration: none;
       font-weight: 600;
     }
@@ -578,6 +599,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
 export class AdminPageComponent implements OnInit {
   readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly cdr = inject(ChangeDetectorRef);
 
   authCheckStatus = 'Checking backend session...';
   serverMessage = '';
@@ -640,6 +662,8 @@ export class AdminPageComponent implements OnInit {
       this.authCheckStatus = 'Session expired or invalid';
       await this.auth.logout();
       await this.router.navigate(['/login']);
+    } finally {
+      this.cdr.detectChanges();
     }
   }
 
@@ -672,6 +696,7 @@ export class AdminPageComponent implements OnInit {
       this.usersError = error instanceof Error ? error.message : 'Failed to load users.';
     } finally {
       this.isLoadingUsers = false;
+      this.cdr.detectChanges();
     }
   }
 
@@ -704,6 +729,7 @@ export class AdminPageComponent implements OnInit {
       this.roleUpdateError = error instanceof Error ? error.message : 'Failed to update role.';
     } finally {
       this.savingRoleId = null;
+      this.cdr.detectChanges();
     }
   }
 
@@ -747,6 +773,7 @@ export class AdminPageComponent implements OnInit {
       this.claimAdminError = error instanceof Error ? error.message : 'Failed to claim admin role.';
     } finally {
       this.isClaimingAdmin = false;
+      this.cdr.detectChanges();
     }
   }
 
@@ -849,6 +876,7 @@ export class AdminPageComponent implements OnInit {
       this.uploadError = error instanceof Error ? error.message : 'Upload failed.';
     } finally {
       this.isUploading = false;
+      this.cdr.detectChanges();
     }
   }
 
@@ -896,6 +924,7 @@ export class AdminPageComponent implements OnInit {
       this.mediaLoadError = error instanceof Error ? error.message : 'Failed to save metadata.';
     } finally {
       this.isSavingId = null;
+      this.cdr.detectChanges();
     }
   }
 
@@ -924,6 +953,7 @@ export class AdminPageComponent implements OnInit {
         error instanceof Error ? error.message : 'Failed to load media list.';
     } finally {
       this.isRefreshing = false;
+      this.cdr.detectChanges();
     }
   }
 
@@ -951,6 +981,7 @@ export class AdminPageComponent implements OnInit {
       this.settingsError = error instanceof Error ? error.message : 'Failed to load settings.';
     } finally {
       this.isLoadingSettings = false;
+      this.cdr.detectChanges();
     }
   }
 
@@ -1016,6 +1047,7 @@ export class AdminPageComponent implements OnInit {
       this.settingsError = error instanceof Error ? error.message : 'Failed to save settings.';
     } finally {
       this.isSavingSettings = false;
+      this.cdr.detectChanges();
     }
   }
 
@@ -1100,3 +1132,8 @@ export class AdminPageComponent implements OnInit {
     });
   }
 }
+
+
+
+
+

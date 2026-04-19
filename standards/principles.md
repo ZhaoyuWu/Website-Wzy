@@ -45,6 +45,11 @@
 - Evaluator owns release gate decisions.
 - Unresolved blocker findings prevent `go`.
 
+### R8 Style Reuse Rule
+- Do not hardcode visual design values in feature pages (especially colors, gradients, shadows, and repeated control styling).
+- UI styling must use reusable design tokens and shared component/class patterns defined in global style contracts.
+- New page styles that introduce raw color literals are non-compliant unless explicitly approved as temporary migration exceptions in handover.
+
 ## Constraints
 - Stack constraint: Angular on Vercel + Supabase Postgres/Auth/Storage for current phase.
 - Scope constraint: Public showcase + upload/display workflow only.
