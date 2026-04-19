@@ -224,3 +224,42 @@ npx vercel alias rm frontend-six-snowy-32.vercel.app --yes 2>/dev/null || true
 curl -s "https://nanami-live.vercel.app/runtime-config.js?t=$(date +%s)" | head -2
 npx vercel alias ls | head -5   # confirm nanami-live.vercel.app source = new deployment
 ```
+
+---
+
+## Production Supabase SQL Migration Log
+
+This is the authoritative record of which files under `handover/sql/` have
+been applied to the live Supabase project `pltveorkgsxfccyuwidk`. Update it
+every time a new DDL is applied to production. The "Verified by" column
+links to the read-only probe used to confirm the object is live.
+
+| Applied on | File | Objects | Verified by |
+|---|---|---|---|
+| ≤ 2026-04-19 (pre-session) | `generator1-task1-supabase-ddl.sql` | baseline profiles / media_items | `/api/settings` returned `source: supabase` |
+| ≤ 2026-04-19 | `generator3-task3-media-likes.sql` | `media_items.likes_count`, `increment/decrement_media_likes` RPCs | `GET /rest/v1/media_items?select=likes_count` → 200; RPC calls → 200 |
+| ≤ 2026-04-19 | `generator3-task3b-story-timeline.sql` | `public.story_posts` table | `/rest/v1/story_posts?limit=1` → 200 with seeded row |
+| ≤ 2026-04-19 | `generator4-task4-media-updated-at.sql` | `media_items.updated_at` | `select=updated_at` → 200 |
+| ≤ 2026-04-19 | `generator4-task4-display-date.sql` | `media_items.display_date`, `story_posts.display_date` | `select=display_date` → 200 on both |
+| 2026-04-19 (before T-007-1 release) | `generator7-task7-2-storage-quota.sql` | `media_items.file_size` column | `GET /rest/v1/media_items?select=id,file_size` → 200 after user ran DDL |
+| 2026-04-19 (before T-007-1 release) | `generator3-task3-showcase-comments.sql` | `public.showcase_comments` table + index | `/rest/v1/showcase_comments?select=*&limit=1` → 200 empty array after user ran DDL |
+
+**Not yet tracked / possibly orphan:**
+- `public.story_comments` table exists in production (verified 2026-04-19 with one row `{id:2, entry_type: "media", ...}`) but no matching file under `handover/sql/` was found. Someone applied a `story_comments` DDL out-of-band; track it down and add the SQL file so new environments can reproduce the schema.
+
+**Scope-drift note (2026-04-19):** the release-owner noted that the
+`showcase_comments` table was built for the legacy `/api/showcase/comments`
+endpoints, even though the `/showcase` page itself was removed in
+`c4e037d` (story-timeline replaced it). The comment system the release-owner
+actually expected is the one backed by `story_posts` + `story_comments`
+(story-timeline comments). The `showcase_comments` table is now live but
+effectively dead code — tech-debt to either remove the legacy endpoints
+(and drop the table in a follow-up migration) or wire a UI surface to it.
+
+## Release Log
+
+| Date | Release | Commit on `online-release` | Scope | Vercel deployment |
+|---|---|---|---|---|
+| 2026-04-19 morning | initial Vercel + Render stack-up | `e8d4262` Render Blueprint | Blueprint + CORS to Vercel origin | `dpl_6Y4Kp8cRfo8AaZwXiLHeowzJDUwB` |
+| 2026-04-19 afternoon | T-003/T-004 + T-007 baseline + brand rebrand | `7ac08fe` CORS → nanami-live | Story timeline, likes, display-date, mobile scope docs, CORS to nanami-live, alias rename | `nanami-live-keewsdyde-zhaoyu-privat.vercel.app` |
+| 2026-04-19 evening | T-007-2 storage quota + security/a11y + showcase_comments | `a854f02` merge into online-release | `media_items.file_size`, `showcase_comments` + endpoints, story-timeline P1 sec/a11y fixes, T-007-1 mobile refinements shipped earlier in the day | `nanami-live-m2zv66l9c-zhaoyu-privat.vercel.app` |
