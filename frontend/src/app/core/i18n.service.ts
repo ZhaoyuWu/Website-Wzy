@@ -105,6 +105,9 @@ const TRANSLATIONS: Record<Lang, Dictionary> = {
     'media.existing.unifiedHint': 'Media uploads and text posts, ordered by display date. Edit changes title, body/description, and date.',
     'media.empty.unified': 'No items yet.',
     'media.upload.hint2': 'Allowed: JPG/PNG/WEBP/GIF up to 10MB, MP4/WEBM/MOV up to 50MB. The display date controls timeline ordering.',
+    'media.storage.heading': 'Supabase storage used',
+    'media.storage.warn': 'Approaching the soft limit. Consider pruning old uploads or upgrading Supabase before the 1 GB ceiling.',
+    'media.storage.critical': 'Over the configured quota. Supabase will start rejecting uploads — free space now.',
 
     'story.section.new': 'New Story Text Post',
     'story.new.hint': 'Text entries appear inline in the timeline alongside photos and videos.',
@@ -247,6 +250,9 @@ const TRANSLATIONS: Record<Lang, Dictionary> = {
     'media.existing.unifiedHint': 'Medien-Uploads und Textbeiträge, sortiert nach Anzeige-Datum. Bearbeitung ändert Titel, Text und Datum.',
     'media.empty.unified': 'Noch keine Einträge.',
     'media.upload.hint2': 'Erlaubt: JPG/PNG/WEBP/GIF bis 10 MB, MP4/WEBM/MOV bis 50 MB. Das Anzeige-Datum steuert die Reihenfolge in der Zeitlinie.',
+    'media.storage.heading': 'Supabase-Speicher belegt',
+    'media.storage.warn': 'Das weiche Limit ist fast erreicht. Alte Uploads aufräumen oder Supabase upgraden, bevor 1 GB voll ist.',
+    'media.storage.critical': 'Über dem konfigurierten Kontingent. Supabase wird Uploads ablehnen — jetzt Platz schaffen.',
 
     'story.section.new': 'Neuer Textbeitrag',
     'story.new.hint': 'Textbeiträge erscheinen zwischen Fotos und Videos in der Zeitlinie.',
@@ -389,6 +395,9 @@ const TRANSLATIONS: Record<Lang, Dictionary> = {
     'media.existing.unifiedHint': '媒体与文字混合列表，按展示日期排序。编辑可修改标题、正文/描述和日期。',
     'media.empty.unified': '暂无条目。',
     'media.upload.hint2': '允许：JPG/PNG/WEBP/GIF ≤ 10MB，MP4/WEBM/MOV ≤ 50MB。展示日期控制时间线顺序。',
+    'media.storage.heading': 'Supabase 存储用量',
+    'media.storage.warn': '接近软上限，建议尽快清理旧素材或升级 Supabase，避免撞到 1 GB 硬上限。',
+    'media.storage.critical': '已超配额，Supabase 将开始拒绝新上传，请立即释放空间。',
 
     'story.section.new': '新增文字故事',
     'story.new.hint': '文字条目会与照片、视频一起出现在时间线中。',

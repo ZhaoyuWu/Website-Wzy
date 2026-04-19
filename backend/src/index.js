@@ -92,6 +92,32 @@ function normalizeSettingText(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function normalizeCommentAuthorName(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeCommentMessage(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function isValidCommentAuthorName(value) {
+  const normalized = normalizeCommentAuthorName(value);
+  return normalized.length >= 1 && normalized.length <= 40 && !hasUnsafeControlChars(normalized);
+}
+
+function isValidCommentMessage(value) {
+  const normalized = normalizeCommentMessage(value);
+  return normalized.length >= 1 && normalized.length <= 500 && !hasUnsafeControlChars(normalized);
+}
+
+function normalizeCommentEntryType(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "media" || normalized === "text") {
+    return normalized;
+  }
+  return "";
+}
+
 function normalizeStoryBody(body) {
   return typeof body === "string" ? body.trim() : "";
 }
@@ -238,6 +264,12 @@ function createApp(options = {}) {
   const likeCooldownMs = Number(process.env.LIKE_COOLDOWN_MS || 1500);
   const likeWindowMs = Number(process.env.LIKE_WINDOW_MS || 60 * 1000);
   const likeMaxPerWindow = Number(process.env.LIKE_MAX_PER_WINDOW || 30);
+  const storageSoftLimitBytes = Number(
+    process.env.STORAGE_SOFT_LIMIT_BYTES || 800 * 1024 * 1024
+  );
+  const storageHardLimitBytes = Number(
+    process.env.STORAGE_HARD_LIMIT_BYTES || 1024 * 1024 * 1024
+  );
   const now = typeof options.now === "function" ? options.now : Date.now;
   const randomBytes = options.randomBytes || crypto.randomBytes;
   const fetchImpl = options.fetchImpl || globalThis.fetch;
@@ -263,6 +295,13 @@ function createApp(options = {}) {
     settingsTable: String(process.env.SUPABASE_SETTINGS_TABLE || "site_settings").trim(),
     settingsKeyColumn: String(process.env.SUPABASE_SETTINGS_KEY_COLUMN || "setting_key").trim(),
     settingsRowKey: String(process.env.SUPABASE_SETTINGS_ROW_KEY || "site").trim(),
+  };
+  const commentsConfig = {
+    commentsTable: String(process.env.SUPABASE_SHOWCASE_COMMENTS_TABLE || "showcase_comments").trim(),
+    commentsListLimit: Math.min(
+      100,
+      Math.max(1, toPositiveInt(process.env.SUPABASE_SHOWCASE_COMMENTS_LIMIT, 50))
+    ),
   };
 
   function createSession(username, role) {
@@ -582,6 +621,173 @@ function createApp(options = {}) {
 
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true, service: "backend", timestamp: new Date().toISOString() });
+  });
+
+  app.get("/api/showcase/comments", (req, res) => {
+    const limit = Math.max(1, Math.min(toPositiveInt(req.query?.limit, commentsConfig.commentsListLimit), 100));
+    const selectColumns = "id,author_name,message,created_at";
+    const endpoint =
+      `/rest/v1/${encodeURIComponent(commentsConfig.commentsTable)}` +
+      `?select=${encodeURIComponent(selectColumns)}` +
+      `&order=created_at.desc&limit=${limit}`;
+
+    return callSupabase(endpoint, { method: "GET" })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+          return res.status(response.status).json({
+            ok: false,
+            message: "Failed to load showcase comments from Supabase.",
+            details: payload,
+          });
+        }
+        return res.json({ ok: true, items: Array.isArray(payload) ? payload : [] });
+      })
+      .catch((error) =>
+        res.status(500).json({ ok: false, message: error.message || "Unable to load comments." })
+      );
+  });
+
+  app.post("/api/showcase/comments", (req, res) => {
+    const authorName = normalizeCommentAuthorName(req.body?.authorName);
+    const message = normalizeCommentMessage(req.body?.message);
+
+    if (!isValidCommentAuthorName(authorName)) {
+      return res.status(400).json({
+        ok: false,
+        message: "Author name is required and must be 1-40 readable characters.",
+      });
+    }
+
+    if (!isValidCommentMessage(message)) {
+      return res.status(400).json({
+        ok: false,
+        message: "Message is required and must be 1-500 readable characters.",
+      });
+    }
+
+    return callSupabase(`/rest/v1/${encodeURIComponent(commentsConfig.commentsTable)}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify([{ author_name: authorName, message }]),
+    })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+          return res.status(response.status).json({
+            ok: false,
+            message: "Failed to save showcase comment to Supabase.",
+            details: payload,
+          });
+        }
+        const item = Array.isArray(payload) ? payload[0] : null;
+        if (!item) {
+          return res.status(500).json({
+            ok: false,
+            message: "Comment save completed with empty response.",
+          });
+        }
+        return res.status(201).json({ ok: true, item });
+      })
+      .catch((error) =>
+        res.status(500).json({ ok: false, message: error.message || "Unable to save comment." })
+      );
+  });
+
+  app.get("/api/story/:type/:id/comments", async (req, res) => {
+    const entryType = normalizeCommentEntryType(req.params?.type);
+    const entryId = toPositiveInt(req.params?.id, 0);
+    if (!entryType || !entryId) {
+      return res.status(400).json({ ok: false, message: "Invalid comment target." });
+    }
+
+    const limit = Math.max(1, Math.min(toPositiveInt(req.query?.limit, commentsConfig.commentsListLimit), 100));
+    const selectColumns = "id,entry_type,entry_id,author_name,message,created_at";
+    const endpoint =
+      `/rest/v1/${encodeURIComponent(commentsConfig.commentsTable)}` +
+      `?select=${encodeURIComponent(selectColumns)}` +
+      `&entry_type=eq.${encodeURIComponent(entryType)}` +
+      `&entry_id=eq.${encodeURIComponent(String(entryId))}` +
+      `&order=created_at.desc&limit=${limit}`;
+
+    try {
+      const response = await callSupabase(endpoint, { method: "GET" });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        return res.status(response.status).json({
+          ok: false,
+          message: "Failed to load story comments from Supabase.",
+          details: payload,
+        });
+      }
+      return res.json({ ok: true, items: Array.isArray(payload) ? payload : [] });
+    } catch (error) {
+      return res.status(500).json({ ok: false, message: error.message || "Unable to load comments." });
+    }
+  });
+
+  app.post("/api/story/:type/:id/comments", async (req, res) => {
+    const entryType = normalizeCommentEntryType(req.params?.type);
+    const entryId = toPositiveInt(req.params?.id, 0);
+    if (!entryType || !entryId) {
+      return res.status(400).json({ ok: false, message: "Invalid comment target." });
+    }
+
+    const authorName = normalizeCommentAuthorName(req.body?.authorName);
+    const message = normalizeCommentMessage(req.body?.message);
+
+    if (!isValidCommentAuthorName(authorName)) {
+      return res.status(400).json({
+        ok: false,
+        message: "Author name is required and must be 1-40 readable characters.",
+      });
+    }
+
+    if (!isValidCommentMessage(message)) {
+      return res.status(400).json({
+        ok: false,
+        message: "Message is required and must be 1-500 readable characters.",
+      });
+    }
+
+    try {
+      const response = await callSupabase(`/rest/v1/${encodeURIComponent(commentsConfig.commentsTable)}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Prefer: "return=representation",
+        },
+        body: JSON.stringify([
+          {
+            entry_type: entryType,
+            entry_id: entryId,
+            author_name: authorName,
+            message,
+          },
+        ]),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        return res.status(response.status).json({
+          ok: false,
+          message: "Failed to save story comment to Supabase.",
+          details: payload,
+        });
+      }
+      const item = Array.isArray(payload) ? payload[0] : null;
+      if (!item) {
+        return res.status(500).json({
+          ok: false,
+          message: "Comment save completed with empty response.",
+        });
+      }
+      return res.status(201).json({ ok: true, item });
+    } catch (error) {
+      return res.status(500).json({ ok: false, message: error.message || "Unable to save comment." });
+    }
   });
 
   const STORY_PAGE_SIZE = 20;
@@ -1134,6 +1340,7 @@ function createApp(options = {}) {
             media_type: mediaType,
             public_url: publicUrl,
             display_date: displayDate,
+            file_size: fileBuffer.length,
           },
         ]),
       });
@@ -1153,6 +1360,51 @@ function createApp(options = {}) {
       return res.status(500).json({ ok: false, message: error.message || "Media upload failed" });
     }
   });
+
+  app.get(
+    "/api/admin/storage/usage",
+    requireAuth,
+    requireRole("Admin", "Publisher"),
+    async (_req, res) => {
+      try {
+        ensureSupabaseConfig();
+        const endpoint =
+          `/rest/v1/${encodeURIComponent(mediaConfig.mediaTable)}` +
+          `?select=file_size&file_size=not.is.null`;
+        const response = await callSupabase(endpoint, { method: "GET" });
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+          return res.status(response.status).json({
+            ok: false,
+            message: "Failed to load storage usage.",
+            details: payload,
+          });
+        }
+        const rows = Array.isArray(payload) ? payload : [];
+        const usedBytes = rows.reduce((sum, row) => {
+          const value = Number(row?.file_size);
+          return sum + (Number.isFinite(value) && value > 0 ? value : 0);
+        }, 0);
+        const softPct = storageSoftLimitBytes > 0 ? usedBytes / storageSoftLimitBytes : 0;
+        const hardPct = storageHardLimitBytes > 0 ? usedBytes / storageHardLimitBytes : 0;
+        const status =
+          hardPct >= 1 ? "critical" : softPct >= 1 ? "warn" : "ok";
+        return res.json({
+          ok: true,
+          usedBytes,
+          softLimitBytes: storageSoftLimitBytes,
+          hardLimitBytes: storageHardLimitBytes,
+          percentOfHard: Math.round(hardPct * 1000) / 10,
+          trackedItems: rows.length,
+          status,
+        });
+      } catch (error) {
+        return res
+          .status(500)
+          .json({ ok: false, message: error.message || "Unable to compute storage usage." });
+      }
+    }
+  );
 
   app.patch("/api/admin/media/:id", requireAuth, requireRole("Admin", "Publisher"), async (req, res) => {
     const id = String(req.params.id || "").trim();

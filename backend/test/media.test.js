@@ -1014,3 +1014,148 @@ test("delete endpoint rejects public_url outside configured bucket", async () =>
     ctx.server.close();
   }
 });
+
+test("public showcase comments supports post and list", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+  process.env.SUPABASE_SHOWCASE_COMMENTS_TABLE = "showcase_comments";
+
+  const comments = [];
+  let commentSeq = 1;
+  const fetchImpl = async (url, init = {}) => {
+    const urlText = String(url);
+    const method = String(init.method || "GET");
+    if (urlText.includes("/rest/v1/showcase_comments") && method === "POST") {
+      const payload = JSON.parse(String(init.body || "[]"));
+      const row = payload[0] || {};
+      const item = {
+        id: commentSeq++,
+        author_name: String(row.author_name || ""),
+        message: String(row.message || ""),
+        created_at: new Date().toISOString(),
+      };
+      comments.unshift(item);
+      return new Response(JSON.stringify([item]), {
+        status: 201,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    if (urlText.includes("/rest/v1/showcase_comments") && method === "GET") {
+      return new Response(JSON.stringify(comments), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify([]), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  const ctx = await startTestServer({ fetchImpl });
+  try {
+    const post = await postJson(ctx.baseUrl, "/api/showcase/comments", {
+      authorName: "Alice",
+      message: "Nanami is adorable!",
+    });
+    assert.equal(post.response.status, 201);
+    assert.equal(post.payload.ok, true);
+    assert.equal(post.payload.item.author_name, "Alice");
+
+    const listResponse = await fetch(`${ctx.baseUrl}/api/showcase/comments?limit=10`);
+    const listPayload = await listResponse.json();
+    assert.equal(listResponse.status, 200);
+    assert.equal(listPayload.ok, true);
+    assert.equal(Array.isArray(listPayload.items), true);
+    assert.equal(listPayload.items.length, 1);
+    assert.equal(listPayload.items[0].message, "Nanami is adorable!");
+  } finally {
+    ctx.server.close();
+  }
+});
+
+test("public showcase comments validates author/message", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+  process.env.SUPABASE_SHOWCASE_COMMENTS_TABLE = "showcase_comments";
+  const ctx = await startTestServer({
+    fetchImpl: async () =>
+      new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+  });
+  try {
+    const badAuthor = await postJson(ctx.baseUrl, "/api/showcase/comments", {
+      authorName: "",
+      message: "Hi",
+    });
+    assert.equal(badAuthor.response.status, 400);
+
+    const badMessage = await postJson(ctx.baseUrl, "/api/showcase/comments", {
+      authorName: "Alice",
+      message: "",
+    });
+    assert.equal(badMessage.response.status, 400);
+  } finally {
+    ctx.server.close();
+  }
+});
+
+test("storage usage endpoint sums file_size and reports status thresholds", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+  process.env.STORAGE_SOFT_LIMIT_BYTES = String(10 * 1024 * 1024);
+  process.env.STORAGE_HARD_LIMIT_BYTES = String(20 * 1024 * 1024);
+
+  const dbPool = {
+    query: async () => ({
+      rowCount: 1,
+      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
+    }),
+  };
+
+  const fetchImpl = async (url) => {
+    if (String(url).includes("/rest/v1/media_items?select=file_size")) {
+      return new Response(
+        JSON.stringify([{ file_size: 4 * 1024 * 1024 }, { file_size: 8 * 1024 * 1024 }]),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    return new Response("[]", { status: 200 });
+  };
+
+  const ctx = await startTestServer({ dbPool, fetchImpl });
+  try {
+    const token = await loginAndGetToken(ctx.baseUrl);
+    const response = await fetch(`${ctx.baseUrl}/api/admin/storage/usage`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.usedBytes, 12 * 1024 * 1024);
+    assert.equal(payload.softLimitBytes, 10 * 1024 * 1024);
+    assert.equal(payload.hardLimitBytes, 20 * 1024 * 1024);
+    assert.equal(payload.trackedItems, 2);
+    assert.equal(payload.status, "warn");
+  } finally {
+    ctx.server.close();
+    delete process.env.STORAGE_SOFT_LIMIT_BYTES;
+    delete process.env.STORAGE_HARD_LIMIT_BYTES;
+  }
+});
+
+test("storage usage endpoint blocks Viewer role", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+
+  const ctx = await startTestServer();
+  try {
+    const response = await fetch(`${ctx.baseUrl}/api/admin/storage/usage`);
+    assert.equal(response.status, 401);
+  } finally {
+    ctx.server.close();
+  }
+});

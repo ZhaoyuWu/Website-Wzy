@@ -89,6 +89,11 @@ Build a warm, media-first personal website to showcase the dog Nanami, with reli
   - No page-level horizontal scrolling on phone widths.
   - Primary interactive controls are touch-friendly (visually >= `44px` height where applicable).
   - Typography and spacing keep clear hierarchy and readable rhythm on small screens.
+- `T-007-2`:
+  - Each uploaded media row persists `file_size` so total storage usage can be summed server-side.
+  - `/manage-media` surfaces a usage banner (`used / hard limit`, %, progress bar) for Admin/Publisher; changes colour when `STORAGE_SOFT_LIMIT_BYTES` is reached and switches to critical copy when `STORAGE_HARD_LIMIT_BYTES` is exceeded.
+  - Backend `GET /api/admin/storage/usage` is role-gated and returns `{ usedBytes, softLimitBytes, hardLimitBytes, percentOfHard, status, trackedItems }`.
+  - Banner refreshes after successful upload and delete so the number stays live; Supabase itself still enforces the real ceiling — the banner is an early warning, not a gatekeeper.
 
 ## Definition of Done (Project)
 - Tasks `T-001` to `T-007` are implemented and demoable.
