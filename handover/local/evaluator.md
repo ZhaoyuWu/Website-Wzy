@@ -67,6 +67,32 @@ continue
 ## Decision
 continue
 
+## 2026-04-19 Addendum - Generator4 Media Delete Safety + Coverage Expansion (Scoped)
+
+## Summary Written
+- Completed follow-up audit/remediation for generator4 `T-004` media management chain.
+- Fixed backend delete-path trust issue:
+  - previous flow derived storage delete path from any `public_url` marker match,
+  - updated flow now requires strict prefix match against configured `SUPABASE_URL` + `SUPABASE_STORAGE_BUCKET`,
+  - non-matching media URL is rejected with `400` and storage delete is skipped.
+- Fixed frontend quality/principle issues in generator4 media scope:
+  - corrected garbled text rendering in admin/media navigation strings,
+  - removed residual hardcoded colors in media page and aligned to style tokens.
+- Expanded tests to cover requested logic + functional + performance dimensions:
+  - backend media delete cross-bucket rejection regression test,
+  - frontend `roleGuard` logic tests,
+  - frontend click-to-switch `/admin -> /manage-media` behavior test,
+  - frontend route toggle performance baseline test,
+  - frontend media page validation + edit-toggle performance tests.
+- Fixed home-page logic spec instantiation to component fixture mode (required by `inject(ChangeDetectorRef)` usage).
+
+## Validation Evidence
+- `npm.cmd test` (backend): passed (`39 passed, 0 failed`).
+- `npm.cmd run test:ci` (frontend): passed (`runtime-config + 36 Angular tests`).
+
+## Decision
+continue
+
 ## Follow-up Actions
 - Publish generator5 scoped public handover and history entry.
 - Run post-deploy smoke on role matrix: Viewer, Publisher, Admin.

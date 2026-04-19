@@ -4,15 +4,6 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../core/auth.service';
 
-type MediaItem = {
-  id: number | string;
-  title: string;
-  description: string;
-  media_type: 'image' | 'video' | string;
-  public_url: string;
-  created_at?: string;
-};
-
 type SiteSettings = {
   profileName: string;
   heroTagline: string;
@@ -30,10 +21,6 @@ type UserRow = {
 };
 
 const ASSIGNABLE_ROLES = ['Admin', 'Publisher', 'Viewer'] as const;
-const IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
-const VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime']);
-const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
-const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
 
 const DEFAULT_SITE_SETTINGS: SiteSettings = {
   profileName: 'Nanami',
@@ -61,7 +48,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
             </p>
           </div>
           <div class="header-actions">
-            <a class="back-home" [routerLink]="['/']">← Home</a>
+            <a class="back-home" [routerLink]="['/']"><- Home</a>
             <button type="button" class="logout" (click)="logout()" [disabled]="isLoggingOut">
               {{ isLoggingOut ? 'Signing out...' : 'Logout' }}
             </button>
@@ -201,93 +188,11 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
       </section>
 
       <section class="admin-card" *ngIf="auth.isPublisherOrAdmin">
-        <h2>Upload Media (T-004)</h2>
-        <p class="hint">Allowed: JPG/PNG/WEBP/GIF up to 10MB, MP4/WEBM/MOV up to 50MB.</p>
-
-        <form class="form-grid" (ngSubmit)="uploadMedia()">
-          <label>
-            <span>Title</span>
-            <input
-              type="text"
-              [(ngModel)]="uploadTitle"
-              name="uploadTitle"
-              maxlength="120"
-              required
-              [disabled]="isUploading"
-            />
-          </label>
-
-          <label>
-            <span>Description</span>
-            <textarea
-              [(ngModel)]="uploadDescription"
-              name="uploadDescription"
-              maxlength="500"
-              rows="3"
-              [disabled]="isUploading"
-            ></textarea>
-          </label>
-
-          <label>
-            <span>File</span>
-            <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime" (change)="onFileSelected($event)" [disabled]="isUploading" />
-          </label>
-
-          <p class="file-meta" *ngIf="selectedFile">
-            {{ selectedFile.name }} ({{ formatSize(selectedFile.size) }})
-          </p>
-
-          <p class="error" *ngIf="uploadError">{{ uploadError }}</p>
-          <p class="success" *ngIf="uploadSuccess">{{ uploadSuccess }}</p>
-
-          <button type="submit" [disabled]="isUploading">
-            {{ isUploading ? 'Uploading...' : 'Upload and Save Metadata' }}
-          </button>
-        </form>
-      </section>
-
-      <section class="admin-card" *ngIf="auth.isPublisherOrAdmin">
-        <div class="list-header">
-          <h2>Existing Media</h2>
-          <button type="button" class="secondary" (click)="loadMediaItems()" [disabled]="isRefreshing">
-            {{ isRefreshing ? 'Refreshing...' : 'Refresh' }}
-          </button>
-        </div>
-
-        <p class="message" *ngIf="mediaLoadError">{{ mediaLoadError }}</p>
-        <p class="hint" *ngIf="!isRefreshing && mediaItems.length === 0">No media items yet.</p>
-
-        <article class="media-row" *ngFor="let item of mediaItems; trackBy: trackById">
-          <div class="thumb" *ngIf="item.media_type === 'image'">
-            <img [src]="item.public_url" [alt]="item.title" loading="lazy" decoding="async" />
-          </div>
-          <div class="thumb" *ngIf="item.media_type === 'video'">
-            <video [src]="item.public_url" controls preload="metadata" playsinline></video>
-          </div>
-
-          <div class="meta-edit">
-            <p class="type">{{ item.media_type.toUpperCase() }}</p>
-            <input
-              type="text"
-              [(ngModel)]="item.title"
-              [ngModelOptions]="{ standalone: true }"
-              maxlength="120"
-            />
-            <textarea
-              [(ngModel)]="item.description"
-              [ngModelOptions]="{ standalone: true }"
-              maxlength="500"
-              rows="2"
-            ></textarea>
-
-            <div class="row-actions">
-              <button type="button" class="secondary" (click)="saveItem(item)" [disabled]="isSavingId === item.id">
-                {{ isSavingId === item.id ? 'Saving...' : 'Save Metadata' }}
-              </button>
-              <a [href]="item.public_url" target="_blank" rel="noreferrer">Open</a>
-            </div>
-          </div>
-        </article>
+        <h2>Media Uploads</h2>
+        <p class="hint">
+          Upload and manage Nanami media on the dedicated page:
+          <a class="inline-link" [routerLink]="['/manage-media']">Manage Media -></a>
+        </p>
       </section>
     </main>
   `,
@@ -490,49 +395,6 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
       flex-wrap: wrap;
     }
 
-    .media-row {
-      border: 1px solid var(--clr-ddede5);
-      border-radius: 12px;
-      padding: 12px;
-      display: grid;
-      grid-template-columns: 170px minmax(0, 1fr);
-      gap: 12px;
-      margin-top: 10px;
-      background: var(--clr-fbfefc);
-      content-visibility: auto;
-      contain-intrinsic-size: 260px;
-    }
-
-    .thumb {
-      width: 100%;
-      aspect-ratio: 16 / 10;
-      border-radius: 10px;
-      overflow: hidden;
-      border: 1px solid var(--clr-d8e9e0);
-      background: var(--clr-f1f6f3);
-    }
-
-    .thumb img,
-    .thumb video {
-      width: 100%;
-      height: 100%;
-      display: block;
-      object-fit: cover;
-    }
-
-    .meta-edit {
-      display: grid;
-      gap: 8px;
-    }
-
-    .type {
-      margin: 0;
-      color: var(--clr-4a6b5d);
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 0.06em;
-    }
-
     .row-actions {
       display: flex;
       gap: 10px;
@@ -553,10 +415,11 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
       margin: 0;
     }
 
-    .row-actions a {
+    .inline-link {
       color: var(--clr-1f6a49);
-      text-decoration: none;
       font-weight: 600;
+      text-decoration: none;
+      margin-left: 4px;
     }
 
     @media (max-width: 760px) {
@@ -568,10 +431,6 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
       .list-header {
         flex-direction: column;
         align-items: flex-start;
-      }
-
-      .media-row {
-        grid-template-columns: 1fr;
       }
     }
 
@@ -617,18 +476,6 @@ export class AdminPageComponent implements OnInit {
   claimAdminError = '';
   claimAdminSuccess = '';
 
-  mediaItems: MediaItem[] = [];
-  mediaLoadError = '';
-  isRefreshing = false;
-
-  uploadTitle = '';
-  uploadDescription = '';
-  selectedFile: File | null = null;
-  uploadError = '';
-  uploadSuccess = '';
-  isUploading = false;
-  isSavingId: number | string | null = null;
-
   settingsForm: SiteSettings = { ...DEFAULT_SITE_SETTINGS };
   settingsError = '';
   settingsSuccess = '';
@@ -655,9 +502,6 @@ export class AdminPageComponent implements OnInit {
       if (this.auth.isAdmin) {
         await this.loadSettings();
       }
-      if (this.auth.isPublisherOrAdmin) {
-        await this.loadMediaItems();
-      }
     } catch {
       this.authCheckStatus = 'Session expired or invalid';
       await this.auth.logout();
@@ -665,10 +509,6 @@ export class AdminPageComponent implements OnInit {
     } finally {
       this.cdr.detectChanges();
     }
-  }
-
-  trackById(index: number, item: MediaItem): number | string {
-    return item.id ?? index;
   }
 
   trackByUserId(_index: number, user: UserRow): string {
@@ -777,186 +617,6 @@ export class AdminPageComponent implements OnInit {
     }
   }
 
-  onFileSelected(event: Event): void {
-    const input = event.target as HTMLInputElement | null;
-    const file = input?.files?.[0] ?? null;
-    this.selectedFile = file;
-    this.uploadError = '';
-    this.uploadSuccess = '';
-
-    if (!file) {
-      return;
-    }
-
-    const mediaType = this.inferMediaType(file.type);
-    if (!mediaType) {
-      this.uploadError =
-        'Unsupported file type. Allowed: image/jpeg, image/png, image/webp, image/gif, video/mp4, video/webm, video/quicktime.';
-      this.selectedFile = null;
-      return;
-    }
-
-    const maxSize = mediaType === 'image' ? MAX_IMAGE_SIZE_BYTES : MAX_VIDEO_SIZE_BYTES;
-    if (file.size > maxSize) {
-      this.uploadError = `${mediaType} file exceeds ${mediaType === 'image' ? '10MB' : '50MB'} limit.`;
-      this.selectedFile = null;
-    }
-  }
-
-  async uploadMedia(): Promise<void> {
-    this.uploadError = '';
-    this.uploadSuccess = '';
-
-    const title = this.uploadTitle.trim();
-    const description = this.uploadDescription.trim();
-    const file = this.selectedFile;
-
-    if (!title || title.length > 120) {
-      this.uploadError = 'Title is required and must be at most 120 characters.';
-      return;
-    }
-
-    if (description.length > 500) {
-      this.uploadError = 'Description must be at most 500 characters.';
-      return;
-    }
-
-    if (!file) {
-      this.uploadError = 'Please choose a file before uploading.';
-      return;
-    }
-
-    const mediaType = this.inferMediaType(file.type);
-    if (!mediaType) {
-      this.uploadError = 'Unsupported file type.';
-      return;
-    }
-
-    const maxSize = mediaType === 'image' ? MAX_IMAGE_SIZE_BYTES : MAX_VIDEO_SIZE_BYTES;
-    if (file.size > maxSize) {
-      this.uploadError = `${mediaType} file exceeds ${mediaType === 'image' ? '10MB' : '50MB'} limit.`;
-      return;
-    }
-
-    this.isUploading = true;
-    try {
-      const fileBase64 = await this.fileToBase64(file);
-      const response = await fetch(this.auth.apiUrl('/api/admin/media'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...this.auth.authHeaders()
-        },
-        body: JSON.stringify({
-          title,
-          description,
-          fileName: file.name,
-          fileType: file.type,
-          fileSize: file.size,
-          fileBase64
-        })
-      });
-
-      const payload = (await response.json()) as {
-        ok?: boolean;
-        message?: string;
-        item?: MediaItem;
-      };
-
-      if (!response.ok || !payload.ok || !payload.item) {
-        throw new Error(payload.message || 'Upload failed.');
-      }
-
-      this.mediaItems = [payload.item, ...this.mediaItems];
-      this.uploadTitle = '';
-      this.uploadDescription = '';
-      this.selectedFile = null;
-      this.uploadSuccess = 'Upload completed and metadata saved.';
-    } catch (error) {
-      this.uploadError = error instanceof Error ? error.message : 'Upload failed.';
-    } finally {
-      this.isUploading = false;
-      this.cdr.detectChanges();
-    }
-  }
-
-  async saveItem(item: MediaItem): Promise<void> {
-    const title = item.title.trim();
-    const description = item.description.trim();
-
-    if (!title || title.length > 120) {
-      this.mediaLoadError = 'Title is required and must be at most 120 characters.';
-      return;
-    }
-
-    if (description.length > 500) {
-      this.mediaLoadError = 'Description must be at most 500 characters.';
-      return;
-    }
-
-    this.mediaLoadError = '';
-    this.isSavingId = item.id;
-
-    try {
-      const response = await fetch(this.auth.apiUrl(`/api/admin/media/${encodeURIComponent(String(item.id))}`), {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          ...this.auth.authHeaders()
-        },
-        body: JSON.stringify({ title, description })
-      });
-
-      const payload = (await response.json()) as {
-        ok?: boolean;
-        message?: string;
-        item?: MediaItem;
-      };
-
-      if (!response.ok || !payload.ok || !payload.item) {
-        throw new Error(payload.message || 'Failed to save metadata.');
-      }
-
-      this.mediaItems = this.mediaItems.map((current) =>
-        current.id === item.id ? payload.item ?? current : current
-      );
-    } catch (error) {
-      this.mediaLoadError = error instanceof Error ? error.message : 'Failed to save metadata.';
-    } finally {
-      this.isSavingId = null;
-      this.cdr.detectChanges();
-    }
-  }
-
-  async loadMediaItems(): Promise<void> {
-    this.isRefreshing = true;
-    this.mediaLoadError = '';
-
-    try {
-      const response = await fetch(this.auth.apiUrl('/api/admin/media'), {
-        headers: this.auth.authHeaders()
-      });
-
-      const payload = (await response.json()) as {
-        ok?: boolean;
-        message?: string;
-        items?: MediaItem[];
-      };
-
-      if (!response.ok || !payload.ok) {
-        throw new Error(payload.message || 'Failed to load media list.');
-      }
-
-      this.mediaItems = Array.isArray(payload.items) ? payload.items : [];
-    } catch (error) {
-      this.mediaLoadError =
-        error instanceof Error ? error.message : 'Failed to load media list.';
-    } finally {
-      this.isRefreshing = false;
-      this.cdr.detectChanges();
-    }
-  }
-
   async loadSettings(): Promise<void> {
     this.isLoadingSettings = true;
     this.settingsError = '';
@@ -1058,33 +718,12 @@ export class AdminPageComponent implements OnInit {
     this.isLoggingOut = false;
   }
 
-  formatSize(bytes: number): string {
-    if (bytes < 1024) {
-      return `${bytes} B`;
-    }
-    if (bytes < 1024 * 1024) {
-      return `${(bytes / 1024).toFixed(1)} KB`;
-    }
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  }
-
   formatDateTime(rawDate: string): string {
     const timestamp = Date.parse(rawDate);
     if (Number.isNaN(timestamp)) {
       return rawDate;
     }
     return new Date(timestamp).toLocaleString();
-  }
-
-  private inferMediaType(mimeType: string): 'image' | 'video' | null {
-    const normalized = String(mimeType || '').toLowerCase();
-    if (IMAGE_MIME_TYPES.has(normalized)) {
-      return 'image';
-    }
-    if (VIDEO_MIME_TYPES.has(normalized)) {
-      return 'video';
-    }
-    return null;
   }
 
   private isValidEmail(email: string): boolean {
@@ -1113,23 +752,6 @@ export class AdminPageComponent implements OnInit {
     }
 
     return normalized;
-  }
-
-  private async fileToBase64(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onerror = () => reject(new Error('Unable to read selected file.'));
-      reader.onload = () => {
-        if (typeof reader.result !== 'string') {
-          reject(new Error('Unable to encode selected file.'));
-          return;
-        }
-
-        const commaIndex = reader.result.indexOf(',');
-        resolve(commaIndex >= 0 ? reader.result.slice(commaIndex + 1) : reader.result);
-      };
-      reader.readAsDataURL(file);
-    });
   }
 }
 

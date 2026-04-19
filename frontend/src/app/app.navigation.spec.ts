@@ -94,6 +94,22 @@ describe('Navigation (functional + performance)', () => {
     expect(router.url).toBe('/login');
   });
 
+  it('supports click-based page switch from admin page to manage-media page', async () => {
+    const harness = await RouterTestingHarness.create('/admin');
+    const router = TestBed.inject(Router);
+
+    const links = Array.from(harness.routeNativeElement?.querySelectorAll('a') ?? []);
+    const mediaLink = links.find((link) => (link.textContent || '').includes('Manage Media')) as
+      | HTMLAnchorElement
+      | undefined;
+    expect(mediaLink).toBeTruthy();
+
+    mediaLink?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
+    await harness.fixture.whenStable();
+
+    expect(router.url).toBe('/manage-media');
+  });
+
   it('keeps route-switch latency under baseline for repeated toggles', async () => {
     const harness = await RouterTestingHarness.create('/login');
     const router = TestBed.inject(Router);
@@ -112,5 +128,23 @@ describe('Navigation (functional + performance)', () => {
     const sorted = durations.slice().sort((a, b) => a - b);
     const p95 = sorted[Math.floor(sorted.length * 0.95) - 1];
     expect(p95).toBeLessThan(250);
+  });
+
+  it('keeps manage-media toggle latency under baseline for repeated switches', async () => {
+    const harness = await RouterTestingHarness.create('/admin');
+    const router = TestBed.inject(Router);
+
+    const durations: number[] = [];
+    for (let index = 0; index < 20; index += 1) {
+      const startedAt = performance.now();
+      await harness.navigateByUrl('/admin');
+      await harness.navigateByUrl('/manage-media');
+      durations.push(performance.now() - startedAt);
+    }
+
+    expect(router.url).toBe('/manage-media');
+    const sorted = durations.slice().sort((a, b) => a - b);
+    const p95 = sorted[Math.floor(sorted.length * 0.95) - 1];
+    expect(p95).toBeLessThan(300);
   });
 });

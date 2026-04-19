@@ -28,6 +28,49 @@ release-owner
 
 ---
 
+## 2026-04-19 Scoped Update - Generator4 Media Safety + Test Expansion
+
+## Source Files
+- backend/src/index.js
+- backend/test/media.test.js
+- frontend/src/app/pages/media-page.component.ts
+- frontend/src/app/pages/media-page.component.spec.ts
+- frontend/src/app/core/auth.guard.spec.ts
+- frontend/src/app/app.navigation.spec.ts
+- frontend/src/app/pages/home-page.component.spec.ts
+- frontend/src/app/pages/admin-page.component.ts
+- handover/local/evaluator.md
+
+## Preconditions Check
+pass (scoped): generator4 audit identified a delete-path trust risk and coverage gaps requiring immediate remediation before release handoff.
+
+## Shared Summary
+- Closed media delete-path trust gap:
+  - backend now only allows storage deletion when `public_url` matches configured `SUPABASE_URL + SUPABASE_STORAGE_BUCKET` prefix,
+  - non-matching bucket/path now returns `400` and aborts storage delete call.
+- Preserved generator4 media metadata behavior:
+  - admin media list includes `updated_at`,
+  - metadata patch stamps `updated_at`.
+- Fixed generator4 UI quality issues:
+  - corrected mojibake/garbled text in media/admin pages,
+  - removed remaining hardcoded danger/muted colors from media page and switched to reusable style tokens.
+- Expanded tests across logic + functional + performance:
+  - backend delete endpoint now has cross-bucket rejection coverage,
+  - role-guard logic tests now include allow/unauth/unauthorized branches,
+  - navigation tests include click switch to `/manage-media` and toggle latency baseline,
+  - media page tests cover file-type validation, date fallback logic, and edit-toggle performance loop.
+- Validation passed:
+  - `backend npm test`: `39/39` pass
+  - `frontend npm run test:ci`: pass (`runtime-config + 36 Angular tests`)
+
+## Final Status
+done (scoped)
+
+## Next Owner
+release-owner
+
+---
+
 ## 2026-04-19 Scoped Update - Generator3 Fix + No-Hardcoded-Style Principle
 
 ## Source Files

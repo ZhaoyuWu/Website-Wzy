@@ -56,7 +56,8 @@ describe('HomePageComponent logic (T-005)', () => {
     globalThis.fetch = mockedFetch;
     window.fetch = mockedFetch;
 
-    const component = TestBed.runInInjectionContext(() => new HomePageComponent());
+    const fixture = TestBed.createComponent(HomePageComponent);
+    const component = fixture.componentInstance;
     await component.ngOnInit();
 
     expect(component.settings.profileName).toBe('Nanami Star');
@@ -71,7 +72,8 @@ describe('HomePageComponent logic (T-005)', () => {
     globalThis.fetch = mockedFetch;
     window.fetch = mockedFetch;
 
-    const component = TestBed.runInInjectionContext(() => new HomePageComponent());
+    const fixture = TestBed.createComponent(HomePageComponent);
+    const component = fixture.componentInstance;
     await component.ngOnInit();
 
     expect(component.settings.profileName).toBe('Nanami');
@@ -91,7 +93,8 @@ describe('HomePageComponent logic (T-005)', () => {
     globalThis.fetch = mockedFetch;
     window.fetch = mockedFetch;
 
-    const component = TestBed.runInInjectionContext(() => new HomePageComponent());
+    const fixture = TestBed.createComponent(HomePageComponent);
+    const component = fixture.componentInstance;
     await component.ngOnInit();
 
     expect(calledUrl).toBe('https://api.nanami.test/api/settings');

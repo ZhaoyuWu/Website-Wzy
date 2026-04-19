@@ -159,6 +159,42 @@ function buildSupabaseObjectPath(bucketName, objectPath) {
   return `${encodedBucket}/${encodedPath}`;
 }
 
+function resolveStorageDeletePathFromPublicUrl(publicUrl, supabaseUrl, storageBucket) {
+  if (typeof publicUrl !== "string" || !publicUrl.trim()) {
+    return null;
+  }
+
+  const expectedPrefix =
+    `${String(supabaseUrl || "").replace(/\/+$/, "")}/storage/v1/object/public/` +
+    `${encodeURIComponent(String(storageBucket || "").trim())}/`;
+  if (!publicUrl.startsWith(expectedPrefix)) {
+    return null;
+  }
+
+  const encodedObjectPath = publicUrl.slice(expectedPrefix.length);
+  if (!encodedObjectPath) {
+    return null;
+  }
+
+  let decodedSegments = null;
+  try {
+    decodedSegments = encodedObjectPath.split("/").map((segment) => decodeURIComponent(segment));
+  } catch {
+    return null;
+  }
+
+  if (
+    decodedSegments.some(
+      (segment) =>
+        !segment || segment === "." || segment === ".." || segment.includes("\\") || segment.includes("/")
+    )
+  ) {
+    return null;
+  }
+
+  return buildSupabaseObjectPath(String(storageBucket || "").trim(), decodedSegments.join("/"));
+}
+
 function normalizeRole(rawRole) {
   const role = typeof rawRole === "string" ? rawRole.trim() : "";
   return VALID_ROLES.has(role) ? role : "Viewer";
@@ -450,7 +486,8 @@ function createApp(options = {}) {
   }
 
   async function listMediaItems(limit, maxLimit = 120) {
-    const selectColumns = "id,title,description,media_type,public_url,thumbnail_url,created_at";
+    const selectColumns =
+      "id,title,description,media_type,public_url,thumbnail_url,created_at,updated_at";
     const hardMax = Math.max(1, Number(maxLimit) || 120);
     const effectiveLimit = Math.max(1, Math.min(Number(limit) || mediaConfig.adminListLimit, hardMax));
     const endpoint =
@@ -864,6 +901,8 @@ function createApp(options = {}) {
       patch.description = description;
     }
 
+    patch.updated_at = new Date().toISOString();
+
     try {
       const response = await callSupabase(
         `/rest/v1/${encodeURIComponent(mediaConfig.mediaTable)}?id=eq.${encodeURIComponent(id)}`,
@@ -921,24 +960,28 @@ function createApp(options = {}) {
         return res.status(404).json({ ok: false, message: "Media item not found." });
       }
 
-      const publicUrl = typeof existing.public_url === "string" ? existing.public_url : "";
-      const storageMarker = "/storage/v1/object/public/";
-      const markerIndex = publicUrl.indexOf(storageMarker);
-      if (markerIndex >= 0) {
-        const rawObjectPath = publicUrl.slice(markerIndex + storageMarker.length);
-        if (rawObjectPath) {
-          const storageResponse = await callSupabase(`/storage/v1/object/${rawObjectPath}`, {
-            method: "DELETE",
-          });
-          if (!storageResponse.ok && storageResponse.status !== 404) {
-            const storageError = await storageResponse.text();
-            return res.status(storageResponse.status).json({
-              ok: false,
-              message: "Failed to delete storage object.",
-              details: storageError,
-            });
-          }
-        }
+      const storageDeletePath = resolveStorageDeletePathFromPublicUrl(
+        existing.public_url,
+        mediaConfig.supabaseUrl,
+        mediaConfig.storageBucket
+      );
+      if (!storageDeletePath) {
+        return res.status(400).json({
+          ok: false,
+          message: "Media public URL does not match configured storage bucket.",
+        });
+      }
+
+      const storageResponse = await callSupabase(`/storage/v1/object/${storageDeletePath}`, {
+        method: "DELETE",
+      });
+      if (!storageResponse.ok && storageResponse.status !== 404) {
+        const storageError = await storageResponse.text();
+        return res.status(storageResponse.status).json({
+          ok: false,
+          message: "Failed to delete storage object.",
+          details: storageError,
+        });
       }
 
       const deleteResponse = await callSupabase(

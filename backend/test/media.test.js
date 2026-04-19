@@ -464,6 +464,69 @@ test("admin media endpoint keeps configured upper limit above showcase cap", asy
   }
 });
 
+test("metadata patch endpoint stamps updated_at on every edit", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+  process.env.SUPABASE_MEDIA_TABLE = "media_items";
+
+  const dbPool = {
+    query: async () => ({
+      rowCount: 1,
+      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
+    }),
+  };
+
+  let capturedBody = null;
+  const fetchImpl = async (url, init = {}) => {
+    if (String(url).includes("/rest/v1/media_items") && String(init.method) === "PATCH") {
+      capturedBody = init.body ? JSON.parse(String(init.body)) : null;
+      return new Response(
+        JSON.stringify([
+          {
+            id: 11,
+            title: "Edited",
+            description: "Edited desc",
+            media_type: "image",
+            public_url: "https://example.test/a.jpg",
+            created_at: "2026-04-01T00:00:00.000Z",
+            updated_at: capturedBody?.updated_at || new Date().toISOString(),
+          },
+        ]),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    return new Response(JSON.stringify([]), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  const ctx = await startTestServer({ dbPool, fetchImpl });
+  try {
+    const token = await loginAndGetToken(ctx.baseUrl);
+
+    const { response, payload } = await patchJson(
+      ctx.baseUrl,
+      "/api/admin/media/11",
+      { title: "Edited", description: "Edited desc" },
+      { Authorization: `Bearer ${token}` }
+    );
+
+    assert.equal(response.status, 200);
+    assert.equal(payload.ok, true);
+    assert.ok(capturedBody, "expected PATCH body to be captured");
+    assert.equal(typeof capturedBody.updated_at, "string");
+    assert.ok(
+      !Number.isNaN(Date.parse(capturedBody.updated_at)),
+      "expected updated_at to be an ISO timestamp"
+    );
+    assert.equal(typeof payload.item.updated_at, "string");
+  } finally {
+    ctx.server.close();
+  }
+});
+
 test("delete endpoint removes storage object and metadata row", async () => {
   process.env.SUPABASE_URL = "https://example.supabase.co";
   process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
@@ -575,6 +638,65 @@ test("delete endpoint returns 404 when media id is missing", async () => {
 
     assert.equal(response.status, 404);
     assert.equal(payload.ok, false);
+  } finally {
+    ctx.server.close();
+  }
+});
+
+test("delete endpoint rejects public_url outside configured bucket", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+  process.env.SUPABASE_STORAGE_BUCKET = "media";
+  process.env.SUPABASE_MEDIA_TABLE = "media_items";
+
+  const dbPool = {
+    query: async () => ({
+      rowCount: 1,
+      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
+    }),
+  };
+
+  const fetchCalls = [];
+  const fetchImpl = async (url, init = {}) => {
+    const urlText = String(url);
+    const method = String(init.method || "GET");
+    fetchCalls.push({ url: urlText, method });
+
+    if (urlText.includes("/rest/v1/media_items") && method === "GET") {
+      return new Response(
+        JSON.stringify([
+          {
+            id: 43,
+            public_url:
+              "https://example.supabase.co/storage/v1/object/public/other-bucket/uploads/43-abc.jpg",
+          },
+        ]),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    return new Response(JSON.stringify([]), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  const ctx = await startTestServer({ dbPool, fetchImpl });
+  try {
+    const token = await loginAndGetToken(ctx.baseUrl);
+    const response = await fetch(`${ctx.baseUrl}/api/admin/media/43`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const payload = await response.json();
+
+    assert.equal(response.status, 400);
+    assert.equal(payload.ok, false);
+    assert.match(String(payload.message || ""), /does not match configured storage bucket/i);
+    assert.equal(
+      fetchCalls.some((entry) => entry.method === "DELETE" && entry.url.includes("/storage/v1/object/")),
+      false
+    );
   } finally {
     ctx.server.close();
   }

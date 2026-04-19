@@ -1,5 +1,25 @@
 # Handover History
 
+## 2026-04-19 - Generator4 Media Safety + Test Expansion (Scoped)
+- Type: public handover update (scoped)
+- Scope: generator4 `T-004` follow-up audit remediation (media delete safety, principle cleanup, test expansion)
+- Source docs:
+  - `handover/local/evaluator.md`
+  - `handover/public.md`
+- Key outcomes:
+  - Hardened media delete endpoint to enforce configured Supabase URL + storage bucket ownership before object deletion.
+  - Added backend regression coverage for cross-bucket `public_url` rejection path.
+  - Fixed generator4 UI text encoding artifacts in admin/media surfaces.
+  - Removed remaining media-page hardcoded colors and aligned to reusable style tokens.
+  - Expanded frontend test coverage:
+    - `roleGuard` logic matrix,
+    - admin -> manage-media click route behavior,
+    - manage-media route toggle latency baseline,
+    - media page validation + edit-toggle performance checks.
+  - Validation passed: backend `39/39`, frontend CI tests pass (`36/36`).
+- Decision: continue
+- Next owner: release-owner
+
 ## 2026-04-19 - Generator3 Remediation and Style Principle Hardening (Scoped)
 - Type: public handover update (scoped)
 - Scope: generator3 `T-003` follow-up functional fix + principle update for style governance

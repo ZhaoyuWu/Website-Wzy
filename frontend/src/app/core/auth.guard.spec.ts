@@ -1,9 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router, UrlTree } from '@angular/router';
 import { AuthService } from './auth.service';
-import { authGuard } from './auth.guard';
+import { authGuard, roleGuard } from './auth.guard';
 
-function configureGuard(isAuthenticated: boolean): Router {
+function configureGuard(isAuthenticated: boolean, userRole = 'Viewer'): Router {
   TestBed.configureTestingModule({
     providers: [
       provideRouter([]),
@@ -12,6 +12,9 @@ function configureGuard(isAuthenticated: boolean): Router {
         useValue: {
           get isAuthenticated() {
             return isAuthenticated;
+          },
+          get userRole() {
+            return userRole;
           }
         }
       }
@@ -36,5 +39,33 @@ describe('authGuard (logic)', () => {
     );
     expect(result instanceof UrlTree).toBe(true);
     expect(router.serializeUrl(result as UrlTree)).toBe('/login?redirect=%2Fadmin');
+  });
+});
+
+describe('roleGuard (logic)', () => {
+  it('allows role-matched authenticated users', () => {
+    configureGuard(true, 'Publisher');
+    const result = TestBed.runInInjectionContext(() =>
+      roleGuard('Admin', 'Publisher')({} as never, { url: '/manage-media' } as never)
+    );
+    expect(result).toBe(true);
+  });
+
+  it('redirects unauthenticated users to /login with redirect param', () => {
+    const router = configureGuard(false, 'Publisher');
+    const result = TestBed.runInInjectionContext(() =>
+      roleGuard('Admin', 'Publisher')({} as never, { url: '/manage-media' } as never)
+    );
+    expect(result instanceof UrlTree).toBe(true);
+    expect(router.serializeUrl(result as UrlTree)).toBe('/login?redirect=%2Fmanage-media');
+  });
+
+  it('redirects authenticated but unauthorized users to home', () => {
+    const router = configureGuard(true, 'Viewer');
+    const result = TestBed.runInInjectionContext(() =>
+      roleGuard('Admin', 'Publisher')({} as never, { url: '/manage-media' } as never)
+    );
+    expect(result instanceof UrlTree).toBe(true);
+    expect(router.serializeUrl(result as UrlTree)).toBe('/');
   });
 });
