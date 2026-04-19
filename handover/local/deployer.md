@@ -99,3 +99,93 @@ User reported "admin 账号无法登录" on https://frontend-six-snowy-32.vercel
 ### Notes
 - Main workspace has unrelated user-local changes; release work stayed isolated in `.release-worktree`.
 - `render.yaml` intentionally lists Supabase table/bucket env vars explicitly (even though backend code has matching defaults) so production config is auditable from the Blueprint alone.
+
+---
+
+## Session 3 (this session) — Pre-release fixes, full release, and brand rebrand to nanami-live
+
+### Trigger
+User asked to "fix problems first, then release". Three feature/docs commits had been built on local `main` since the original Vercel + Render deploy and were sitting unreleased. User then asked the deployed URL be renamed from the random `frontend-six-snowy-32.vercel.app` to `nanami-live.vercel.app`.
+
+### Pre-release fix commits (on `main`)
+1. `15b638f fix(runtime): strip CLI quote wrappers and resolve Supabase config lazily`
+   - `frontend/scripts/write-runtime-config.mjs` adds `normalizeArgToken()` to strip wrapping quotes — fixes the Windows/PowerShell case where Vercel build received `"--api-base-url=..."` and silently dropped the URL into the localhost fallback.
+   - `frontend/src/app/core/auth.service.ts` resolves `supabaseUrl`/`supabaseAnonKey` lazily inside each method instead of capturing them at Angular service-construct time, which fired before `runtime-config.js` had loaded in some bootstrap orderings.
+2. `26f33a4 docs(workflow): add T-007 mobile scope and codify child-ID revision policy`
+   - `standards/principles.md` adds R5.1 Mobile Elegance and immutability of baseline task IDs.
+   - All four `handover/tasks/*` workflow files widen scope from T-006 to T-007.
+3. `837ca72 chore(backend): stop instantiating localhost PG Pool at module load`
+   - Removed `require("./db")` and the `|| defaultPool` fallback in `createApp`. Deleted `backend/src/db.js`. Tests inject `dbPool` explicitly so `node --test backend/test/auth.test.js backend/test/media.test.js backend/test/settings.test.js` stays at 44/44 pass.
+   - **Scope contraction note:** original plan was to also delete the legacy `/api/auth/{register,login,logout}` and `/api/db-check` routes, but the existing media/settings test suites depend on `/api/auth/login` to obtain Bearer tokens. Doing the full cleanup needs cross-file test rewrites; deferred as a tech-debt task.
+
+### Pre-release Supabase schema probe (read-only)
+Verified production Supabase already has every column/RPC/table the new feature commit needs — no DDL had to run to ship `c4e037d feat(T-003+T-004)`:
+
+| Object | Probe result |
+|---|---|
+| `media_items.display_date` | 200 |
+| `media_items.updated_at` | 200 |
+| `media_items.likes_count` | 200 |
+| `public.increment_media_likes(bigint)` | RPC reachable |
+| `public.decrement_media_likes(bigint)` | RPC reachable |
+| `public.story_posts` | exists with one seeded row |
+
+### Trunk push
+- Local `main` was 21 commits ahead of `origin/main` (the 18 task fixes from earlier in the day + my 3 above). Push was a fast-forward: `301799c..837ca72  main -> main`. No force needed.
+
+### Release merge
+- In `.release-worktree` (branch `online-release`): `git merge main --no-ff -m "Merge main into online-release for production deploy"` → merge commit `d1df942`. No conflicts (main commits never touched `render.yaml` / `vercel.json` / `runtime-config.js`; the release-only commits never touched the files main edited).
+- Backend tests on the merged tree: `node --test backend/test/{auth,media,settings}.test.js` → 44/44 pass.
+- `git push origin online-release` → `e8d4262..d1df942` → triggered Render auto-redeploy from the `branch: online-release` declaration in `render.yaml`.
+
+### Frontend redeploy
+- `npx vercel --prod --yes` from `.release-worktree/frontend` → deployment `dpl_6Y4Kp8cRfo8AaZwXiLHeowzJDUwB`-style URL, `readyState: READY`.
+- Probed `https://frontend-six-snowy-32.vercel.app/runtime-config.js` and `/api/story/timeline` on Render to confirm new code surface is live (timeline endpoint is from `c4e037d`).
+
+### Brand rebrand to nanami-live
+1. `npx vercel project rename frontend nanami-live` → project slug changed.
+2. `npx vercel alias set <latest-prod-deployment> nanami-live.vercel.app` → alias claimed (was free).
+3. **Vercel Deployment Protection issue:** the new alias returned `401` because Vercel's Deployment Protection ("Vercel Authentication") only auto-bypasses the original `frontend-six-snowy-32.vercel.app` slug. Asked user to disable it via Settings → Deployment Protection → Vercel Authentication = Disabled. After user toggle, `nanami-live.vercel.app` returned `200`.
+4. Updated `.release-worktree/render.yaml`: `CORS_ORIGIN_ALLOWLIST` from `https://frontend-six-snowy-32.vercel.app` → `https://nanami-live.vercel.app`. Commit `7ac08fe`, pushed → Render auto-redeployed; new CORS live within ~11s.
+5. `npx vercel alias rm frontend-six-snowy-32.vercel.app --yes` → old alias removed; URL now returns 404. (Backend `nanami-backend.onrender.com` kept by user request.)
+
+### Final Production State
+- **Public entrypoint:** https://nanami-live.vercel.app (Vercel project `nanami-live`, was `frontend`)
+- **Backend:** https://nanami-backend.onrender.com (Render free plan, Frankfurt, branch `online-release`)
+- Runtime config served at `https://nanami-live.vercel.app/runtime-config.js`:
+  - `apiBaseUrl = "https://nanami-backend.onrender.com"`
+  - `supabaseUrl = "https://pltveorkgsxfccyuwidk.supabase.co"`
+  - `supabaseAnonKey = "sb_publishable_ESrIEMrD1MFDAe_0rJ93Hw_2UNRaxJS"`
+- CORS preflight from `nanami-live.vercel.app` → `204`, header `access-control-allow-origin: https://nanami-live.vercel.app`.
+- Old `frontend-six-snowy-32.vercel.app` → `404`.
+
+### Release Branch State (after Session 3)
+- Branch: `online-release`
+- Remote: `origin/online-release`
+- Latest commits (top):
+  - `7ac08fe` chore(deploy): point backend CORS at nanami-live.vercel.app
+  - `d1df942` Merge main into online-release for production deploy
+  - `837ca72` chore(backend): stop instantiating localhost PG Pool at module load
+  - `26f33a4` docs(workflow): add T-007 mobile scope ...
+  - `15b638f` fix(runtime): strip CLI quote wrappers ...
+
+### Validation Evidence (Session 3)
+- `git push origin main` → `301799c..837ca72  main -> main` (fast-forward, 21 commits).
+- `git push origin online-release` → `e8d4262..d1df942` then `d1df942..7ac08fe`.
+- Backend test suite on merged tree: `pass 44 / fail 0`.
+- `curl https://nanami-live.vercel.app/runtime-config.js` → 200 with correct apiBaseUrl after Vercel Authentication was disabled.
+- `curl -X OPTIONS https://nanami-backend.onrender.com/api/admin/overview -H "Origin: https://nanami-live.vercel.app" ...` → 204 with allow-origin echoed (post-redeploy poll converged in 11s).
+- `curl https://frontend-six-snowy-32.vercel.app/runtime-config.js` → 404 (alias removed).
+- `curl https://nanami-backend.onrender.com/api/story/timeline?page=1` → 200 with merged media + story rows (proves the merge of `c4e037d` reached Render).
+
+### Unresolved Risks (after Session 3)
+1. **Render free-plan cold start** — unchanged from Session 2; user opted to stay free for now. Mitigations remain: upgrade to Starter ($7/mo), or external keep-alive ping every 10–14 min, or accept.
+2. **Legacy PG-only routes still in code** — `/api/auth/{register,login,logout}`, `/api/db-check` are present but unreachable in production (no `DATABASE_URL`); they would `TypeError` if invoked. Removal blocked on cross-file test rewrites in `media.test.js` / `settings.test.js`. Frontend never hits them.
+3. **Admin password and Supabase service-role JWT in this file / on local disk** — same as Session 2; rotate via Supabase admin API if this file is ever shared publicly.
+4. **Vercel Deployment Protection now globally disabled on the project** — every new preview/branch deployment is publicly accessible. If preview environments later host sensitive admin work, re-enable protection but add `nanami-live.vercel.app` to the bypass list explicitly.
+
+### Next Actions
+1. **Decide cold-start mitigation** — only outstanding production-quality knob.
+2. **Tech-debt cleanup ticket** — fully remove the legacy PG-only routes, refactor `media.test.js` / `settings.test.js` `loginAndGetToken` helpers to use a Supabase-mocked auth fixture.
+3. **Custom domain** — when DNS for a real `nanami` domain is set up, point Vercel at the apex/subdomain and Render at `api.<domain>`, update `NANAMI_API_BASE_URL` + `CORS_ORIGIN_ALLOWLIST`, redeploy.
+4. **Rotate admin password** before sharing this handover externally.
