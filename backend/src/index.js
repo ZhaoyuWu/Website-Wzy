@@ -3,7 +3,6 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const crypto = require("crypto");
-const defaultPool = require("./db");
 const { hashPassword, verifyPassword } = require("./password");
 
 const PORT = Number(process.env.PORT || 4000);
@@ -231,7 +230,7 @@ function normalizeRole(rawRole) {
 }
 
 function createApp(options = {}) {
-  const dbPool = options.dbPool || defaultPool;
+  const dbPool = options.dbPool;
   const sessionTtlMs = Number(process.env.SESSION_TTL_MS || 1000 * 60 * 60 * 8);
   const loginAttemptWindowMs = Number(process.env.LOGIN_ATTEMPT_WINDOW_MS || 10 * 60 * 1000);
   const loginAttemptMax = Number(process.env.LOGIN_ATTEMPT_MAX || 5);
