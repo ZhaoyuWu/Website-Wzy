@@ -1,5 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { ChangeDetectorRef, Component, HostListener, OnInit, inject } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { AuthService } from '../core/auth.service';
 import { I18nService } from '../core/i18n.service';
 import { resolveApiBaseUrl } from '../core/runtime-config';
 
@@ -14,6 +16,7 @@ export type TimelineEntry = {
   mediaUrl: string | null;
   thumbnailUrl: string | null;
   likesCount: number;
+  commentsCount: number;
   displayDate: string | null;
   createdAt: string | null;
 };
@@ -27,6 +30,8 @@ type RawTimelineEntry = {
   mediaUrl?: string | null;
   thumbnailUrl?: string | null;
   likesCount?: number | string;
+  commentsCount?: number | string;
+  likedByMe?: boolean;
   displayDate?: string | null;
   createdAt?: string | null;
 };
@@ -40,14 +45,28 @@ type TimelineResponse = {
   totalPages?: number;
 };
 
-const LIKED_STORAGE_KEY = 'nanami.story.likes';
+type StoryComment = {
+  id: number | string;
+  entry_type: 'media' | 'text';
+  entry_id: number;
+  author_name: string;
+  message: string;
+  created_at: string;
+};
 
-type LikedKey = { type: TimelineEntryType; id: string | number };
+type StoryCommentsResponse = {
+  ok?: boolean;
+  items?: StoryComment[];
+  total?: number;
+  message?: string;
+};
+
+const LIKED_STORAGE_KEY = 'nanami.story.likes';
 
 @Component({
   selector: 'app-story-timeline',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   template: `
     <div class="timeline-wrap">
       <header class="timeline-head">
@@ -73,7 +92,7 @@ type LikedKey = { type: TimelineEntryType; id: string | number };
         >
           <div class="anchor" aria-hidden="true">
             <span class="dot"></span>
-            <span class="anchor-date font-caveat" *ngIf="entry.displayDate || entry.createdAt">
+            <span class="anchor-date" *ngIf="entry.displayDate || entry.createdAt">
               {{ formatDay(entry.displayDate || entry.createdAt) }}
             </span>
           </div>
@@ -111,18 +130,32 @@ type LikedKey = { type: TimelineEntryType; id: string | number };
               <p class="desc" *ngIf="entry.type !== 'text' && entry.description">{{ entry.description }}</p>
               <p class="body" *ngIf="entry.type === 'text' && entry.body">{{ entry.body }}</p>
               <div class="foot">
-                <button
-                  type="button"
-                  class="like-button"
-                  [class.liked]="isLiked(entry)"
-                  [disabled]="isLikePending(entry)"
-                  [attr.aria-pressed]="isLiked(entry)"
-                  [attr.aria-label]="i18n.t(isLiked(entry) ? 'story.like.unlike' : 'story.like.like', { title: entry.title })"
-                  (click)="onToggleLike(entry)"
-                >
-                  <span class="heart" aria-hidden="true">{{ isLiked(entry) ? '♥' : '♡' }}</span>
-                  <span class="count">{{ entry.likesCount }}</span>
-                </button>
+                <div class="engagement">
+                  <button
+                    type="button"
+                    class="like-button"
+                    [class.liked]="isLiked(entry)"
+                    [disabled]="isLikePending(entry)"
+                    [attr.aria-pressed]="isLiked(entry)"
+                    [attr.aria-label]="i18n.t(isLiked(entry) ? 'story.like.unlike' : 'story.like.like', { title: entry.title })"
+                    (click)="onToggleLike(entry)"
+                  >
+                    <span class="heart" aria-hidden="true">{{ isLiked(entry) ? '♥' : '♡' }}</span>
+                    <span class="count">{{ entry.likesCount }}</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="comment-button"
+                    [attr.aria-label]="i18n.t('story.comment.open', { title: entry.title })"
+                    (click)="openCommentModal(entry)"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path d="M5 5h14v10H9l-4 4V5z" />
+                    </svg>
+                    <span>{{ i18n.t('story.comment.label') }}</span>
+                    <span class="count">{{ entry.commentsCount }}</span>
+                  </button>
+                </div>
                 <time *ngIf="entry.displayDate || entry.createdAt">{{ formatFull(entry.displayDate || entry.createdAt) }}</time>
               </div>
             </div>
@@ -184,6 +217,70 @@ type LikedKey = { type: TimelineEntryType; id: string | number };
         </figcaption>
       </figure>
     </div>
+
+    <div
+      class="comment-modal-mask"
+      *ngIf="commentModalEntry"
+      role="dialog"
+      aria-modal="true"
+      [attr.aria-label]="i18n.t('story.comment.modal.title')"
+      (click)="closeCommentModal()"
+    >
+      <section class="comment-modal" (click)="$event.stopPropagation()">
+        <header>
+          <h3>{{ i18n.t('story.comment.modal.title') }}</h3>
+          <button type="button" class="comment-close" (click)="closeCommentModal()" [attr.aria-label]="i18n.t('story.comment.modal.close')">x</button>
+        </header>
+
+        <p class="comment-target">{{ commentModalEntry.title }}</p>
+        <p class="comment-author">{{ i18n.t('story.comment.modal.authorLabel') }} {{ auth.username || i18n.t('story.comment.modal.loginHint') }}</p>
+
+        <textarea
+          [(ngModel)]="commentDraft"
+          rows="4"
+          maxlength="500"
+          [attr.placeholder]="i18n.t('story.comment.modal.placeholder')"
+          [disabled]="isCommentSubmitting"
+        ></textarea>
+
+        <p class="comment-error" *ngIf="commentError">{{ commentError }}</p>
+        <p class="comment-success" *ngIf="commentSuccess">{{ commentSuccess }}</p>
+
+        <div class="comment-actions">
+          <button type="button" class="comment-submit" (click)="submitComment()" [disabled]="isCommentSubmitting">
+            {{ isCommentSubmitting ? i18n.t('story.comment.modal.submitting') : i18n.t('story.comment.modal.submit') }}
+          </button>
+          <button type="button" class="comment-cancel" (click)="closeCommentModal()" [disabled]="isCommentSubmitting">
+            {{ i18n.t('story.comment.modal.cancel') }}
+          </button>
+        </div>
+
+        <div class="comment-list">
+          <p *ngIf="isCommentLoading">{{ i18n.t('story.comment.modal.loading') }}</p>
+          <p class="comment-error" *ngIf="commentLoadError">{{ commentLoadError }}</p>
+          <p *ngIf="!isCommentLoading && !commentLoadError && activeComments.length === 0">{{ i18n.t('story.comment.modal.empty') }}</p>
+          <article class="comment-row" *ngFor="let item of activeComments; trackBy: trackByCommentId">
+            <header>
+              <strong>{{ item.author_name }}</strong>
+              <div class="comment-row-tools">
+                <time>{{ formatFull(item.created_at) }}</time>
+                <button
+                  *ngIf="auth.isAdmin"
+                  type="button"
+                  class="comment-delete"
+                  [disabled]="isCommentDeleting(item)"
+                  [attr.aria-label]="i18n.t('story.comment.modal.deleteAria', { id: item.id })"
+                  (click)="deleteComment(item)"
+                >
+                  x
+                </button>
+              </div>
+            </header>
+            <p>{{ item.message }}</p>
+          </article>
+        </div>
+      </section>
+    </div>
   `,
   styles: `
     :host {
@@ -238,8 +335,8 @@ type LikedKey = { type: TimelineEntryType; id: string | number };
     .timeline::before {
       content: '';
       position: absolute;
-      top: 0;
-      bottom: 0;
+      top: 16px;
+      bottom: 16px;
       left: 50%;
       width: 3px;
       transform: translateX(-50%);
@@ -274,12 +371,17 @@ type LikedKey = { type: TimelineEntryType; id: string | number };
     }
 
     .anchor-date {
-      margin-top: 8px;
-      font-size: 20px;
-      color: var(--color-ink);
+      margin-top: 10px;
+      padding: 2px 8px;
+      border: 1px solid var(--color-ink);
+      border-radius: 999px;
+      background: var(--color-paper);
+      color: var(--color-ink-soft);
+      font-size: 12px;
+      font-weight: 700;
       text-align: center;
-      max-width: 72px;
-      line-height: 1;
+      line-height: 1.2;
+      white-space: nowrap;
     }
 
     .entry .card {
@@ -373,6 +475,13 @@ type LikedKey = { type: TimelineEntryType; id: string | number };
       flex-wrap: wrap;
     }
 
+    .engagement {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
     .foot time {
       color: var(--color-ink-muted);
       font-family: 'Caveat', cursive;
@@ -403,6 +512,36 @@ type LikedKey = { type: TimelineEntryType; id: string | number };
     }
     .like-button:disabled { cursor: default; opacity: 0.75; }
     .like-button .heart { font-size: 16px; line-height: 1; }
+
+    .comment-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1.5px solid var(--color-ink);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      transition: transform 120ms ease, background 120ms ease;
+    }
+
+    .comment-button svg {
+      width: 15px;
+      height: 15px;
+      fill: currentColor;
+      display: block;
+    }
+
+    .comment-button:hover:not(:disabled) {
+      background: var(--color-cool-wash);
+    }
+
+    .comment-button:active:not(:disabled) {
+      transform: scale(0.96);
+    }
 
     .pager {
       display: flex;
@@ -502,6 +641,152 @@ type LikedKey = { type: TimelineEntryType; id: string | number };
       border-color: var(--color-accent);
     }
 
+    .comment-modal-mask {
+      position: fixed;
+      inset: 0;
+      z-index: 1001;
+      background: rgba(0, 0, 0, 0.5);
+      display: grid;
+      place-items: center;
+      padding: 16px;
+    }
+
+    .comment-modal {
+      width: min(640px, 100%);
+      max-height: 85vh;
+      overflow: auto;
+      border-radius: 14px;
+      border: 2px solid var(--color-ink);
+      background: var(--color-paper);
+      padding: 14px;
+      box-shadow: 4px 4px 0 var(--color-ink);
+    }
+
+    .comment-modal header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .comment-modal h3 {
+      margin: 0;
+    }
+
+    .comment-close {
+      width: 34px;
+      height: 34px;
+      border-radius: 999px;
+      border: 1px solid var(--color-ink);
+      background: var(--color-paper);
+      cursor: pointer;
+    }
+
+    .comment-target,
+    .comment-author {
+      margin: 8px 0 0;
+      color: var(--color-ink-soft);
+    }
+
+    .comment-modal textarea {
+      width: 100%;
+      margin-top: 10px;
+      border: 1px solid var(--color-line);
+      border-radius: 10px;
+      font: inherit;
+      padding: 10px;
+      resize: vertical;
+      background: var(--color-paper);
+    }
+
+    .comment-actions {
+      margin-top: 10px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .comment-submit,
+    .comment-cancel {
+      border: 1.5px solid var(--color-ink);
+      border-radius: 10px;
+      min-height: 38px;
+      padding: 0 12px;
+      background: var(--color-accent);
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    .comment-cancel {
+      background: var(--color-paper);
+    }
+
+    .comment-error {
+      margin: 8px 0 0;
+      color: var(--color-accent-contrast);
+      font-weight: 600;
+    }
+
+    .comment-success {
+      margin: 8px 0 0;
+      color: var(--color-ink);
+      font-weight: 600;
+    }
+
+    .comment-list {
+      margin-top: 12px;
+      border-top: 1px solid var(--color-line);
+      padding-top: 10px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .comment-row {
+      border: 1px solid var(--color-line);
+      border-radius: 10px;
+      padding: 8px 10px;
+      background: var(--color-paper);
+    }
+
+    .comment-row header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 10px;
+    }
+
+    .comment-row-tools {
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .comment-delete {
+      width: 26px;
+      height: 26px;
+      border-radius: 999px;
+      border: 1px solid var(--color-line);
+      background: var(--color-paper);
+      color: var(--color-ink-muted);
+      cursor: pointer;
+    }
+
+    .comment-delete:hover:not(:disabled) {
+      border-color: var(--color-accent-contrast);
+      color: var(--color-accent-contrast);
+    }
+
+    .comment-delete:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .comment-row p {
+      margin: 6px 0 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--color-ink-soft);
+    }
+
     @media (max-width: 760px) {
       .timeline::before {
         left: 22px;
@@ -528,7 +813,8 @@ type LikedKey = { type: TimelineEntryType; id: string | number };
     }
 
     @media (max-width: 428px) {
-      .like-button {
+      .like-button,
+      .comment-button {
         min-height: 44px;
         padding: 10px 14px;
       }
@@ -566,21 +852,71 @@ export class StoryTimelineComponent implements OnInit {
   errorMessage = '';
   activeImage: TimelineEntry | null = null;
   page = 1;
-  pageSize = 20;
+  pageSize = 10;
   totalPages = 1;
   total = 0;
 
   private readonly likedKeys = new Set<string>();
   private readonly likePending = new Set<string>();
   private apiBaseUrl = '';
+  readonly auth = inject(AuthService);
   readonly i18n = inject(I18nService);
+  commentModalEntry: TimelineEntry | null = null;
+  commentDraft = '';
+  isCommentSubmitting = false;
+  isCommentLoading = false;
+  commentError = '';
+  commentSuccess = '';
+  commentLoadError = '';
+  activeComments: StoryComment[] = [];
+  private readonly deletingCommentIds = new Set<string>();
 
   constructor(private readonly cdr?: ChangeDetectorRef) {}
 
   async ngOnInit(): Promise<void> {
     this.apiBaseUrl = (resolveApiBaseUrl() || '').trim();
-    this.loadLikedKeys();
+    this.loadLikedKeysFromStorage();
     await this.loadPage(1);
+  }
+
+  private loadLikedKeysFromStorage(): void {
+    try {
+      const raw = localStorage.getItem(LIKED_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return;
+      for (const entry of parsed) {
+        if (entry && typeof entry === 'object') {
+          const type = (entry as { type?: unknown }).type;
+          const id = (entry as { id?: unknown }).id;
+          if (
+            (type === 'image' || type === 'video' || type === 'text') &&
+            (typeof id === 'string' || typeof id === 'number')
+          ) {
+            this.likedKeys.add(`${type}:${id}`);
+          }
+        }
+      }
+    } catch {
+      // storage unavailable or corrupted — ignore
+    }
+  }
+
+  private persistLikedKeys(): void {
+    try {
+      const rows = Array.from(this.likedKeys).map((key) => {
+        const separator = key.indexOf(':');
+        return separator > 0
+          ? { type: key.slice(0, separator), id: key.slice(separator + 1) }
+          : null;
+      });
+      localStorage.setItem(
+        LIKED_STORAGE_KEY,
+        JSON.stringify(rows.filter(Boolean))
+      );
+    } catch {
+      // storage unavailable — ignore
+    }
   }
 
   get pageNumbers(): number[] {
@@ -619,9 +955,16 @@ export class StoryTimelineComponent implements OnInit {
       const base = this.apiBaseUrl.replace(/\/+$/, '');
       const response = await fetch(
         `${base}/api/story/${encodeURIComponent(entry.type === 'text' ? 'text' : 'media')}/${encodeURIComponent(String(entry.id))}/like`,
-        { method }
+        {
+          method,
+          headers: this.auth.authHeaders()
+        }
       );
       if (!response.ok) {
+        if (response.status === 401) {
+          this.errorMessage = this.i18n.t('story.comment.error.loginFirstLike');
+          this.cdr?.markForCheck();
+        }
         return;
       }
       const payload = (await response.json().catch(() => null)) as
@@ -657,6 +1000,9 @@ export class StoryTimelineComponent implements OnInit {
   onEscape(): void {
     if (this.activeImage) {
       this.closeFullscreen();
+    }
+    if (this.commentModalEntry) {
+      this.closeCommentModal();
     }
   }
 
@@ -722,7 +1068,8 @@ export class StoryTimelineComponent implements OnInit {
     try {
       const base = this.apiBaseUrl.replace(/\/+$/, '');
       const response = await fetch(
-        `${base}/api/story/timeline?page=${encodeURIComponent(String(pageNumber))}`
+        `${base}/api/story/timeline?page=${encodeURIComponent(String(pageNumber))}`,
+        { headers: this.auth.authHeaders() }
       );
       if (!response.ok) {
         throw new Error(`Timeline request failed (${response.status}).`);
@@ -732,8 +1079,19 @@ export class StoryTimelineComponent implements OnInit {
       this.entries = rawItems
         .map((row) => this.mapEntry(row))
         .filter((entry): entry is TimelineEntry => entry !== null);
+      for (const row of rawItems) {
+        if (row && row.likedByMe) {
+          const type = this.normalizeType(row.type);
+          if (!type) continue;
+          const id = row.id;
+          if (typeof id === 'string' || typeof id === 'number') {
+            this.likedKeys.add(`${type}:${id}`);
+          }
+        }
+      }
+      this.persistLikedKeys();
       this.page = Math.max(1, Number(payload.page) || pageNumber);
-      this.pageSize = Math.max(1, Number(payload.pageSize) || 20);
+      this.pageSize = Math.max(1, Number(payload.pageSize) || 10);
       this.total = Math.max(0, Number(payload.total) || 0);
       this.totalPages = Math.max(1, Number(payload.totalPages) || 1);
     } catch (error) {
@@ -742,6 +1100,158 @@ export class StoryTimelineComponent implements OnInit {
       this.entries = [];
     } finally {
       this.isLoading = false;
+      this.cdr?.markForCheck();
+    }
+  }
+
+  trackByCommentId(_index: number, item: StoryComment): number | string {
+    return item.id;
+  }
+
+  isCommentDeleting(item: StoryComment): boolean {
+    return this.deletingCommentIds.has(String(item.id));
+  }
+
+  openCommentModal(entry: TimelineEntry): void {
+    this.commentModalEntry = entry;
+    this.commentDraft = '';
+    this.commentError = '';
+    this.commentSuccess = '';
+    this.commentLoadError = '';
+    void this.loadCommentsForEntry(entry);
+  }
+
+  closeCommentModal(): void {
+    this.commentModalEntry = null;
+    this.commentDraft = '';
+    this.commentError = '';
+    this.commentSuccess = '';
+    this.commentLoadError = '';
+    this.activeComments = [];
+    this.cdr?.markForCheck();
+  }
+
+  async submitComment(): Promise<void> {
+    if (!this.commentModalEntry || !this.apiBaseUrl) {
+      return;
+    }
+
+    const authorName = (this.auth.username || '').trim();
+    if (!authorName) {
+      this.commentError = this.i18n.t('story.comment.error.loginFirst');
+      return;
+    }
+
+    const message = this.commentDraft.trim();
+    if (!message || message.length > 500) {
+      this.commentError = this.i18n.t('story.comment.error.length');
+      return;
+    }
+
+    this.isCommentSubmitting = true;
+    this.commentError = '';
+    this.commentSuccess = '';
+    try {
+      const entryType = this.toCommentEntryType(this.commentModalEntry);
+      const base = this.apiBaseUrl.replace(/\/+$/, '');
+      const response = await fetch(
+        `${base}/api/story/${encodeURIComponent(entryType)}/${encodeURIComponent(String(this.commentModalEntry.id))}/comments`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ authorName, message })
+        }
+      );
+      const payload = (await response.json().catch(() => null)) as
+        | { ok?: boolean; item?: StoryComment; message?: string }
+        | null;
+      if (!response.ok || !payload?.ok || !payload.item) {
+        throw new Error(payload?.message || this.i18n.t('story.comment.error.postFailed'));
+      }
+
+      this.activeComments = [payload.item, ...this.activeComments];
+      this.updateCommentsCount(this.commentModalEntry, this.activeComments.length);
+      this.commentDraft = '';
+      this.commentSuccess = this.i18n.t('story.comment.success.posted');
+    } catch (error) {
+      this.commentError =
+        error instanceof Error ? error.message : this.i18n.t('story.comment.error.postFailed');
+    } finally {
+      this.isCommentSubmitting = false;
+      this.cdr?.markForCheck();
+    }
+  }
+
+  private async loadCommentsForEntry(entry: TimelineEntry): Promise<void> {
+    if (!this.apiBaseUrl) {
+      return;
+    }
+
+    this.isCommentLoading = true;
+    this.commentLoadError = '';
+    try {
+      const entryType = this.toCommentEntryType(entry);
+      const base = this.apiBaseUrl.replace(/\/+$/, '');
+      const response = await fetch(
+        `${base}/api/story/${encodeURIComponent(entryType)}/${encodeURIComponent(String(entry.id))}/comments?limit=20`
+      );
+      const payload = (await response.json().catch(() => null)) as StoryCommentsResponse | null;
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.message || `Comment request failed (${response.status}).`);
+      }
+      this.activeComments = Array.isArray(payload.items) ? payload.items : [];
+      this.updateCommentsCount(entry, Number.isFinite(Number(payload.total)) ? Number(payload.total) : this.activeComments.length);
+    } catch (error) {
+      this.commentLoadError =
+        error instanceof Error ? error.message : this.i18n.t('story.comment.error.loadFailed');
+      this.activeComments = [];
+    } finally {
+      this.isCommentLoading = false;
+      this.cdr?.markForCheck();
+    }
+  }
+
+  private toCommentEntryType(entry: TimelineEntry): 'media' | 'text' {
+    return entry.type === 'text' ? 'text' : 'media';
+  }
+
+  async deleteComment(item: StoryComment): Promise<void> {
+    if (!this.commentModalEntry || !this.apiBaseUrl || !this.auth.isAdmin) {
+      return;
+    }
+    const deleteKey = String(item.id);
+    if (this.deletingCommentIds.has(deleteKey)) {
+      return;
+    }
+
+    this.deletingCommentIds.add(deleteKey);
+    this.commentError = '';
+    this.commentSuccess = '';
+    try {
+      const entryType = this.toCommentEntryType(this.commentModalEntry);
+      const base = this.apiBaseUrl.replace(/\/+$/, '');
+      const response = await fetch(
+        `${base}/api/story/${encodeURIComponent(entryType)}/${encodeURIComponent(String(this.commentModalEntry.id))}/comments/${encodeURIComponent(String(item.id))}`,
+        {
+          method: 'DELETE',
+          headers: this.auth.authHeaders()
+        }
+      );
+      const payload = (await response.json().catch(() => null)) as
+        | { ok?: boolean; message?: string }
+        | null;
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.message || this.i18n.t('story.comment.error.deleteFailed'));
+      }
+
+      this.activeComments = this.activeComments.filter((row) => String(row.id) !== deleteKey);
+      this.updateCommentsCount(this.commentModalEntry, Math.max(0, this.activeComments.length));
+      this.commentSuccess = this.i18n.t('story.comment.success.deleted');
+    } catch (error) {
+      this.commentError =
+        error instanceof Error ? error.message : this.i18n.t('story.comment.error.deleteFailed');
+    } finally {
+      this.deletingCommentIds.delete(deleteKey);
       this.cdr?.markForCheck();
     }
   }
@@ -762,6 +1272,7 @@ export class StoryTimelineComponent implements OnInit {
         mediaUrl: normalizedUrl,
         thumbnailUrl: this.normalizeHttpUrl(row.thumbnailUrl ?? null) ?? null,
         likesCount: this.toLikeCount(row.likesCount),
+        commentsCount: this.toLikeCount(row.commentsCount),
         displayDate,
         createdAt: row.createdAt ? String(row.createdAt) : null
       };
@@ -775,6 +1286,7 @@ export class StoryTimelineComponent implements OnInit {
       mediaUrl: null,
       thumbnailUrl: null,
       likesCount: this.toLikeCount(row.likesCount),
+      commentsCount: this.toLikeCount(row.commentsCount),
       displayDate,
       createdAt: row.createdAt ? String(row.createdAt) : null
     };
@@ -808,43 +1320,15 @@ export class StoryTimelineComponent implements OnInit {
     return `${entry.type}:${entry.id}`;
   }
 
-  private loadLikedKeys(): void {
-    try {
-      const raw = localStorage.getItem(LIKED_STORAGE_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        for (const value of parsed) {
-          if (this.isLikedKey(value)) {
-            this.likedKeys.add(`${value.type}:${value.id}`);
-          }
-        }
+  private updateCommentsCount(entry: TimelineEntry, nextCount: number): void {
+    const normalized = Number.isFinite(nextCount) && nextCount >= 0 ? Math.floor(nextCount) : 0;
+    entry.commentsCount = normalized;
+    for (const item of this.entries) {
+      if (item.type === entry.type && String(item.id) === String(entry.id)) {
+        item.commentsCount = normalized;
+        break;
       }
-    } catch {
-      // ignore storage read errors
     }
   }
 
-  private persistLikedKeys(): void {
-    try {
-      const payload: LikedKey[] = Array.from(this.likedKeys).map((key) => {
-        const [type, ...rest] = key.split(':');
-        return { type: type as TimelineEntryType, id: rest.join(':') };
-      });
-      localStorage.setItem(LIKED_STORAGE_KEY, JSON.stringify(payload));
-    } catch {
-      // storage unavailable
-    }
-  }
-
-  private isLikedKey(value: unknown): value is LikedKey {
-    if (!value || typeof value !== 'object') return false;
-    const candidate = value as Record<string, unknown>;
-    const type = candidate['type'];
-    const id = candidate['id'];
-    return (
-      (type === 'image' || type === 'video' || type === 'text') &&
-      (typeof id === 'string' || typeof id === 'number')
-    );
-  }
 }

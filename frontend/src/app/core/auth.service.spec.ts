@@ -45,6 +45,7 @@ describe('AuthService (logic)', () => {
         refreshToken: 'refresh-token',
         tokenType: 'bearer',
         userId: 'user-1',
+        username: 'admin',
         email: 'admin@nanami.test',
         expiresAt: new Date(Date.now() - 60_000).toISOString()
       })
@@ -70,6 +71,7 @@ describe('AuthService (logic)', () => {
           user: {
             id: 'user-1',
             email: 'admin@nanami.test',
+            user_metadata: { username: 'admin' },
             app_metadata: { role: 'Admin' }
           }
         }),
@@ -82,7 +84,7 @@ describe('AuthService (logic)', () => {
     const raw = localStorage.getItem(storageKey);
     expect(raw).not.toBeNull();
     expect(service.isAuthenticated).toBe(true);
-    expect(service.username).toBe('admin@nanami.test');
+    expect(service.username).toBe('admin');
     expect(service.userRole).toBe('Admin');
   });
 
@@ -111,6 +113,7 @@ describe('AuthService (logic)', () => {
         refreshToken: 'refresh-token',
         tokenType: 'bearer',
         userId: 'user-1',
+        username: 'admin',
         email: 'admin@nanami.test',
         expiresAt: new Date(Date.now() + 60_000).toISOString()
       })
@@ -141,6 +144,7 @@ describe('AuthService (logic)', () => {
           user: {
             id: 'user-2',
             email: 'new-user@example.com',
+            user_metadata: { username: 'new-user' },
             app_metadata: { role: 'Viewer' }
           }
         }),
@@ -153,7 +157,87 @@ describe('AuthService (logic)', () => {
     const raw = localStorage.getItem(storageKey);
     expect(raw).not.toBeNull();
     expect(service.isAuthenticated).toBe(true);
-    expect(service.username).toBe('new-user@example.com');
+    expect(service.username).toBe('new-user');
+  });
+
+  it('register without session (email-confirmation mode) does not throw and leaves no session', async () => {
+    window.__NANAMI_APP_CONFIG__ = {
+      supabaseUrl: 'https://demo.supabase.co',
+      supabaseAnonKey: 'anon-key'
+    };
+    const calls: string[] = [];
+    globalThis.fetch = async (input: RequestInfo | URL) => {
+      calls.push(String(input));
+      return new Response(
+        JSON.stringify({
+          user: {
+            id: 'user-3',
+            email: 'pending@example.com',
+            user_metadata: { username: 'pending' }
+          }
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    };
+
+    const service = new AuthService();
+    await service.register('pending', 'pending@example.com', 'superpass123');
+
+    expect(service.isAuthenticated).toBe(false);
+    expect(localStorage.getItem(storageKey)).toBeNull();
+    expect(calls.some((url) => url.includes('/api/auth/sync-profile'))).toBe(false);
+  });
+
+  it('login triggers profile sync and role refresh in order', async () => {
+    window.__NANAMI_APP_CONFIG__ = {
+      supabaseUrl: 'https://demo.supabase.co',
+      supabaseAnonKey: 'anon-key',
+      apiBaseUrl: 'https://api.nanami.test'
+    };
+    const calls: string[] = [];
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      calls.push(`${init?.method || 'GET'} ${url}`);
+      if (url.includes('/auth/v1/token')) {
+        return new Response(
+          JSON.stringify({
+            access_token: 'token-new',
+            refresh_token: 'refresh-new',
+            expires_in: 3600,
+            token_type: 'bearer',
+            user: {
+              id: 'user-4',
+              email: 'fresh@example.com',
+              user_metadata: { username: 'fresh' },
+              app_metadata: {}
+            }
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      if (url.includes('/api/auth/sync-profile')) {
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      if (url.includes('/api/admin/overview')) {
+        return new Response(JSON.stringify({ ok: true, role: 'Publisher' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      return new Response('null', { status: 200 });
+    };
+
+    const service = new AuthService();
+    await service.login('fresh@example.com', 'superpass123');
+
+    const syncIndex = calls.findIndex((line) => line.includes('/api/auth/sync-profile'));
+    const overviewIndex = calls.findIndex((line) => line.includes('/api/admin/overview'));
+    expect(syncIndex).toBeGreaterThan(-1);
+    expect(overviewIndex).toBeGreaterThan(syncIndex);
+    expect(service.userRole).toBe('Publisher');
   });
 
   it('register throws backend message when registration fails', async () => {

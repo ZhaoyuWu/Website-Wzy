@@ -62,6 +62,15 @@ function isValidUsername(username) {
   return typeof username === "string" && /^[A-Za-z0-9_.-]{3,32}$/.test(username);
 }
 
+function sanitizeDerivedUsername(raw) {
+  const cleaned = String(raw || "")
+    .trim()
+    .replace(/[^A-Za-z0-9_.-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^[-.]+|[-.]+$/g, "");
+  return cleaned.slice(0, 32);
+}
+
 function isValidEmail(email) {
   return typeof email === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
@@ -205,6 +214,20 @@ function toPositiveInt(rawValue, fallback) {
   return parsed;
 }
 
+function parseContentRangeTotal(contentRange) {
+  const raw = String(contentRange || "").trim();
+  const slashIndex = raw.lastIndexOf("/");
+  if (slashIndex < 0) {
+    return null;
+  }
+  const tail = raw.slice(slashIndex + 1).trim();
+  if (!tail || tail === "*") {
+    return null;
+  }
+  const total = Number.parseInt(tail, 10);
+  return Number.isFinite(total) && total >= 0 ? total : null;
+}
+
 function buildSupabaseObjectPath(bucketName, objectPath) {
   const encodedBucket = encodeURIComponent(bucketName);
   const encodedPath = objectPath
@@ -276,6 +299,7 @@ function createApp(options = {}) {
   const sessions = new Map();
   const loginAttempts = new Map();
   const likeAttempts = new Map();
+  const likeRecordsByEntry = new Map();
   const app = express();
 
   app.use(cors(buildCorsOptions()));
@@ -296,8 +320,14 @@ function createApp(options = {}) {
     settingsKeyColumn: String(process.env.SUPABASE_SETTINGS_KEY_COLUMN || "setting_key").trim(),
     settingsRowKey: String(process.env.SUPABASE_SETTINGS_ROW_KEY || "site").trim(),
   };
+  const authConfig = {
+    profilesTable: String(process.env.SUPABASE_PROFILES_TABLE || "profiles").trim(),
+  };
   const commentsConfig = {
-    commentsTable: String(process.env.SUPABASE_SHOWCASE_COMMENTS_TABLE || "showcase_comments").trim(),
+    showcaseCommentsTable: String(
+      process.env.SUPABASE_SHOWCASE_COMMENTS_TABLE || "showcase_comments"
+    ).trim(),
+    storyCommentsTable: String(process.env.SUPABASE_STORY_COMMENTS_TABLE || "story_comments").trim(),
     commentsListLimit: Math.min(
       100,
       Math.max(1, toPositiveInt(process.env.SUPABASE_SHOWCASE_COMMENTS_LIMIT, 50))
@@ -595,6 +625,37 @@ function createApp(options = {}) {
     return response;
   }
 
+  async function resolveSupabaseUserFromToken(accessToken) {
+    ensureSupabaseConfig();
+    if (!accessToken || typeof accessToken !== "string") {
+      return { ok: false, status: 401, message: "Missing access token." };
+    }
+
+    if (typeof fetchImpl !== "function") {
+      return { ok: false, status: 500, message: "Fetch is unavailable in this Node runtime." };
+    }
+
+    const response = await fetchImpl(`${mediaConfig.supabaseUrl}/auth/v1/user`, {
+      method: "GET",
+      headers: {
+        apikey: mediaConfig.serviceRoleKey,
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status || 401,
+        message: "Invalid or expired auth token.",
+        details: payload,
+      };
+    }
+
+    return { ok: true, user: payload };
+  }
+
   async function listMediaItems(limit, maxLimit = 120) {
     const selectColumns =
       "id,title,description,media_type,public_url,thumbnail_url,likes_count,display_date,created_at,updated_at";
@@ -627,7 +688,7 @@ function createApp(options = {}) {
     const limit = Math.max(1, Math.min(toPositiveInt(req.query?.limit, commentsConfig.commentsListLimit), 100));
     const selectColumns = "id,author_name,message,created_at";
     const endpoint =
-      `/rest/v1/${encodeURIComponent(commentsConfig.commentsTable)}` +
+      `/rest/v1/${encodeURIComponent(commentsConfig.showcaseCommentsTable)}` +
       `?select=${encodeURIComponent(selectColumns)}` +
       `&order=created_at.desc&limit=${limit}`;
 
@@ -666,7 +727,7 @@ function createApp(options = {}) {
       });
     }
 
-    return callSupabase(`/rest/v1/${encodeURIComponent(commentsConfig.commentsTable)}`, {
+    return callSupabase(`/rest/v1/${encodeURIComponent(commentsConfig.showcaseCommentsTable)}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -705,16 +766,21 @@ function createApp(options = {}) {
     }
 
     const limit = Math.max(1, Math.min(toPositiveInt(req.query?.limit, commentsConfig.commentsListLimit), 100));
-    const selectColumns = "id,entry_type,entry_id,author_name,message,created_at";
+    const selectColumns = "id,entry_type,entry_id,author_name,body,created_at";
     const endpoint =
-      `/rest/v1/${encodeURIComponent(commentsConfig.commentsTable)}` +
+      `/rest/v1/${encodeURIComponent(commentsConfig.storyCommentsTable)}` +
       `?select=${encodeURIComponent(selectColumns)}` +
       `&entry_type=eq.${encodeURIComponent(entryType)}` +
       `&entry_id=eq.${encodeURIComponent(String(entryId))}` +
       `&order=created_at.desc&limit=${limit}`;
 
     try {
-      const response = await callSupabase(endpoint, { method: "GET" });
+      const response = await callSupabase(endpoint, {
+        method: "GET",
+        headers: {
+          Prefer: "count=exact",
+        },
+      });
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
         return res.status(response.status).json({
@@ -723,7 +789,14 @@ function createApp(options = {}) {
           details: payload,
         });
       }
-      return res.json({ ok: true, items: Array.isArray(payload) ? payload : [] });
+      const items = Array.isArray(payload)
+        ? payload.map((item) => ({
+            ...item,
+            message: typeof item?.body === "string" ? item.body : "",
+          }))
+        : [];
+      const total = parseContentRangeTotal(response.headers.get("content-range"));
+      return res.json({ ok: true, items, total: total ?? items.length });
     } catch (error) {
       return res.status(500).json({ ok: false, message: error.message || "Unable to load comments." });
     }
@@ -754,7 +827,7 @@ function createApp(options = {}) {
     }
 
     try {
-      const response = await callSupabase(`/rest/v1/${encodeURIComponent(commentsConfig.commentsTable)}`, {
+      const response = await callSupabase(`/rest/v1/${encodeURIComponent(commentsConfig.storyCommentsTable)}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -765,7 +838,7 @@ function createApp(options = {}) {
             entry_type: entryType,
             entry_id: entryId,
             author_name: authorName,
-            message,
+            body: message,
           },
         ]),
       });
@@ -784,14 +857,178 @@ function createApp(options = {}) {
           message: "Comment save completed with empty response.",
         });
       }
-      return res.status(201).json({ ok: true, item });
+      return res.status(201).json({
+        ok: true,
+        item: {
+          ...item,
+          message: typeof item?.body === "string" ? item.body : "",
+        },
+      });
     } catch (error) {
       return res.status(500).json({ ok: false, message: error.message || "Unable to save comment." });
     }
   });
 
-  const STORY_PAGE_SIZE = 20;
+  app.delete("/api/story/:type/:id/comments/:commentId", requireAuth, requireRole("Admin"), async (req, res) => {
+    const entryType = normalizeCommentEntryType(req.params?.type);
+    const entryId = toPositiveInt(req.params?.id, 0);
+    const commentId = toPositiveInt(req.params?.commentId, 0);
+    if (!entryType || !entryId || !commentId) {
+      return res.status(400).json({ ok: false, message: "Invalid comment target." });
+    }
+
+    const endpoint =
+      `/rest/v1/${encodeURIComponent(commentsConfig.storyCommentsTable)}` +
+      `?id=eq.${encodeURIComponent(String(commentId))}` +
+      `&entry_type=eq.${encodeURIComponent(entryType)}` +
+      `&entry_id=eq.${encodeURIComponent(String(entryId))}` +
+      `&select=id,entry_type,entry_id,author_name,body,created_at`;
+
+    try {
+      const response = await callSupabase(endpoint, {
+        method: "DELETE",
+        headers: {
+          Prefer: "return=representation",
+        },
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        return res.status(response.status).json({
+          ok: false,
+          message: "Failed to delete story comment from Supabase.",
+          details: payload,
+        });
+      }
+      const deleted = Array.isArray(payload) ? payload[0] : null;
+      if (!deleted) {
+        return res.status(404).json({ ok: false, message: "Comment not found." });
+      }
+
+      return res.json({
+        ok: true,
+        item: {
+          ...deleted,
+          message: typeof deleted?.body === "string" ? deleted.body : "",
+        },
+      });
+    } catch (error) {
+      return res.status(500).json({ ok: false, message: error.message || "Unable to delete comment." });
+    }
+  });
+
+  const STORY_PAGE_SIZE = 10;
   const STORY_POSTS_TABLE = "story_posts";
+
+  async function getStoryCommentCount(entryType, entryId) {
+    if (!entryType || !entryId) {
+      return 0;
+    }
+    const endpoint =
+      `/rest/v1/${encodeURIComponent(commentsConfig.storyCommentsTable)}` +
+      `?select=id` +
+      `&entry_type=eq.${encodeURIComponent(entryType)}` +
+      `&entry_id=eq.${encodeURIComponent(String(entryId))}` +
+      `&limit=1`;
+    const response = await callSupabase(endpoint, {
+      method: "GET",
+      headers: {
+        Prefer: "count=exact",
+      },
+    });
+    if (!response.ok) {
+      return 0;
+    }
+    const total = parseContentRangeTotal(response.headers.get("content-range"));
+    return total ?? 0;
+  }
+
+  async function getEntryCurrentLikeCount(entryType, entryId) {
+    const tableName = entryType === "text" ? STORY_POSTS_TABLE : mediaConfig.mediaTable;
+    const endpoint =
+      `/rest/v1/${encodeURIComponent(tableName)}` +
+      `?select=likes_count&id=eq.${encodeURIComponent(String(entryId))}&limit=1`;
+    try {
+      const response = await callSupabase(endpoint, { method: "GET" });
+      if (!response.ok) {
+        return 0;
+      }
+      const payload = await response.json().catch(() => null);
+      const row = Array.isArray(payload) ? payload[0] : null;
+      const parsed = Number(row?.likes_count);
+      return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  function entryLikeKey(entryType, entryId) {
+    return `${entryType}:${entryId}`;
+  }
+
+  function viewerLikeKeyFromAuth(auth) {
+    const userId = String(auth?.userId || "").trim();
+    if (userId) {
+      return `uid:${userId}`;
+    }
+    const username = String(auth?.username || "").trim().toLowerCase();
+    return username ? `uname:${username}` : "";
+  }
+
+  function getEntryLikesMap(entryType, entryId, createIfMissing = false) {
+    const key = entryLikeKey(entryType, entryId);
+    let likesMap = likeRecordsByEntry.get(key) || null;
+    if (!likesMap && createIfMissing) {
+      likesMap = new Map();
+      likeRecordsByEntry.set(key, likesMap);
+    }
+    return likesMap;
+  }
+
+  function hasUserLikedEntry(entryType, entryId, viewerKey) {
+    if (!viewerKey) {
+      return false;
+    }
+    const likesMap = getEntryLikesMap(entryType, entryId, false);
+    return Boolean(likesMap && likesMap.has(viewerKey));
+  }
+
+  async function resolveViewerLikeIdentity(req) {
+    const authToken = parseBearerToken(req.headers.authorization);
+    if (authToken && mediaConfig.supabaseUrl && mediaConfig.serviceRoleKey) {
+      try {
+        const userResponse = await fetchImpl(`${mediaConfig.supabaseUrl}/auth/v1/user`, {
+          headers: {
+            apikey: mediaConfig.serviceRoleKey,
+            Authorization: `Bearer ${authToken}`,
+          },
+        });
+        if (userResponse.ok) {
+          const userData = await userResponse.json().catch(() => null);
+          const userId = String(userData?.id || "").trim();
+          const username = String(userData?.email || userData?.id || "").trim();
+          const viewerLikeKey = viewerLikeKeyFromAuth({ userId, username });
+          if (viewerLikeKey) {
+            return {
+              viewerLikeKey,
+              userId: userId || null,
+              username,
+              isAuthenticated: true,
+            };
+          }
+        }
+      } catch {
+        // fallback to anonymous identity
+      }
+    }
+
+    const ip = String(req.ip || req.socket?.remoteAddress || "unknown").trim();
+    return {
+      viewerLikeKey: `anon:${ip}`,
+      userId: null,
+      username: `anonymous@${ip}`,
+      isAuthenticated: false,
+    };
+  }
 
   async function listStoryPosts() {
     const selectColumns =
@@ -825,6 +1062,7 @@ function createApp(options = {}) {
       likesCount: Number.isFinite(Number(row?.likes_count)) ? Number(row.likes_count) : 0,
       displayDate: row?.display_date ? String(row.display_date) : null,
       createdAt: row?.created_at ? String(row.created_at) : null,
+      likedByMe: false,
     };
   }
 
@@ -840,11 +1078,34 @@ function createApp(options = {}) {
       likesCount: Number.isFinite(Number(row?.likes_count)) ? Number(row.likes_count) : 0,
       displayDate: row?.display_date ? String(row.display_date) : null,
       createdAt: row?.created_at ? String(row.created_at) : null,
+      likedByMe: false,
     };
   }
 
   app.get("/api/story/timeline", async (req, res) => {
     const page = Math.max(1, toPositiveInt(req.query?.page, 1));
+    const authToken = parseBearerToken(req.headers.authorization);
+    let viewerLikeKey = "";
+
+    if (authToken && mediaConfig.supabaseUrl && mediaConfig.serviceRoleKey) {
+      try {
+        const userResponse = await fetchImpl(`${mediaConfig.supabaseUrl}/auth/v1/user`, {
+          headers: {
+            apikey: mediaConfig.serviceRoleKey,
+            Authorization: `Bearer ${authToken}`,
+          },
+        });
+        if (userResponse.ok) {
+          const userData = await userResponse.json().catch(() => null);
+          viewerLikeKey = viewerLikeKeyFromAuth({
+            userId: userData?.id || "",
+            username: userData?.email || userData?.id || "",
+          });
+        }
+      } catch {
+        viewerLikeKey = "";
+      }
+    }
 
     try {
       const [mediaResult, storyResult] = await Promise.all([
@@ -885,7 +1146,16 @@ function createApp(options = {}) {
       const totalPages = Math.max(1, Math.ceil(total / STORY_PAGE_SIZE));
       const clampedPage = Math.min(page, totalPages);
       const start = (clampedPage - 1) * STORY_PAGE_SIZE;
-      const items = merged.slice(start, start + STORY_PAGE_SIZE);
+      const pageItems = merged.slice(start, start + STORY_PAGE_SIZE);
+      const items = await Promise.all(
+        pageItems.map(async (item) => {
+          const entryType = item.type === "text" ? "text" : "media";
+          const entryId = toPositiveInt(item.id, 0);
+          const commentsCount = await getStoryCommentCount(entryType, entryId);
+          const likedByMe = hasUserLikedEntry(entryType, entryId, viewerLikeKey);
+          return { ...item, commentsCount, likedByMe };
+        })
+      );
 
       return res.json({
         ok: true,
@@ -951,6 +1221,11 @@ function createApp(options = {}) {
     if (!entryId) {
       return res.status(400).json({ ok: false, message: "Invalid entry id." });
     }
+    if (entryType !== "media" && entryType !== "text") {
+      return res.status(400).json({ ok: false, message: "Unsupported entry type." });
+    }
+    const viewer = await resolveViewerLikeIdentity(req);
+    const viewerLikeKey = viewer.viewerLikeKey;
 
     const throttle = checkLikeThrottle(req, entryType, entryId);
     if (!throttle.allowed) {
@@ -959,6 +1234,18 @@ function createApp(options = {}) {
       return res
         .status(429)
         .json({ ok: false, message: "Too many like attempts. Try again later." });
+    }
+
+    if (hasUserLikedEntry(entryType, entryId, viewerLikeKey)) {
+      const likesCount = await getEntryCurrentLikeCount(entryType, entryId);
+      return res.json({
+        ok: true,
+        type: entryType,
+        id: entryId,
+        alreadyLiked: true,
+        likedByMe: true,
+        likesCount,
+      });
     }
 
     try {
@@ -970,7 +1257,21 @@ function createApp(options = {}) {
           details: result.details,
         });
       }
-      return res.json({ ok: true, type: entryType, id: entryId, likesCount: result.likesCount });
+      const likesMap = getEntryLikesMap(entryType, entryId, true);
+      likesMap.set(viewerLikeKey, {
+        userId: viewer.userId,
+        username: viewer.username,
+        isAuthenticated: viewer.isAuthenticated,
+        createdAt: new Date().toISOString(),
+      });
+      return res.json({
+        ok: true,
+        type: entryType,
+        id: entryId,
+        likesCount: result.likesCount,
+        alreadyLiked: false,
+        likedByMe: true,
+      });
     } catch (error) {
       return res
         .status(500)
@@ -984,7 +1285,11 @@ function createApp(options = {}) {
     if (!entryId) {
       return res.status(400).json({ ok: false, message: "Invalid entry id." });
     }
-
+    if (entryType !== "media" && entryType !== "text") {
+      return res.status(400).json({ ok: false, message: "Unsupported entry type." });
+    }
+    const viewer = await resolveViewerLikeIdentity(req);
+    const viewerLikeKey = viewer.viewerLikeKey;
     const throttle = checkLikeThrottle(req, entryType, entryId);
     if (!throttle.allowed) {
       const retryAfter = Math.max(1, Math.ceil(throttle.retryAfterMs / 1000));
@@ -1003,12 +1308,39 @@ function createApp(options = {}) {
           details: result.details,
         });
       }
-      return res.json({ ok: true, type: entryType, id: entryId, likesCount: result.likesCount });
+      const likesMap = getEntryLikesMap(entryType, entryId, false);
+      if (likesMap) {
+        likesMap.delete(viewerLikeKey);
+        if (likesMap.size === 0) {
+          likeRecordsByEntry.delete(entryLikeKey(entryType, entryId));
+        }
+      }
+      return res.json({
+        ok: true,
+        type: entryType,
+        id: entryId,
+        likesCount: result.likesCount,
+        alreadyUnliked: false,
+        likedByMe: false,
+      });
     } catch (error) {
       return res
         .status(500)
         .json({ ok: false, message: error.message || "Unable to unlike entry right now." });
     }
+  });
+
+  app.get("/api/story/:type/:id/likes", requireAuth, requireRole("Admin"), (req, res) => {
+    const entryType = String(req.params?.type || "").toLowerCase();
+    const entryId = toPositiveInt(req.params?.id, 0);
+    if (!entryId || (entryType !== "media" && entryType !== "text")) {
+      return res.status(400).json({ ok: false, message: "Invalid entry target." });
+    }
+    const likesMap = getEntryLikesMap(entryType, entryId, false);
+    const items = likesMap
+      ? Array.from(likesMap.values()).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+      : [];
+    return res.json({ ok: true, type: entryType, id: entryId, total: items.length, items });
   });
 
   app.post("/api/auth/register", async (req, res) => {
@@ -1136,6 +1468,88 @@ function createApp(options = {}) {
   app.post("/api/auth/logout", requireAuth, (req, res) => {
     sessions.delete(req.auth.token);
     res.json({ ok: true });
+  });
+
+  app.post("/api/auth/sync-profile", async (req, res) => {
+    try {
+      const token = parseBearerToken(req.headers.authorization);
+      const userResult = await resolveSupabaseUserFromToken(token);
+      if (!userResult.ok) {
+        return res.status(userResult.status).json({
+          ok: false,
+          message: userResult.message,
+          details: userResult.details,
+        });
+      }
+
+      const user = userResult.user || {};
+      const userId = String(user.id || "").trim();
+      const email = String(user.email || "").trim().toLowerCase();
+      const rawMeta =
+        user.user_metadata && typeof user.user_metadata === "object" ? user.user_metadata : {};
+      const suggestedUsername =
+        typeof req.body?.username === "string" ? req.body.username.trim() : "";
+      const metadataUsername =
+        typeof rawMeta.username === "string" ? rawMeta.username.trim() : "";
+      const emailLocalPart = email ? email.split("@")[0] : "";
+
+      if (!userId || !email) {
+        return res.status(400).json({ ok: false, message: "Supabase user is missing id or email." });
+      }
+
+      if (suggestedUsername && !isValidUsername(suggestedUsername)) {
+        return res.status(400).json({
+          ok: false,
+          message:
+            "Username must be 3-32 chars and contain only letters, numbers, dot, underscore, or dash.",
+        });
+      }
+
+      const derivedRaw = suggestedUsername
+        ? suggestedUsername
+        : sanitizeDerivedUsername(metadataUsername || emailLocalPart);
+      const username =
+        derivedRaw.length >= 3 && derivedRaw.length <= 32 ? derivedRaw : "";
+
+      if (!username) {
+        return res.status(400).json({
+          ok: false,
+          message: "Unable to derive a valid username from the Supabase profile.",
+        });
+      }
+
+      const response = await callSupabase(
+        `/rest/v1/${encodeURIComponent(authConfig.profilesTable)}?on_conflict=id`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Prefer: "resolution=merge-duplicates,return=representation",
+          },
+          body: JSON.stringify([
+            {
+              id: userId,
+              email,
+              username,
+            },
+          ]),
+        }
+      );
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        return res.status(response.status).json({
+          ok: false,
+          message: "Failed to sync profile.",
+          details: payload,
+        });
+      }
+
+      const profile = Array.isArray(payload) ? payload[0] : payload;
+      return res.json({ ok: true, profile });
+    } catch (error) {
+      return res.status(500).json({ ok: false, message: error.message || "Profile sync failed." });
+    }
   });
 
   app.get("/api/admin/overview", requireAuth, (req, res) => {

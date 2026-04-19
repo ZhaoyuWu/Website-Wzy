@@ -439,7 +439,7 @@ test("public story timeline endpoint merges media and text entries newest-first"
     assert.equal(payload.items[0].title, "Newest Text");
     assert.equal(payload.items[1].type, "image");
     assert.equal(payload.items[1].title, "Older Image");
-    assert.equal(payload.pageSize, 20);
+    assert.equal(payload.pageSize, 10);
     assert.equal(payload.page, 1);
     assert.equal(payload.totalPages, 1);
   } finally {
@@ -1155,6 +1155,335 @@ test("storage usage endpoint blocks Viewer role", async () => {
   try {
     const response = await fetch(`${ctx.baseUrl}/api/admin/storage/usage`);
     assert.equal(response.status, 401);
+  } finally {
+    ctx.server.close();
+  }
+});
+
+test("sync-profile upserts using metadata or email fallback", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+
+  const captured = [];
+  const fetchImpl = async (url, init = {}) => {
+    const urlText = String(url);
+    if (urlText.endsWith("/auth/v1/user")) {
+      return new Response(
+        JSON.stringify({
+          id: "user-9",
+          email: "foo@example.com",
+          user_metadata: { username: "foo_star" },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (urlText.includes("/rest/v1/profiles")) {
+      captured.push({ url: urlText, body: init.body ? JSON.parse(init.body) : null });
+      return new Response(
+        JSON.stringify([{ id: "user-9", email: "foo@example.com", username: "foo_star" }]),
+        { status: 201, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    return new Response("null", { status: 200 });
+  };
+
+  const ctx = await startTestServer({ fetchImpl });
+  try {
+    const response = await fetch(`${ctx.baseUrl}/api/auth/sync-profile`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer supabase-jwt" },
+      body: JSON.stringify({}),
+    });
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.ok, true);
+    assert.equal(payload.profile.username, "foo_star");
+    assert.equal(captured.length, 1);
+    assert.equal(captured[0].body[0].username, "foo_star");
+  } finally {
+    ctx.server.close();
+  }
+});
+
+test("sync-profile sanitizes Gmail plus-address fallback instead of 400", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+
+  let insertedUsername = null;
+  const fetchImpl = async (url, init = {}) => {
+    const urlText = String(url);
+    if (urlText.endsWith("/auth/v1/user")) {
+      return new Response(
+        JSON.stringify({ id: "user-10", email: "foo+tag@gmail.com", user_metadata: {} }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (urlText.includes("/rest/v1/profiles")) {
+      const body = init.body ? JSON.parse(init.body) : [];
+      insertedUsername = body[0]?.username || null;
+      return new Response(
+        JSON.stringify([{ id: "user-10", email: "foo+tag@gmail.com", username: insertedUsername }]),
+        { status: 201, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    return new Response("null", { status: 200 });
+  };
+
+  const ctx = await startTestServer({ fetchImpl });
+  try {
+    const response = await fetch(`${ctx.baseUrl}/api/auth/sync-profile`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer supabase-jwt" },
+      body: JSON.stringify({}),
+    });
+    assert.equal(response.status, 200);
+    assert.equal(insertedUsername, "foo-tag");
+  } finally {
+    ctx.server.close();
+  }
+});
+
+test("sync-profile rejects explicitly bad suggested username", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+
+  const fetchImpl = async (url) => {
+    if (String(url).endsWith("/auth/v1/user")) {
+      return new Response(
+        JSON.stringify({ id: "user-11", email: "ok@example.com", user_metadata: {} }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    return new Response("null", { status: 200 });
+  };
+
+  const ctx = await startTestServer({ fetchImpl });
+  try {
+    const response = await fetch(`${ctx.baseUrl}/api/auth/sync-profile`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer supabase-jwt" },
+      body: JSON.stringify({ username: "bad name!" }),
+    });
+    assert.equal(response.status, 400);
+  } finally {
+    ctx.server.close();
+  }
+});
+
+test("sync-profile rejects missing bearer token", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+
+  const ctx = await startTestServer();
+  try {
+    const response = await fetch(`${ctx.baseUrl}/api/auth/sync-profile`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    assert.equal(response.status, 401);
+  } finally {
+    ctx.server.close();
+  }
+});
+
+test("story like endpoint is idempotent for the same anon viewer", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+  process.env.LIKE_COOLDOWN_MS = "0";
+
+  const rpcHits = [];
+  const fetchImpl = async (url) => {
+    const urlText = String(url);
+    if (urlText.endsWith("/auth/v1/user")) {
+      return new Response("{}", { status: 401 });
+    }
+    if (urlText.includes("/rest/v1/rpc/increment_media_likes")) {
+      rpcHits.push(urlText);
+      return new Response("1", { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    if (urlText.includes("/rest/v1/media_items") && urlText.includes("likes_count")) {
+      return new Response(JSON.stringify([{ likes_count: 1 }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return new Response("null", { status: 200 });
+  };
+
+  const ctx = await startTestServer({ fetchImpl });
+  try {
+    const first = await fetch(`${ctx.baseUrl}/api/story/media/77/like`, { method: "POST" });
+    assert.equal(first.status, 200);
+    const firstPayload = await first.json();
+    assert.equal(firstPayload.alreadyLiked, false);
+
+    const second = await fetch(`${ctx.baseUrl}/api/story/media/77/like`, { method: "POST" });
+    assert.equal(second.status, 200);
+    const secondPayload = await second.json();
+    assert.equal(secondPayload.alreadyLiked, true);
+    assert.equal(secondPayload.likesCount, 1);
+    assert.equal(rpcHits.length, 1);
+  } finally {
+    ctx.server.close();
+    delete process.env.LIKE_COOLDOWN_MS;
+  }
+});
+
+test("comment delete requires Admin role, Publisher gets 403", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+
+  const dbPool = {
+    query: async () => ({
+      rowCount: 1,
+      rows: [{ username: "publisher", password_hash: hashPassword("admin123456"), role: "Publisher" }],
+    }),
+  };
+
+  const ctx = await startTestServer({ dbPool, fetchImpl: async () => new Response("[]") });
+  try {
+    const token = await (async () => {
+      const { response, payload } = await postJson(ctx.baseUrl, "/api/auth/login", {
+        username: "publisher",
+        password: "admin123456",
+      });
+      assert.equal(response.status, 200);
+      return payload.token;
+    })();
+
+    const response = await fetch(`${ctx.baseUrl}/api/story/media/1/comments/9`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    assert.equal(response.status, 403);
+  } finally {
+    ctx.server.close();
+  }
+});
+
+test("comment delete returns 404 when Supabase response is empty", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+
+  const dbPool = {
+    query: async () => ({
+      rowCount: 1,
+      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
+    }),
+  };
+
+  const fetchImpl = async (url, init = {}) => {
+    if (String(url).includes("/rest/v1/story_comments") && init.method === "DELETE") {
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return new Response("[]");
+  };
+
+  const ctx = await startTestServer({ dbPool, fetchImpl });
+  try {
+    const token = await loginAndGetToken(ctx.baseUrl);
+    const response = await fetch(`${ctx.baseUrl}/api/story/media/1/comments/9999`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    assert.equal(response.status, 404);
+  } finally {
+    ctx.server.close();
+  }
+});
+
+test("story likes listing endpoint is Admin-only and returns recorded viewers", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+  process.env.LIKE_COOLDOWN_MS = "0";
+
+  const dbPool = {
+    query: async () => ({
+      rowCount: 1,
+      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
+    }),
+  };
+
+  const fetchImpl = async (url) => {
+    const urlText = String(url);
+    if (urlText.endsWith("/auth/v1/user")) {
+      return new Response("{}", { status: 401 });
+    }
+    if (urlText.includes("/rest/v1/rpc/increment_media_likes")) {
+      return new Response("1", { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    return new Response("[]", { status: 200 });
+  };
+
+  const ctx = await startTestServer({ dbPool, fetchImpl });
+  try {
+    await fetch(`${ctx.baseUrl}/api/story/media/55/like`, { method: "POST" });
+
+    const token = await loginAndGetToken(ctx.baseUrl);
+    const response = await fetch(`${ctx.baseUrl}/api/story/media/55/likes`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.total, 1);
+    assert.equal(payload.items.length, 1);
+  } finally {
+    ctx.server.close();
+    delete process.env.LIKE_COOLDOWN_MS;
+  }
+});
+
+test("timeline respects 10-per-page ceiling", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+
+  const rows = Array.from({ length: 25 }, (_, i) => ({
+    id: i + 1,
+    title: `Item ${i + 1}`,
+    description: "",
+    media_type: "image",
+    public_url: `https://example.com/img${i + 1}.jpg`,
+    thumbnail_url: null,
+    likes_count: 0,
+    display_date: `2026-04-${String((i % 30) + 1).padStart(2, "0")}`,
+    created_at: new Date(2026, 3, (i % 30) + 1).toISOString(),
+  }));
+
+  const fetchImpl = async (url) => {
+    const urlText = String(url);
+    if (urlText.includes("/rest/v1/media_items") && urlText.includes("select=id")) {
+      return new Response(JSON.stringify(rows), {
+        status: 200,
+        headers: { "Content-Type": "application/json", "content-range": "0-24/25" },
+      });
+    }
+    if (urlText.includes("/rest/v1/story_posts")) {
+      return new Response("[]", {
+        status: 200,
+        headers: { "Content-Type": "application/json", "content-range": "*/0" },
+      });
+    }
+    if (urlText.includes("/rest/v1/story_comments")) {
+      return new Response("[]", {
+        status: 200,
+        headers: { "Content-Type": "application/json", "content-range": "*/0" },
+      });
+    }
+    return new Response("[]", { status: 200 });
+  };
+
+  const ctx = await startTestServer({ fetchImpl });
+  try {
+    const response = await fetch(`${ctx.baseUrl}/api/story/timeline?page=1`);
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.pageSize, 10);
+    assert.equal(payload.items.length, 10);
+    assert.equal(payload.totalPages, 3);
   } finally {
     ctx.server.close();
   }
