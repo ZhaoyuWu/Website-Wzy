@@ -144,6 +144,13 @@
   --radius-pill: 999px;
   --shadow-card: 0 6px 18px rgba(27, 27, 29, 0.08);
 
+  /* Unified motion tokens (T-007-10) */
+  --motion-duration-fast: 120ms;
+  --motion-duration-standard: 180ms;
+  --motion-duration-enter: 220ms;
+  --motion-ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --motion-ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
+
   --fx-warm-glow-45: rgba(255, 205, 157, 0.45);
   --fx-cool-glow-34: rgba(160, 214, 255, 0.34);
   --fx-warm-glow-40: rgba(255, 205, 157, 0.4);
@@ -160,6 +167,60 @@
   --fx-register-warm-glow: rgba(247, 225, 174, 0.45);
   --fx-register-cool-glow: rgba(188, 227, 245, 0.48);
   --fx-shadow-auth: rgba(47, 28, 7, 0.12);
+
+  /* T-007 design-motion tokens */
+  --fx-chalk-cloud-shadow: rgba(27, 27, 29, 0.22);
+  --fx-chalk-cloud-fill: rgba(255, 243, 216, 0.86);
+  --fx-chalk-cloud-stroke: rgba(255, 221, 168, 0.85);
+  --fx-chalk-cloud-outline: rgba(27, 27, 29, 0.86);
+  --fx-chalk-cloud-sketch: rgba(27, 27, 29, 0.64);
+  --fx-chalk-lines-stroke: rgba(27, 27, 29, 0.26);
+  --fx-hero-gradient-base: linear-gradient(
+    130deg,
+    rgba(255, 239, 205, 0.86) 0%,
+    rgba(255, 223, 132, 0.82) 48%,
+    rgba(255, 210, 115, 0.8) 100%
+  );
+  --fx-hero-glow-a: radial-gradient(
+    circle at 18% 28%,
+    rgba(255, 255, 255, 0.38) 0%,
+    rgba(255, 255, 255, 0) 52%
+  );
+  --fx-hero-glow-b: radial-gradient(
+    circle at 80% 22%,
+    rgba(255, 185, 103, 0.42) 0%,
+    rgba(255, 185, 103, 0) 50%
+  );
+  --fx-hero-glow-c: radial-gradient(
+    circle at 70% 78%,
+    rgba(255, 150, 124, 0.3) 0%,
+    rgba(255, 150, 124, 0) 46%
+  );
+  --fx-hero-overlay: linear-gradient(
+    176deg,
+    rgba(255, 255, 255, 0.22) 0%,
+    rgba(255, 250, 238, 0.06) 42%,
+    rgba(255, 255, 255, 0.28) 100%
+  );
+  --fx-timeline-media-shimmer: linear-gradient(
+    112deg,
+    rgba(255, 255, 255, 0) 34%,
+    rgba(255, 255, 255, 0.32) 48%,
+    rgba(255, 255, 255, 0) 62%
+  );
+  --fx-lightbox-backdrop: rgba(27, 27, 29, 0.92);
+  --fx-comment-backdrop: rgba(0, 0, 0, 0.5);
+}
+
+@keyframes status-feedback-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 html,
@@ -205,3 +266,298 @@ body {
   font-family: 'Caveat', 'Segoe Script', cursive;
 }
 
+/* T-007 style-budget slimming:
+   move large responsive/animation blocks from component-inline styles
+   into global, host-scoped rules to preserve visuals and interaction. */
+@keyframes chalk-sketch {
+  from { stroke-dashoffset: 420; }
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes cloud-a-drift {
+  from { transform: translate3d(-4%, -3%, 0) scale(1) rotate(-1.2deg); }
+  to { transform: translate3d(9%, 5%, 0) scale(1.07) rotate(1.3deg); }
+}
+
+@keyframes cloud-b-drift {
+  from { transform: translate3d(4%, 2%, 0) scale(1) rotate(1.1deg); }
+  to { transform: translate3d(-8%, -5%, 0) scale(1.08) rotate(-1.2deg); }
+}
+
+@keyframes hero-ambient-cycle {
+  0% {
+    transform: translate3d(-2.5%, -1.8%, 0) scale(1);
+  }
+  100% {
+    transform: translate3d(-1.3%, 2.2%, 0) scale(1.03);
+  }
+}
+
+@keyframes sun-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 640px) {
+  app-home-page .doodle-paw,
+  app-home-page .doodle-scribble {
+    display: none;
+  }
+
+  app-home-page .doodle-sun { width: 48px; height: 48px; top: 10px; right: 12px; }
+  app-home-page .doodle-grass { width: 90px; right: 10px; bottom: 6px; }
+  app-home-page .doodle-heart { width: 30px; height: 30px; bottom: 12px; left: 14px; }
+
+  app-home-page .home {
+    padding: 14px;
+  }
+
+  app-home-page .top-nav {
+    top: 6px;
+    flex-direction: column;
+    align-items: flex-start;
+    border-radius: 14px;
+  }
+
+  app-home-page .top-nav.top-nav-sticky {
+    padding: 10px 12px;
+  }
+
+  app-home-page nav {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 428px) {
+  app-home-page .home { padding: 16px; }
+
+  app-home-page .top-nav {
+    padding: 6px 0 14px;
+  }
+
+  app-home-page nav {
+    gap: 8px;
+  }
+
+  app-home-page nav a,
+  app-home-page .nav-logout {
+    height: 44px;
+    padding: 0 14px;
+    font-size: 14px;
+  }
+
+  app-home-page .hero {
+    padding: clamp(20px, 5vw, 32px);
+    box-shadow: 4px 4px 0 var(--color-ink);
+  }
+
+  app-home-page .hero-title {
+    font-size: clamp(28px, 8vw, 38px);
+    line-height: 1.15;
+    margin: 12px 0 18px;
+    max-width: 100%;
+    word-break: break-word;
+  }
+
+  app-home-page .hero-title .chr {
+    transform: none !important;
+    color: var(--color-ink) !important;
+  }
+
+  app-home-page .hero-about {
+    font-size: 19px;
+    line-height: 1.4;
+    max-width: 100%;
+    word-break: break-word;
+    hyphens: auto;
+  }
+
+  app-home-page .hero-about .chr.sub {
+    color: var(--color-ink-soft) !important;
+  }
+
+  app-home-page .underline-squiggle {
+    width: min(260px, 80%);
+  }
+
+  app-home-page .profile-card {
+    padding: 18px;
+  }
+
+  app-home-page .floating-create {
+    right: 14px;
+    bottom: 14px;
+    min-height: 46px;
+    padding: 0 14px;
+  }
+
+  app-home-page .cloud-a {
+    width: 128vw;
+    top: 8%;
+    left: -34%;
+  }
+
+  app-home-page .cloud-b {
+    width: 124vw;
+    top: 44%;
+    right: -38%;
+  }
+
+  app-story-timeline .like-button,
+  app-story-timeline .comment-button {
+    min-height: 44px;
+    padding: 10px 14px;
+  }
+
+  app-story-timeline .pager-num,
+  app-story-timeline .pager-edge {
+    min-width: 44px;
+    height: 44px;
+  }
+
+  app-story-timeline .meta {
+    padding: 14px;
+  }
+
+  app-story-timeline .lightbox-close {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+@media (max-width: 390px) {
+  app-home-page .home { padding: 14px; }
+
+  app-home-page nav a,
+  app-home-page .nav-logout {
+    padding: 0 12px;
+    font-size: 13px;
+  }
+
+  app-home-page .doodle-grass { width: 72px; right: 8px; }
+  app-home-page .doodle-sun { width: 40px; height: 40px; }
+}
+
+@media (max-width: 360px) {
+  app-home-page .brand-mark {
+    width: 30px;
+    height: 30px;
+  }
+
+  app-home-page .doodle-grass,
+  app-home-page .doodle-heart {
+    display: none;
+  }
+
+  app-home-page .hero-title { font-size: 26px; }
+  app-home-page .hero-about { font-size: 17px; }
+
+  app-story-timeline .entry {
+    grid-template-columns: 32px 1fr;
+  }
+
+  app-story-timeline .timeline::before {
+    left: 16px;
+  }
+}
+
+@media (max-width: 760px) {
+  app-story-timeline .timeline::before {
+    left: 22px;
+  }
+
+  app-story-timeline .entry {
+    grid-template-columns: 44px 1fr;
+  }
+
+  app-story-timeline .anchor {
+    grid-column: 1;
+    padding-top: 18px;
+  }
+
+  app-story-timeline .anchor-date {
+    display: none;
+  }
+
+  app-story-timeline .entry .card,
+  app-story-timeline .entry.align-right .card {
+    grid-column: 2;
+    margin: 0;
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  app-story-timeline .entry[data-type='image'] .card:active,
+  app-story-timeline .entry[data-type='video'] .card:active {
+    transform: scale(0.988);
+    box-shadow: 2px 2px 0 var(--color-ink);
+  }
+
+  app-story-timeline .entry[data-type='image'] .card:active .media-frame img,
+  app-story-timeline .entry[data-type='video'] .card:active .media-frame video {
+    transform: scale(1.02);
+  }
+
+  app-story-timeline .media-button:active {
+    transform: scale(0.992);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  app-home-page .top-nav {
+    transition: none;
+  }
+
+  app-home-page .hero-entrance .eyebrow,
+  app-home-page .hero-entrance .hero-title,
+  app-home-page .hero-entrance .hero-about,
+  app-home-page .hero-entrance .doodle {
+    transition: none !important;
+  }
+
+  app-home-page .hero-graffiti::before {
+    animation: none;
+  }
+
+  app-home-page .hero-graffiti::after,
+  app-home-page .doodle {
+    transform: none;
+  }
+
+  app-home-page .doodle-sun {
+    animation: none;
+  }
+
+  app-home-page .floating-create {
+    transition: none;
+  }
+
+  app-home-page .chalk-cloud,
+  app-home-page .chalk-lines path {
+    animation: none;
+  }
+
+  app-story-timeline .entry.entry-reveal,
+  app-story-timeline .entry.entry-reveal.entry-pending,
+  app-story-timeline .entry.entry-reveal.entry-visible {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  app-story-timeline .entry .card,
+  app-story-timeline .media-button,
+  app-story-timeline .media-frame img,
+  app-story-timeline .media-frame video,
+  app-story-timeline .media-frame::after {
+    transition: none;
+    transform: none;
+    animation: none;
+  }
+}
+
+@media (min-width: 1280px) {
+  app-home-page .home {
+    padding: 28px 32px;
+  }
+}

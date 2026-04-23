@@ -88,3 +88,13 @@
   - Main actions are easy to tap and not crowded.
   - Visual hierarchy remains clear and consistent on mobile.
   - Regression check passes on desktop after mobile polish.
+
+### T-007 Design Subtasks / A-007 Design Audits
+- `T-007-3 / A-007-3`: Hero entrance choreography and reduced-motion verification.
+- `T-007-4 / A-007-4`: Hero parallax atmosphere and mobile smoothness verification.
+- `T-007-5 / A-007-5`: Timeline stagger reveal and replay-control verification.
+- `T-007-6 / A-007-6`: Sticky glass navigation and active-state clarity verification.
+- `T-007-7 / A-007-7`: Floating create action with strict role visibility verification.
+- `T-007-8 / A-007-8`: Ambient gradient cycle with readability/contrast verification.
+- `T-007-9 / A-007-9`: Tactile media interaction (desktop hover + mobile press) verification.
+- `T-007-10 / A-007-10`: Unified micro-interaction timing/easing consistency verification.

@@ -475,7 +475,11 @@ const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
       font-weight: 700;
       cursor: pointer;
       padding: 8px 14px;
-      transition: background 120ms ease, color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+      transition:
+        background var(--motion-duration-fast) var(--motion-ease-standard),
+        color var(--motion-duration-fast) var(--motion-ease-standard),
+        transform var(--motion-duration-fast) var(--motion-ease-standard),
+        box-shadow var(--motion-duration-fast) var(--motion-ease-standard);
       font-family: inherit;
     }
 
@@ -532,7 +536,9 @@ const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
       border: 1px solid var(--color-ink);
       border-radius: 10px;
       background: var(--color-paper);
-      transition: background 120ms ease, transform 120ms ease;
+      transition:
+        background var(--motion-duration-fast) var(--motion-ease-standard),
+        transform var(--motion-duration-fast) var(--motion-ease-standard);
     }
 
     .back-home:hover {
@@ -575,12 +581,14 @@ const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
       margin: 0;
       color: var(--color-accent-contrast);
       font-weight: 600;
+      animation: status-feedback-in var(--motion-duration-standard) var(--motion-ease-emphasized);
     }
 
     .success {
       margin: 0;
       color: var(--color-ink);
       font-weight: 600;
+      animation: status-feedback-in var(--motion-duration-standard) var(--motion-ease-emphasized);
     }
 
     .list-header {
@@ -789,7 +797,7 @@ const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
     .storage-bar-fill {
       height: 100%;
       background: var(--color-accent);
-      transition: width 240ms ease;
+      transition: width var(--motion-duration-enter) var(--motion-ease-emphasized);
     }
 
     .storage-bar-fill.warn { background: var(--color-accent-contrast); }

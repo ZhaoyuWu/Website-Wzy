@@ -292,7 +292,11 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
       font-weight: 700;
       cursor: pointer;
       padding: 8px 14px;
-      transition: background 120ms ease, color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+      transition:
+        background var(--motion-duration-fast) var(--motion-ease-standard),
+        color var(--motion-duration-fast) var(--motion-ease-standard),
+        transform var(--motion-duration-fast) var(--motion-ease-standard),
+        box-shadow var(--motion-duration-fast) var(--motion-ease-standard);
       font-family: inherit;
     }
 
@@ -338,7 +342,9 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
       border: 1px solid var(--color-ink);
       border-radius: 10px;
       background: var(--color-paper);
-      transition: background 120ms ease, transform 120ms ease;
+      transition:
+        background var(--motion-duration-fast) var(--motion-ease-standard),
+        transform var(--motion-duration-fast) var(--motion-ease-standard);
     }
 
     .back-home:hover {
@@ -377,18 +383,21 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
     .message {
       margin: 0;
       color: var(--color-ink-muted);
+      animation: status-feedback-in var(--motion-duration-standard) var(--motion-ease-emphasized);
     }
 
     .error {
       margin: 0;
       color: var(--color-accent-contrast);
       font-weight: 600;
+      animation: status-feedback-in var(--motion-duration-standard) var(--motion-ease-emphasized);
     }
 
     .success {
       margin: 0;
       color: var(--color-ink);
       font-weight: 600;
+      animation: status-feedback-in var(--motion-duration-standard) var(--motion-ease-emphasized);
     }
 
     .list-header {
@@ -815,7 +824,6 @@ export class AdminPageComponent implements OnInit {
     return normalized;
   }
 }
-
 
 
 

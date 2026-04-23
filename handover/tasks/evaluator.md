@@ -14,6 +14,7 @@ Audit delivery of `T-001` to `T-007` against GStack master task, principles, and
 5. Run principles gate and Vercel release checks (`T-006`).
 6. Audit mobile layout correctness and visual quality (`T-007`).
 7. Classify findings: blocker vs non-blocker.
+8. Audit design child tasks (`T-007-3` to `T-007-10`) for motion quality, accessibility fallback, and role-gated visibility.
 
 ## Evidence Requirements
 - Data access behavior evidence (Supabase query/action examples).
