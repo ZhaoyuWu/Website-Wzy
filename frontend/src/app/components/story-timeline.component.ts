@@ -1,5 +1,16 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectorRef, Component, HostListener, OnInit, inject } from '@angular/core';
+import {
+  AfterViewInit,
+  ChangeDetectorRef,
+  Component,
+  ElementRef,
+  HostListener,
+  OnDestroy,
+  OnInit,
+  QueryList,
+  ViewChildren,
+  inject
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../core/auth.service';
 import { I18nService } from '../core/i18n.service';
@@ -85,9 +96,12 @@ const LIKED_STORAGE_KEY = 'nanami.story.likes';
         *ngIf="!isLoading && !errorMessage && entries.length > 0"
       >
         <li
-          class="entry"
+          class="entry entry-reveal"
           *ngFor="let entry of entries; let i = index; trackBy: trackByKey"
+          #entryNode
           [class.align-right]="i % 2 === 1"
+          [style.--stagger-index]="i % 6"
+          [attr.data-entry-key]="trackByKey(i, entry)"
           [attr.data-type]="entry.type"
         >
           <div class="anchor" aria-hidden="true">
@@ -353,6 +367,20 @@ const LIKED_STORAGE_KEY = 'nanami.story.likes';
       margin: 18px 0;
     }
 
+    .entry.entry-reveal {
+      opacity: 0;
+      transform: translateY(16px) scale(0.987);
+      transition:
+        opacity var(--motion-duration-enter) var(--motion-ease-emphasized),
+        transform var(--motion-duration-enter) var(--motion-ease-emphasized);
+      transition-delay: calc(var(--stagger-index, 0) * 70ms);
+    }
+
+    .entry.entry-reveal.entry-visible {
+      opacity: 1;
+      transform: none;
+    }
+
     .anchor {
       grid-column: 2;
       display: flex;
@@ -392,6 +420,11 @@ const LIKED_STORAGE_KEY = 'nanami.story.likes';
       background: var(--color-paper);
       box-shadow: 4px 4px 0 var(--color-ink);
       overflow: hidden;
+      transform-style: preserve-3d;
+      transition:
+        transform var(--motion-duration-enter) var(--motion-ease-emphasized),
+        box-shadow var(--motion-duration-enter) var(--motion-ease-emphasized),
+        border-color var(--motion-duration-enter) var(--motion-ease-emphasized);
     }
 
     .entry.align-right .card {
@@ -412,6 +445,7 @@ const LIKED_STORAGE_KEY = 'nanami.story.likes';
       justify-content: center;
       overflow: hidden;
       border-bottom: 2px solid var(--color-ink);
+      position: relative;
     }
 
     .media-frame img,
@@ -420,6 +454,20 @@ const LIKED_STORAGE_KEY = 'nanami.story.likes';
       height: 100%;
       object-fit: cover;
       display: block;
+      transition: transform var(--motion-duration-enter) var(--motion-ease-emphasized);
+    }
+
+    .media-frame::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: var(--fx-timeline-media-shimmer);
+      transform: translateX(-130%);
+      opacity: 0;
+      transition:
+        transform var(--motion-duration-enter) var(--motion-ease-emphasized),
+        opacity var(--motion-duration-standard) var(--motion-ease-standard);
     }
 
     .media-button {
@@ -431,11 +479,36 @@ const LIKED_STORAGE_KEY = 'nanami.story.likes';
       background: transparent;
       cursor: zoom-in;
       display: block;
+      transition: transform var(--motion-duration-fast) var(--motion-ease-standard);
     }
 
     .media-button:focus-visible {
       outline: 3px solid var(--color-accent);
       outline-offset: -3px;
+    }
+
+    @media (hover: hover) and (pointer: fine) {
+      .entry[data-type='image'] .card:hover,
+      .entry[data-type='video'] .card:hover {
+        transform: perspective(920px) rotateX(1.8deg) rotateY(-2.2deg) translateY(-3px);
+        box-shadow: 8px 10px 0 var(--color-ink);
+      }
+
+      .entry.align-right[data-type='image'] .card:hover,
+      .entry.align-right[data-type='video'] .card:hover {
+        transform: perspective(920px) rotateX(1.8deg) rotateY(2.2deg) translateY(-3px);
+      }
+
+      .entry[data-type='image'] .card:hover .media-frame img,
+      .entry[data-type='video'] .card:hover .media-frame video {
+        transform: scale(1.035);
+      }
+
+      .entry[data-type='image'] .card:hover .media-frame::after,
+      .entry[data-type='video'] .card:hover .media-frame::after {
+        opacity: 1;
+        transform: translateX(130%);
+      }
     }
 
     .meta {
@@ -500,7 +573,9 @@ const LIKED_STORAGE_KEY = 'nanami.story.likes';
       font-weight: 600;
       font-size: 14px;
       cursor: pointer;
-      transition: transform 120ms ease, background 120ms ease;
+      transition:
+        transform var(--motion-duration-fast) var(--motion-ease-standard),
+        background var(--motion-duration-fast) var(--motion-ease-standard);
     }
 
     .like-button:hover:not(:disabled) { background: var(--color-accent-wash); }
@@ -525,7 +600,9 @@ const LIKED_STORAGE_KEY = 'nanami.story.likes';
       font-weight: 600;
       font-size: 14px;
       cursor: pointer;
-      transition: transform 120ms ease, background 120ms ease;
+      transition:
+        transform var(--motion-duration-fast) var(--motion-ease-standard),
+        background var(--motion-duration-fast) var(--motion-ease-standard);
     }
 
     .comment-button svg {
@@ -580,7 +657,7 @@ const LIKED_STORAGE_KEY = 'nanami.story.likes';
       position: fixed;
       inset: 0;
       z-index: 1000;
-      background: rgba(27, 27, 29, 0.92);
+      background: var(--fx-lightbox-backdrop);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -645,7 +722,7 @@ const LIKED_STORAGE_KEY = 'nanami.story.likes';
       position: fixed;
       inset: 0;
       z-index: 1001;
-      background: rgba(0, 0, 0, 0.5);
+      background: var(--fx-comment-backdrop);
       display: grid;
       place-items: center;
       padding: 16px;
@@ -725,12 +802,14 @@ const LIKED_STORAGE_KEY = 'nanami.story.likes';
       margin: 8px 0 0;
       color: var(--color-accent-contrast);
       font-weight: 600;
+      animation: status-feedback-in var(--motion-duration-standard) var(--motion-ease-emphasized);
     }
 
     .comment-success {
       margin: 8px 0 0;
       color: var(--color-ink);
       font-weight: 600;
+      animation: status-feedback-in var(--motion-duration-standard) var(--motion-ease-emphasized);
     }
 
     .comment-list {
@@ -787,66 +866,10 @@ const LIKED_STORAGE_KEY = 'nanami.story.likes';
       color: var(--color-ink-soft);
     }
 
-    @media (max-width: 760px) {
-      .timeline::before {
-        left: 22px;
-      }
-
-      .entry {
-        grid-template-columns: 44px 1fr;
-      }
-
-      .anchor {
-        grid-column: 1;
-        padding-top: 18px;
-      }
-
-      .anchor-date {
-        display: none;
-      }
-
-      .entry .card,
-      .entry.align-right .card {
-        grid-column: 2;
-        margin: 0;
-      }
-    }
-
-    @media (max-width: 428px) {
-      .like-button,
-      .comment-button {
-        min-height: 44px;
-        padding: 10px 14px;
-      }
-
-      .pager-num,
-      .pager-edge {
-        min-width: 44px;
-        height: 44px;
-      }
-
-      .meta {
-        padding: 14px;
-      }
-
-      .lightbox-close {
-        width: 44px;
-        height: 44px;
-      }
-    }
-
-    @media (max-width: 360px) {
-      .entry {
-        grid-template-columns: 32px 1fr;
-      }
-
-      .timeline::before {
-        left: 16px;
-      }
-    }
   `
 })
-export class StoryTimelineComponent implements OnInit {
+export class StoryTimelineComponent implements OnInit, AfterViewInit, OnDestroy {
+  @ViewChildren('entryNode') private entryNodes?: QueryList<ElementRef<HTMLLIElement>>;
   entries: TimelineEntry[] = [];
   isLoading = true;
   errorMessage = '';
@@ -869,6 +892,12 @@ export class StoryTimelineComponent implements OnInit {
   commentSuccess = '';
   commentLoadError = '';
   activeComments: StoryComment[] = [];
+  private entryNodesSubscription?: { unsubscribe(): void };
+  private entryObserver: IntersectionObserver | null = null;
+  private readonly revealedEntryKeys = new Set<string>();
+  private readonly replayCountByEntry = new Map<string, number>();
+  private readonly maxRevealReplays = 1;
+  private readonly prefersReducedMotion = this.detectReducedMotion();
   private readonly deletingCommentIds = new Set<string>();
 
   constructor(private readonly cdr?: ChangeDetectorRef) {}
@@ -877,6 +906,18 @@ export class StoryTimelineComponent implements OnInit {
     this.apiBaseUrl = (resolveApiBaseUrl() || '').trim();
     this.loadLikedKeysFromStorage();
     await this.loadPage(1);
+  }
+
+  ngAfterViewInit(): void {
+    this.entryNodesSubscription = this.entryNodes?.changes.subscribe(() => {
+      this.refreshRevealTargets();
+    });
+    this.refreshRevealTargets();
+  }
+
+  ngOnDestroy(): void {
+    this.entryNodesSubscription?.unsubscribe();
+    this.entryObserver?.disconnect();
   }
 
   private loadLikedKeysFromStorage(): void {
@@ -1329,6 +1370,89 @@ export class StoryTimelineComponent implements OnInit {
         break;
       }
     }
+  }
+
+  private detectReducedMotion(): boolean {
+    return typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  private refreshRevealTargets(): void {
+    const nodes = this.entryNodes?.toArray() ?? [];
+    if (!nodes.length) {
+      this.entryObserver?.disconnect();
+      return;
+    }
+
+    if (this.prefersReducedMotion || typeof window === 'undefined' || typeof IntersectionObserver === 'undefined') {
+      this.entryObserver?.disconnect();
+      for (const node of nodes) {
+        this.setEntryVisible(node.nativeElement, true);
+      }
+      return;
+    }
+
+    if (!this.entryObserver) {
+      this.entryObserver = new IntersectionObserver(
+        (entries) => {
+          for (const item of entries) {
+            const target = item.target as HTMLLIElement;
+            const key = this.entryDomKey(target);
+            if (item.isIntersecting && item.intersectionRatio >= 0.25) {
+              this.revealedEntryKeys.add(key);
+              this.setEntryVisible(target, true);
+              continue;
+            }
+
+            if (this.revealedEntryKeys.has(key) && this.allowReplay(target, key)) {
+              this.revealedEntryKeys.delete(key);
+              this.setEntryVisible(target, false);
+            }
+          }
+        },
+        { threshold: [0.25, 0.45], rootMargin: '0px 0px -8% 0px' }
+      );
+    } else {
+      this.entryObserver.disconnect();
+    }
+
+    for (const node of nodes) {
+      const element = node.nativeElement;
+      const key = this.entryDomKey(element);
+      this.setEntryVisible(element, this.revealedEntryKeys.has(key));
+      this.entryObserver.observe(element);
+    }
+  }
+
+  private entryDomKey(element: HTMLLIElement): string {
+    return element.dataset['entryKey'] || '';
+  }
+
+  private setEntryVisible(element: HTMLLIElement, visible: boolean): void {
+    element.classList.toggle('entry-visible', visible);
+    element.classList.toggle('entry-pending', !visible);
+  }
+
+  private allowReplay(element: HTMLLIElement, key: string): boolean {
+    if (!key || typeof window === 'undefined') {
+      return false;
+    }
+
+    const viewportHeight = window.innerHeight || 800;
+    const rect = element.getBoundingClientRect();
+    const farOutside = rect.bottom < -viewportHeight * 0.2 || rect.top > viewportHeight * 1.2;
+    if (!farOutside) {
+      return false;
+    }
+
+    const current = this.replayCountByEntry.get(key) || 0;
+    if (current >= this.maxRevealReplays) {
+      return false;
+    }
+
+    this.replayCountByEntry.set(key, current + 1);
+    return true;
   }
 
 }

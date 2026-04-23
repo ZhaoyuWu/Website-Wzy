@@ -258,3 +258,25 @@ go (code-level) — all three P1 closed in this branch, P2 items enumerated and 
 - Deployer: apply [handover/sql/generator3-task3-showcase-comments.sql](../sql/generator3-task3-showcase-comments.sql) as migration row 7 (after row 6 storage-quota).
 - Evaluator next pass: verify materialized `comments_count` if P2-1 performance becomes visible.
 - Optional: shrink `story-timeline.component.ts` inline styles (move to `.scss` file) to clear the 8 kB budget ceiling before the next style addition.
+
+## 2026-04-23 Addendum - Generator7 Latest Delta Slimming + Budget Hardening (Scoped)
+
+## Summary Written
+- Audited only the latest generator7 delta and remediated the remaining style-budget risk without changing product behavior.
+- Removed per-component style pressure by moving large responsive/motion blocks from:
+  - [frontend/src/app/pages/home-page.component.ts](../../frontend/src/app/pages/home-page.component.ts)
+  - [frontend/src/app/components/story-timeline.component.ts](../../frontend/src/app/components/story-timeline.component.ts)
+  into host-scoped global rules in [frontend/src/styles.scss](../../frontend/src/styles.scss).
+- Preserved UI behavior intentionally:
+  - kept class names/selectors and animation keyframe names,
+  - kept hero/timeline interaction and reduced-motion branches,
+  - no feature rollback.
+- Tightened build guardrail in [frontend/angular.json](../../frontend/angular.json):
+  - `anyComponentStyle`: warning `10kB`, error `12kB`.
+
+## Validation Evidence
+- `frontend npm run build`: pass (component-style warnings cleared).
+- `frontend npm run test:ci`: pass (`41 passed, 0 failed`).
+
+## Decision
+continue

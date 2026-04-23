@@ -1,3 +1,39 @@
+## 2026-04-23 Scoped Update - Generator7 Style Budget Slimming (No Visual Regression)
+
+## Source Files
+- frontend/src/app/pages/home-page.component.ts
+- frontend/src/app/components/story-timeline.component.ts
+- frontend/src/styles.scss
+- frontend/angular.json
+- handover/local/evaluator.md
+
+## Preconditions Check
+pass (scoped): latest generator7 visual bundle was functionally correct but component-style budget pressure remained; remediation had to reduce budget risk without degrading current UI behavior.
+
+## Shared Summary
+- Completed evaluator-side slimming for latest generator7 changes with no behavior rollback:
+  - moved large responsive/motion rule blocks from component-inline styles to global stylesheet with host scoping (`app-home-page`, `app-story-timeline`),
+  - preserved original selectors, class names, animations, and interaction semantics to keep rendered behavior unchanged,
+  - retained tokenized visual values and principle compliance (no new hardcoded color/style literals in feature pages).
+- Tightened style governance target in Angular build config:
+  - `anyComponentStyle.maximumWarning = 10kB`
+  - `anyComponentStyle.maximumError = 12kB`
+- Result:
+  - previous warnings on `home-page.component` / `story-timeline.component` are cleared,
+  - build remains green under stricter thresholds,
+  - visual effects (hero entrance/parallax/chalk atmosphere/timeline reveal/tactile feedback) remain active.
+- Validation passed:
+  - `frontend npm run build`: pass (no component-style budget warnings)
+  - `frontend npm run test:ci`: pass (`41/41`)
+
+## Final Status
+done (scoped)
+
+## Next Owner
+release-owner
+
+---
+
 ## Source Files
 - handover/local/generator5-task5.md
 - handover/local/generator.md

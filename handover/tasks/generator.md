@@ -14,6 +14,7 @@ Implement `T-001` to `T-007` for Nanami showcase according to GStack master task
 5. `T-005` Info and settings page (Supabase-backed profile/preferences update).
 6. `T-006` Hardening + Vercel deployment sweep (validation/responsive/perf/release).
 7. `T-007` Mobile layout + visual polish sweep (phone-first UX refinement).
+8. `T-007-3` to `T-007-10` Homepage design-motion enhancement pack.
 
 ## Scope Freeze (Current Iteration)
 - In scope:

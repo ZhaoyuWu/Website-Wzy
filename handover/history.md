@@ -1,5 +1,19 @@
 # Handover History
 
+## 2026-04-23 - Generator7 Style Budget Slimming (Scoped)
+- Type: public handover update (scoped)
+- Scope: evaluator remediation for latest generator7 UI bundle to remove component-style budget pressure without visual/interaction regression
+- Source docs:
+  - `handover/local/evaluator.md`
+  - `handover/public.md`
+- Key outcomes:
+  - Moved heavy responsive/motion style blocks out of component-inline styles into global `styles.scss` with host scoping (`app-home-page`, `app-story-timeline`) to preserve behavior while reducing per-component CSS size.
+  - Kept style-principle alignment by continuing tokenized visual values and avoiding new hardcoded color/style literals.
+  - Tightened Angular production style budget to `10kB` warning / `12kB` error and cleared prior warnings.
+  - Validation passed: frontend build pass (no component-style budget warnings), frontend CI tests `41/41`.
+- Decision: continue
+- Next owner: release-owner
+
 ## 2026-04-19 - Generator7 Audit Remediation (A-007 Scoped)
 - Type: public handover update (scoped)
 - Scope: generator7 follow-up audit fix for release-blocking runtime safety + env contract alignment

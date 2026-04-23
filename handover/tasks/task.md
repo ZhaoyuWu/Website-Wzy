@@ -95,6 +95,32 @@ Build a warm, media-first personal website to showcase the dog Nanami, with reli
   - Backend `GET /api/admin/storage/usage` is role-gated and returns `{ usedBytes, softLimitBytes, hardLimitBytes, percentOfHard, status, trackedItems }`.
   - Banner refreshes after successful upload and delete so the number stays live; Supabase itself still enforces the real ceiling — the banner is an early warning, not a gatekeeper.
 
+### G6 Design Child Tasks (No Baseline Override)
+- `T-007-3` Hero entrance choreography:
+  - Hero eyebrow/title/about/doodles animate in staged sequence on first load.
+  - Includes reduced-motion fallback.
+- `T-007-4` Hero parallax atmosphere:
+  - Doodles/background layers receive subtle bounded parallax on scroll.
+  - Must remain smooth on mid-range mobile devices.
+- `T-007-5` Timeline stagger reveal:
+  - Story/media cards reveal with stagger timing as they enter viewport.
+  - Avoid excessive replay while scrolling.
+- `T-007-6` Sticky glass navigation:
+  - Top nav transitions into sticky glass style after scroll threshold.
+  - Active section/link state remains clear.
+- `T-007-7` Floating create action:
+  - Homepage shows floating create/upload action for `Admin`/`Publisher` only.
+  - Viewer role must not see create control.
+- `T-007-8` Ambient gradient cycle:
+  - Hero background adds slow warm atmospheric gradient movement.
+  - Text contrast must stay readable.
+- `T-007-9` Tactile media interaction:
+  - Desktop media cards add subtle hover tilt/highlight.
+  - Mobile adds press feedback instead of hover reliance.
+- `T-007-10` Unified micro-interaction system:
+  - Save/success/like/error interactions use consistent motion timing/easing tokens.
+  - Interaction style is coherent across home/media/admin pages.
+
 ## Definition of Done (Project)
 - Tasks `T-001` to `T-007` are implemented and demoable.
 - Principles check passes with no unresolved blocker.
