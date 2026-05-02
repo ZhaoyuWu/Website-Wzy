@@ -1,11 +1,11 @@
 import { CommonModule } from '@angular/common';
-import { AfterViewInit, ChangeDetectorRef, Component, ElementRef, OnDestroy, OnInit, ViewChild, ViewRef, inject } from '@angular/core';
+import { AfterViewInit, ChangeDetectorRef, Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, ViewRef, inject } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../core/auth.service';
 import { I18nService } from '../core/i18n.service';
 import { resolveApiBaseUrl } from '../core/runtime-config';
 import { LanguagePickerComponent } from '../components/language-picker.component';
-import { StoryTimelineComponent } from '../components/story-timeline.component';
 
 type SiteSettings = {
   profileName: string;
@@ -13,6 +13,27 @@ type SiteSettings = {
   aboutText: string;
   contactEmail: string;
   showContactEmail: boolean;
+};
+
+type TimelineMediaItem = {
+  id: string | number;
+  type: 'image' | 'video';
+  title: string;
+  description: string;
+  mediaUrl: string;
+  displayDate: string | null;
+  createdAt: string | null;
+  likesCount: number;
+  commentsCount: number;
+};
+
+const LIKED_STORAGE_KEY = 'nanami.story.likes';
+
+type MediaComment = {
+  id: string | number;
+  author_name: string;
+  message: string;
+  created_at: string;
 };
 
 const DEFAULT_SITE_SETTINGS: SiteSettings = {
@@ -26,9 +47,9 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
 @Component({
   selector: 'app-home-page',
   standalone: true,
-  imports: [CommonModule, RouterLink, StoryTimelineComponent, LanguagePickerComponent],
+  imports: [CommonModule, FormsModule, RouterLink, LanguagePickerComponent],
   template: `
-    <main class="home">
+    <main class="home" [class.theme-night]="theme === 'night'">
       <div class="bg-doodle-layer" aria-hidden="true">
         <svg class="chalk-cloud cloud-a" viewBox="0 0 420 210" preserveAspectRatio="xMidYMid meet">
           <path class="cloud-fill" d="M58 150 C 48 112, 72 86, 110 84 C 121 58, 153 44, 188 50 C 214 28, 254 30, 281 52 C 321 42, 356 66, 360 102 C 390 108, 404 132, 394 156 C 382 184, 344 190, 312 181 L 106 181 C 78 188, 62 174, 58 150 Z" />
@@ -86,12 +107,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
         [class.hero-enter-ready]="heroEntranceReady"
         [class.hero-reduced-motion]="prefersReducedMotion"
       >
-        <svg class="doodle doodle-sun" viewBox="0 0 64 64" aria-hidden="true">
-          <circle cx="32" cy="32" r="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
-          <path
-            d="M32 6 V14 M32 50 V58 M6 32 H14 M50 32 H58 M12 12 L18 18 M46 46 L52 52 M52 12 L46 18 M12 52 L18 46"
-            stroke="currentColor" stroke-width="3" stroke-linecap="round" fill="none"/>
-        </svg>
+        <img class="doodle doodle-sun" [src]="theme === 'night' ? '月亮.png' : '太阳.png'" alt="" aria-hidden="true" [class.is-moon]="theme === 'night'" />
 
         <svg class="doodle doodle-paw" viewBox="0 0 60 60" aria-hidden="true">
           <ellipse cx="15" cy="20" rx="5" ry="7" fill="currentColor"/>
@@ -119,45 +135,185 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
             fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
         </svg>
 
-        <p class="eyebrow">{{ i18n.t('home.eyebrow') }}</p>
-
-        <h1 class="hero-title" [attr.aria-label]="settings.heroTagline">
-          <span
-            *ngFor="let ch of splitChars(settings.heroTagline); let i = index"
-            class="chr"
-            [class.space]="ch === ' '"
-            aria-hidden="true"
-          >{{ ch }}</span>
-        </h1>
-
-        <p class="hero-about" [attr.aria-label]="settings.aboutText">
-          <span
-            *ngFor="let ch of splitChars(settings.aboutText); let i = index"
-            class="chr sub"
-            [class.space]="ch === ' '"
-            aria-hidden="true"
-          >{{ ch }}</span>
-          <svg class="underline-squiggle" viewBox="0 0 240 10" aria-hidden="true" preserveAspectRatio="none">
-            <path
-              d="M2 6 Q 15 2 28 6 T 54 6 T 80 6 T 106 6 T 132 6 T 158 6 T 184 6 T 210 6 T 236 6"
-              fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
-          </svg>
-        </p>
+        <ng-container *ngIf="currentHeroMedia as item">
+          <div
+            class="kite-frame"
+            [attr.data-kite-frame]="kiteFrame"
+            role="button"
+            tabindex="0"
+            [attr.aria-label]="item.title || settings.profileName"
+            (click)="openMediaDetail(item)"
+            (keydown.enter)="openMediaDetail(item)"
+            (keydown.arrowleft)="showOlderMedia()"
+            (keydown.arrowright)="showNewerMedia()"
+            (pointerdown)="onHeroPointerDown($event)"
+            (pointermove)="onHeroPointerMove($event)"
+            (pointerup)="onHeroPointerUp($event)"
+            (pointercancel)="onHeroPointerCancel()"
+          >
+            <img class="kite-bg" [class.is-active]="kiteFrame === 1" src="走路1.png" alt="" aria-hidden="true" />
+            <img class="kite-bg" [class.is-active]="kiteFrame === 2" src="走路2.png" alt="" aria-hidden="true" />
+            <img class="kite-bg" [class.is-active]="kiteFrame === 3" src="走路3.png" alt="" aria-hidden="true" />
+            <img class="kite-bg" [class.is-active]="kiteFrame === 4" src="走路4.png" alt="" aria-hidden="true" />
+            <img
+              *ngIf="item.type === 'image'"
+              class="kite-photo"
+              [src]="item.mediaUrl"
+              [alt]="item.title || settings.profileName"
+            />
+            <video
+              *ngIf="item.type === 'video'"
+              class="kite-photo"
+              [src]="item.mediaUrl"
+              muted
+              playsinline
+              autoplay
+              loop
+            ></video>
+            <div class="kite-caption">{{ item.title || settings.profileName }}</div>
+          </div>
+        </ng-container>
       </section>
 
-      <section class="profile-card">
-        <h2>{{ i18n.t('home.profile.heading', { name: settings.profileName }) }}</h2>
-        <p>{{ settings.aboutText }}</p>
-        <p class="contact" *ngIf="settings.showContactEmail && settings.contactEmail">
-          {{ i18n.t('home.profile.contact') }}
-          <a [href]="'mailto:' + settings.contactEmail">{{ settings.contactEmail }}</a>
-        </p>
-        <p class="message" *ngIf="settingsMessage">{{ settingsMessage }}</p>
-      </section>
+      <div
+        class="date-stack"
+        *ngIf="currentHeroMedia"
+        aria-hidden="true"
+        [class.is-step-forward]="mediaSwitchDirection === 'forward'"
+        [class.is-step-backward]="mediaSwitchDirection === 'backward'"
+      >
+        <div class="date-item date-next">{{ formatMediaDate(nextMedia) }}</div>
+        <div class="date-item date-current">{{ formatMediaDate(currentHeroMedia) }}</div>
+        <div class="date-item date-prev">{{ formatMediaDate(prevMedia) }}</div>
+      </div>
 
-      <section id="story" class="story-section">
-        <app-story-timeline></app-story-timeline>
-      </section>
+      <div
+        class="media-modal-mask"
+        *ngIf="selectedMedia as item"
+        role="dialog"
+        aria-modal="true"
+        (click)="closeMediaDetail()"
+      >
+        <section class="media-modal" (click)="$event.stopPropagation()">
+          <button
+            type="button"
+            class="media-modal-close"
+            (click)="closeMediaDetail()"
+            aria-label="关闭"
+          >×</button>
+          <div class="media-modal-image">
+            <img *ngIf="item.type === 'image'" [src]="item.mediaUrl" [alt]="item.title" />
+            <video *ngIf="item.type === 'video'" [src]="item.mediaUrl" controls playsinline></video>
+          </div>
+          <aside class="media-modal-info">
+            <h2 class="media-modal-title">{{ item.title || settings.profileName }}</h2>
+            <p class="media-modal-date" *ngIf="item.displayDate">{{ item.displayDate }}</p>
+            <p class="media-modal-desc" *ngIf="item.description">{{ item.description }}</p>
+
+            <div class="media-actions">
+              <button
+                type="button"
+                class="like-button"
+                [class.is-liked]="isLiked(item)"
+                [disabled]="isLikePending(item)"
+                (click)="toggleLike(item)"
+                [attr.aria-pressed]="isLiked(item)"
+                aria-label="点赞"
+              >
+                <span class="like-heart" aria-hidden="true">{{ isLiked(item) ? '♥' : '♡' }}</span>
+                <span class="like-count">{{ item.likesCount }}</span>
+              </button>
+              <span class="comment-count" aria-label="留言数">
+                <span aria-hidden="true">💬</span>
+                <span>{{ mediaComments.length || item.commentsCount }}</span>
+              </span>
+            </div>
+
+            <section class="media-comments">
+              <h3 class="media-comments-heading">留言</h3>
+              <p class="comments-state" *ngIf="isLoadingComments">加载中…</p>
+              <p class="comments-state" *ngIf="commentsLoadError && !isLoadingComments">{{ commentsLoadError }}</p>
+              <ul
+                class="media-comment-list"
+                *ngIf="!isLoadingComments && mediaComments.length > 0"
+              >
+                <li *ngFor="let c of mediaComments">
+                  <div class="comment-meta">
+                    <strong>{{ c.author_name }}</strong>
+                    <span>{{ c.created_at }}</span>
+                  </div>
+                  <p class="comment-message">{{ c.message }}</p>
+                </li>
+              </ul>
+              <p
+                class="comments-state comments-empty"
+                *ngIf="!isLoadingComments && !commentsLoadError && mediaComments.length === 0"
+              >还没有留言。</p>
+
+              <form class="media-comment-form" (ngSubmit)="submitMediaComment()">
+                <input
+                  *ngIf="!auth.isAuthenticated"
+                  type="text"
+                  class="comment-author"
+                  [(ngModel)]="mediaCommentAuthor"
+                  name="author"
+                  maxlength="60"
+                  placeholder="你的名字"
+                  [disabled]="isSubmittingComment"
+                />
+                <textarea
+                  class="comment-textarea"
+                  [(ngModel)]="mediaCommentDraft"
+                  name="message"
+                  rows="3"
+                  maxlength="800"
+                  placeholder="写点什么…"
+                  [disabled]="isSubmittingComment"
+                ></textarea>
+                <p class="comment-error" *ngIf="mediaCommentError">{{ mediaCommentError }}</p>
+                <p class="comment-success" *ngIf="mediaCommentSuccess">{{ mediaCommentSuccess }}</p>
+                <div class="comment-form-actions">
+                  <button type="submit" [disabled]="isSubmittingComment">
+                    {{ isSubmittingComment ? '发送中…' : '发送留言' }}
+                  </button>
+                </div>
+              </form>
+            </section>
+          </aside>
+        </section>
+      </div>
+
+      <div class="street-ring-section" aria-hidden="true">
+        <div class="street-ring-viewport">
+          <img
+            [src]="theme === 'night' ? '晚上建筑.png' : '白天建筑.png'"
+            alt=""
+            class="ring-layer ring-buildings"
+            [class.ring-wheel-animating]="ringStepDirection !== null"
+            [style.transform]="'translate(-50%, 50%) rotate(' + (ringRotationDeg * 0.5) + 'deg)'"
+          />
+          <img
+            [src]="theme === 'night' ? '晚上商店.png' : '白天商店.png'"
+            alt=""
+            class="ring-layer ring-shops"
+            [class.ring-wheel-animating]="ringStepDirection !== null"
+            [style.transform]="'translate(-50%, 50%) rotate(' + ringRotationDeg + 'deg)'"
+          />
+          <img
+            src="街道.png"
+            alt=""
+            class="ring-layer ring-streets"
+            [class.ring-wheel-animating]="ringStepDirection !== null"
+            [style.transform]="'translate(-50%, 50%) rotate(' + (ringRotationDeg * 1.6) + 'deg)'"
+            (transitionend)="onRingStepAnimationEnd()"
+          />
+        </div>
+      </div>
+
+      <div class="hero-stage-actions" aria-label="Carousel controls">
+        <button type="button" (click)="showOlderMedia()" [disabled]="!canShowOlderMedia()" aria-label="Older">‹</button>
+        <button type="button" (click)="showNewerMedia()" [disabled]="!canShowNewerMedia()" aria-label="Newer">›</button>
+      </div>
 
       <a
         *ngIf="auth.isPublisherOrAdmin"
@@ -170,510 +326,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
       </a>
     </main>
   `,
-  styles: `
-    .home {
-      min-height: 100vh;
-      padding: 20px;
-      background: var(--color-app-bg);
-      overflow-x: clip;
-      position: relative;
-      isolation: isolate;
-    }
-
-    .bg-doodle-layer {
-      position: absolute;
-      inset: 0;
-      z-index: 1;
-      pointer-events: none;
-      overflow: hidden;
-    }
-
-    .chalk-cloud {
-      position: absolute;
-      width: min(74vw, 640px);
-      height: auto;
-      opacity: 0.94;
-      filter: drop-shadow(0 3px 0 var(--fx-chalk-cloud-shadow));
-    }
-
-    .chalk-cloud .cloud-fill {
-      fill: var(--fx-chalk-cloud-fill);
-      stroke: var(--fx-chalk-cloud-stroke);
-      stroke-width: 6;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-    }
-
-    .chalk-cloud .cloud-outline {
-      fill: none;
-      stroke: var(--fx-chalk-cloud-outline);
-      stroke-width: 7;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      stroke-dasharray: 10 8;
-    }
-
-    .chalk-cloud .cloud-sketch {
-      fill: none;
-      stroke: var(--fx-chalk-cloud-sketch);
-      stroke-width: 4.5;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      stroke-dasharray: 7 10;
-    }
-
-    .cloud-a {
-      top: 6%;
-      left: -6%;
-      animation: cloud-a-drift 30s ease-in-out infinite alternate;
-    }
-
-    .cloud-b {
-      right: -8%;
-      top: 34%;
-      width: min(68vw, 600px);
-      animation: cloud-b-drift 34s ease-in-out infinite alternate;
-    }
-
-    .chalk-lines {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      opacity: 0.24;
-    }
-
-    .chalk-lines path {
-      fill: none;
-      stroke: var(--fx-chalk-lines-stroke);
-      stroke-width: 2.2;
-      stroke-linecap: round;
-      stroke-dasharray: 14 18;
-      stroke-dashoffset: 340;
-      animation: chalk-sketch 19s linear infinite;
-    }
-
-    .chalk-lines path:nth-child(2) {
-      animation-delay: -7s;
-    }
-
-    .chalk-lines path:nth-child(3) {
-      animation-delay: -12s;
-    }
-
-    .top-nav,
-    .hero,
-    .profile-card,
-    .story-section,
-    .floating-create {
-      position: relative;
-      z-index: 2;
-    }
-
-    .top-nav {
-      width: min(1100px, 100%);
-      margin: 0 auto;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 16px;
-      padding: 10px 0 18px;
-      position: sticky;
-      top: 8px;
-      z-index: 30;
-      border-radius: 18px;
-      transition:
-        background-color var(--motion-duration-standard) var(--motion-ease-standard),
-        border-color var(--motion-duration-standard) var(--motion-ease-standard),
-        box-shadow var(--motion-duration-standard) var(--motion-ease-standard),
-        backdrop-filter var(--motion-duration-standard) var(--motion-ease-standard);
-      border: 1px solid transparent;
-    }
-
-    .top-nav.top-nav-sticky {
-      padding: 10px 14px;
-      background: var(--color-surface-glass-86);
-      border-color: var(--color-line);
-      box-shadow: 0 10px 24px var(--fx-shadow-cool-08);
-      backdrop-filter: blur(10px);
-    }
-
-    .brand {
-      color: var(--color-ink);
-      font-weight: 800;
-      text-decoration: none;
-      letter-spacing: 0.02em;
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .brand.is-active,
-    nav a.is-active {
-      color: var(--color-ink);
-      border-color: var(--color-ink);
-      background: var(--color-accent-soft);
-      box-shadow: 0 0 0 2px var(--fx-warm-glow-45);
-    }
-
-    .brand-mark {
-      width: 36px;
-      height: 36px;
-      border-radius: 8px;
-      object-fit: cover;
-    }
-
-    nav {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      justify-content: flex-end;
-      align-items: center;
-    }
-
-    nav a,
-    .nav-logout {
-      display: inline-flex;
-      align-items: center;
-      height: 34px;
-      color: var(--color-ink-soft);
-      text-decoration: none;
-      border: 1px solid var(--color-line);
-      border-radius: 999px;
-      padding: 0 14px;
-      background: var(--color-paper);
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      font-family: inherit;
-      transition:
-        background var(--motion-duration-fast) var(--motion-ease-standard),
-        color var(--motion-duration-fast) var(--motion-ease-standard),
-        border-color var(--motion-duration-fast) var(--motion-ease-standard),
-        transform var(--motion-duration-fast) var(--motion-ease-standard);
-    }
-
-    nav a:hover,
-    .nav-logout:hover:not(:disabled) {
-      background: var(--color-accent);
-      border-color: var(--color-ink);
-      color: var(--color-ink);
-      transform: translateY(-1px);
-    }
-
-    nav a:active,
-    .nav-logout:active:not(:disabled) {
-      transform: translateY(0);
-    }
-
-    .nav-logout:disabled { opacity: 0.5; cursor: not-allowed; }
-
-    .hero {
-      width: min(1100px, 100%);
-      margin: 0 auto;
-      border: 2px solid var(--color-ink);
-      border-radius: 22px;
-      padding: clamp(28px, 5vw, 48px);
-      background: var(--color-accent);
-      box-shadow: 6px 6px 0 var(--color-ink);
-    }
-
-    .hero-graffiti {
-      position: relative;
-      overflow: hidden;
-      isolation: isolate;
-      --hero-parallax-x: 0px;
-      --hero-parallax-y: 0px;
-      --hero-parallax-soft-x: 0px;
-      --hero-parallax-soft-y: 0px;
-      background: var(--fx-hero-gradient-base);
-    }
-
-    .hero-graffiti::before,
-    .hero-graffiti::after {
-      content: '';
-      position: absolute;
-      inset: -25%;
-      pointer-events: none;
-    }
-
-    .hero-graffiti::before {
-      z-index: 0;
-      background:
-        var(--fx-hero-glow-a),
-        var(--fx-hero-glow-b),
-        var(--fx-hero-glow-c);
-      animation: hero-ambient-cycle 32s ease-in-out infinite alternate;
-    }
-
-    .hero-graffiti::after {
-      z-index: 1;
-      inset: 0;
-      background: var(--fx-hero-overlay);
-      transform: translate3d(var(--hero-parallax-soft-x), var(--hero-parallax-soft-y), 0);
-    }
-
-    .eyebrow {
-      margin: 0;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      font-size: 12px;
-      font-weight: 800;
-      color: var(--color-ink);
-      position: relative;
-      z-index: 2;
-    }
-
-    .hero-title {
-      margin: 14px 0 22px;
-      font-family: 'Kalam', 'Caveat', 'Segoe Script', cursive;
-      font-weight: 700;
-      font-size: clamp(34px, 5.4vw, 58px);
-      line-height: 1.05;
-      max-width: 18ch;
-      position: relative;
-      z-index: 2;
-      word-break: break-word;
-      color: var(--color-ink);
-    }
-
-    .hero-title .chr {
-      display: inline-block;
-      transition: transform 240ms ease;
-    }
-
-    .hero-title .chr.space {
-      width: 0.32em;
-    }
-
-    .hero-title .chr:hover {
-      transform: translateY(-3px) rotate(-4deg) !important;
-    }
-
-    .hero-title .chr:nth-child(6n+1) { transform: rotate(-3deg) translateY(-1px); }
-    .hero-title .chr:nth-child(6n+2) { transform: rotate(2deg) translateY(1px); }
-    .hero-title .chr:nth-child(6n+3) { transform: rotate(-1deg); }
-    .hero-title .chr:nth-child(6n+4) { transform: rotate(3deg) translateY(-2px); color: var(--color-accent-contrast); }
-    .hero-title .chr:nth-child(6n+5) { transform: rotate(-2deg) translateY(2px); }
-    .hero-title .chr:nth-child(6n+6) { transform: rotate(1deg); }
-
-    .hero-about {
-      position: relative;
-      margin: 0;
-      max-width: 48ch;
-      font-family: 'Caveat', 'Segoe Script', cursive;
-      font-size: 22px;
-      line-height: 1.35;
-      color: var(--color-ink-soft);
-      padding-bottom: 14px;
-      z-index: 2;
-    }
-
-    .hero-entrance .eyebrow,
-    .hero-entrance .hero-title,
-    .hero-entrance .hero-about {
-      opacity: 0;
-      transform: translateY(14px);
-      transition: opacity 520ms cubic-bezier(0.2, 0.8, 0.2, 1), transform 520ms cubic-bezier(0.2, 0.8, 0.2, 1);
-    }
-
-    .hero-entrance .doodle {
-      opacity: 0;
-      transition: opacity 520ms cubic-bezier(0.2, 0.8, 0.2, 1);
-    }
-
-    .hero-entrance.hero-enter-ready .eyebrow,
-    .hero-entrance.hero-enter-ready .hero-title,
-    .hero-entrance.hero-enter-ready .hero-about {
-      opacity: 1;
-      transform: translateY(0);
-    }
-
-    .hero-entrance.hero-enter-ready .doodle {
-      opacity: var(--doodle-opacity, 0.9);
-    }
-
-    .hero-entrance .eyebrow { transition-delay: 40ms; }
-    .hero-entrance .hero-title { transition-delay: 150ms; }
-    .hero-entrance .hero-about { transition-delay: 280ms; }
-    .hero-entrance .doodle { transition-delay: 450ms; }
-
-    .hero-about .chr.sub {
-      display: inline-block;
-    }
-
-    .hero-about .chr.sub:nth-child(7n+3) { color: var(--color-ink); }
-    .hero-about .chr.sub:nth-child(11n+5) { color: var(--color-accent-contrast); }
-
-    .hero-about .chr.sub.space {
-      width: 0.28em;
-    }
-
-    .underline-squiggle {
-      position: absolute;
-      left: 0;
-      bottom: -2px;
-      width: min(320px, 70%);
-      height: 10px;
-      pointer-events: none;
-    }
-
-    .doodle {
-      position: absolute;
-      pointer-events: none;
-      opacity: var(--doodle-opacity, 0.9);
-      z-index: 1;
-      color: var(--color-ink);
-      transform: translate3d(
-        calc(var(--hero-parallax-x, 0px) * var(--doodle-parallax-x, 0)),
-        calc(var(--hero-parallax-y, 0px) * var(--doodle-parallax-y, 0)),
-        0
-      ) rotate(var(--doodle-rotate, 0deg));
-    }
-
-    .doodle-sun {
-      top: 18px;
-      right: 24px;
-      width: 70px;
-      height: 70px;
-      animation: sun-spin 22s linear infinite;
-      --doodle-opacity: 0.9;
-      --doodle-parallax-x: 0;
-      --doodle-parallax-y: 0;
-      --doodle-rotate: 0deg;
-    }
-
-    .doodle-paw {
-      top: 30%;
-      right: 12%;
-      width: 56px;
-      height: 56px;
-      --doodle-opacity: 0.75;
-      --doodle-parallax-x: 0.56;
-      --doodle-parallax-y: 0.9;
-      --doodle-rotate: -16deg;
-      color: var(--color-accent-contrast);
-    }
-
-    .doodle-grass {
-      bottom: 10px;
-      right: 18px;
-      width: 140px;
-      height: 38px;
-      --doodle-opacity: 0.9;
-      --doodle-parallax-x: 0.34;
-      --doodle-parallax-y: 0.54;
-    }
-
-    .doodle-heart {
-      bottom: 24px;
-      left: 26px;
-      width: 44px;
-      height: 44px;
-      --doodle-opacity: 0.85;
-      --doodle-parallax-x: -0.46;
-      --doodle-parallax-y: 0.7;
-      --doodle-rotate: -8deg;
-      color: var(--color-accent-contrast);
-    }
-
-    .doodle-scribble {
-      top: 28px;
-      left: 44%;
-      width: 110px;
-      height: 30px;
-      --doodle-opacity: 0.55;
-      --doodle-parallax-x: -0.62;
-      --doodle-parallax-y: 0.42;
-      --doodle-rotate: 4deg;
-    }
-
-    .underline-squiggle {
-      color: var(--color-ink);
-    }
-
-    .profile-card {
-      width: min(1100px, 100%);
-      margin: 20px auto 0;
-      border: 2px solid var(--color-ink);
-      border-radius: 18px;
-      background: var(--color-paper);
-      padding: 22px;
-      box-shadow: 4px 4px 0 var(--color-ink);
-    }
-
-    .profile-card h2 {
-      margin: 0;
-      color: var(--color-ink);
-    }
-
-    .profile-card p {
-      margin: 8px 0 0;
-      color: var(--color-ink-soft);
-    }
-
-    .contact a {
-      color: var(--color-ink);
-      text-decoration: underline;
-      text-decoration-color: var(--color-accent);
-      text-decoration-thickness: 2px;
-      text-underline-offset: 3px;
-      font-weight: 700;
-    }
-
-    .message {
-      color: var(--color-ink-muted);
-      font-size: 14px;
-      animation: status-feedback-in var(--motion-duration-standard) var(--motion-ease-emphasized);
-    }
-
-    .story-section {
-      width: min(1100px, 100%);
-      margin: 28px auto 0;
-    }
-
-    .floating-create {
-      position: fixed;
-      right: 18px;
-      bottom: 18px;
-      z-index: 40;
-      min-height: 48px;
-      padding: 0 16px 0 14px;
-      border-radius: 999px;
-      border: 2px solid var(--color-ink);
-      background: var(--color-accent);
-      color: var(--color-ink);
-      text-decoration: none;
-      font-weight: 800;
-      font-size: 14px;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      box-shadow: 4px 4px 0 var(--color-ink);
-      transition:
-        transform var(--motion-duration-fast) var(--motion-ease-standard),
-        box-shadow var(--motion-duration-fast) var(--motion-ease-standard),
-        background var(--motion-duration-fast) var(--motion-ease-standard);
-    }
-
-    .floating-create .plus {
-      font-size: 19px;
-      line-height: 1;
-      font-weight: 700;
-    }
-
-    .floating-create:hover {
-      transform: translateY(-2px);
-      box-shadow: 6px 6px 0 var(--color-ink);
-      background: var(--color-accent-soft);
-    }
-
-    .floating-create:active {
-      transform: translateY(0);
-      box-shadow: 3px 3px 0 var(--color-ink);
-    }
-
-  `
+  styleUrl: "./home-page.component.scss"
 })
 export class HomePageComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('heroRoot') private heroRoot?: ElementRef<HTMLElement>;
@@ -687,13 +340,36 @@ export class HomePageComponent implements OnInit, AfterViewInit, OnDestroy {
   isLoggingOut = false;
   isNavSticky = false;
   activeTopLink: 'brand' | 'story' = 'brand';
+  heroMediaItems: TimelineMediaItem[] = [];
+  heroMediaIndex = 0;
   heroEntranceReady = false;
   readonly prefersReducedMotion = this.checkPrefersReducedMotion();
   private parallaxFrameId: number | null = null;
+  ringStepDirection: 'forward' | 'backward' | null = null;
+  ringRotationDeg = 0;
+  private activePointerId: number | null = null;
+  private pointerStartX = 0;
+  private pointerCurrentX = 0;
 
-  splitChars(input: string): string[] {
-    return Array.from(String(input || ''));
-  }
+  kiteFrame: 1 | 2 | 3 | 4 = 1;
+  mediaSwitchDirection: 'forward' | 'backward' | null = null;
+  private mediaSwitchResetId: ReturnType<typeof setTimeout> | null = null;
+
+  theme: 'day' | 'night' = 'day';
+  private themeWatchId: ReturnType<typeof setInterval> | null = null;
+
+  selectedMedia: TimelineMediaItem | null = null;
+  mediaComments: MediaComment[] = [];
+  mediaCommentDraft = '';
+  mediaCommentAuthor = '';
+  isLoadingComments = false;
+  isSubmittingComment = false;
+  mediaCommentError = '';
+  mediaCommentSuccess = '';
+  commentsLoadError = '';
+
+  private readonly likedKeys = new Set<string>();
+  private readonly likePending = new Set<string>();
 
   async logout(): Promise<void> {
     this.isLoggingOut = true;
@@ -707,13 +383,107 @@ export class HomePageComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   async ngOnInit(): Promise<void> {
+    this.loadLikedKeysFromStorage();
+    this.applyThemeFromClock();
+    this.themeWatchId = setInterval(() => this.applyThemeFromClock(), 60_000);
     try {
-      await this.loadSettings();
+      await Promise.all([this.loadSettings(), this.loadHeroMedia()]);
     } catch {
       this.settings = { ...DEFAULT_SITE_SETTINGS };
       this.settingsMessage = this.i18n.t('home.settings.loadError');
     } finally {
       this.safeDetectChanges();
+    }
+  }
+
+  private applyThemeFromClock(): void {
+    const hour = new Date().getHours();
+    const next: 'day' | 'night' = hour >= 6 && hour < 18 ? 'day' : 'night';
+    if (next !== this.theme) {
+      this.theme = next;
+      this.safeDetectChanges();
+    }
+  }
+
+  private mediaKey(item: TimelineMediaItem): string {
+    return `${item.type}:${item.id}`;
+  }
+
+  isLiked(item: TimelineMediaItem): boolean {
+    return this.likedKeys.has(this.mediaKey(item));
+  }
+
+  isLikePending(item: TimelineMediaItem): boolean {
+    return this.likePending.has(this.mediaKey(item));
+  }
+
+  async toggleLike(item: TimelineMediaItem): Promise<void> {
+    const key = this.mediaKey(item);
+    if (this.likePending.has(key) || !this.apiBaseUrl) {
+      return;
+    }
+    const isUnlike = this.likedKeys.has(key);
+    const method = isUnlike ? 'DELETE' : 'POST';
+    const fallback = isUnlike ? Math.max(0, item.likesCount - 1) : item.likesCount + 1;
+
+    this.likePending.add(key);
+    this.safeDetectChanges();
+    try {
+      const base = this.apiBaseUrl.replace(/\/+$/, '');
+      const url = `${base}/api/story/media/${encodeURIComponent(String(item.id))}/like`;
+      const response = await fetch(url, { method, headers: this.auth.authHeaders?.() ?? {} });
+      const payload = (await response.json().catch(() => null)) as { likesCount?: number } | null;
+      if (!response.ok) {
+        return;
+      }
+      item.likesCount =
+        payload && typeof payload.likesCount === 'number' ? payload.likesCount : fallback;
+      if (isUnlike) {
+        this.likedKeys.delete(key);
+      } else {
+        this.likedKeys.add(key);
+      }
+      this.persistLikedKeys();
+    } finally {
+      this.likePending.delete(key);
+      this.safeDetectChanges();
+    }
+  }
+
+  private loadLikedKeysFromStorage(): void {
+    try {
+      const raw = localStorage.getItem(LIKED_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return;
+      for (const entry of parsed) {
+        if (entry && typeof entry === 'object') {
+          const type = (entry as { type?: unknown }).type;
+          const id = (entry as { id?: unknown }).id;
+          if (
+            (type === 'image' || type === 'video' || type === 'text') &&
+            (typeof id === 'string' || typeof id === 'number')
+          ) {
+            this.likedKeys.add(`${type}:${id}`);
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  private persistLikedKeys(): void {
+    try {
+      const rows = Array.from(this.likedKeys).map((key) => {
+        const sep = key.indexOf(':');
+        return sep > 0
+          ? { type: key.slice(0, sep), id: key.slice(sep + 1) }
+          : null;
+      });
+      localStorage.setItem(LIKED_STORAGE_KEY, JSON.stringify(rows.filter(Boolean)));
+    } catch {
+      // ignore
     }
   }
 
@@ -747,6 +517,14 @@ export class HomePageComponent implements OnInit, AfterViewInit, OnDestroy {
         window.clearTimeout(this.parallaxFrameId);
       }
       this.parallaxFrameId = null;
+    }
+    if (this.mediaSwitchResetId !== null) {
+      clearTimeout(this.mediaSwitchResetId);
+      this.mediaSwitchResetId = null;
+    }
+    if (this.themeWatchId !== null) {
+      clearInterval(this.themeWatchId);
+      this.themeWatchId = null;
     }
   }
 
@@ -884,6 +662,310 @@ export class HomePageComponent implements OnInit, AfterViewInit, OnDestroy {
     this.settings = this.mergeSettings(payload.settings);
     this.settingsMessage =
       payload.source === 'default' ? this.i18n.t('home.settings.defaultsNote') : '';
+  }
+
+  get currentHeroMedia(): TimelineMediaItem | null {
+    return this.heroMediaItems[this.heroMediaIndex] ?? null;
+  }
+
+  get nextMedia(): TimelineMediaItem | null {
+    return this.heroMediaItems[this.heroMediaIndex - 1] ?? null;
+  }
+
+  get prevMedia(): TimelineMediaItem | null {
+    return this.heroMediaItems[this.heroMediaIndex + 1] ?? null;
+  }
+
+  formatMediaDate(item: TimelineMediaItem | null): string {
+    if (!item) return '';
+    const raw = item.displayDate || item.createdAt || '';
+    if (!raw) return '';
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) return raw;
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}.${m}.${day}`;
+  }
+
+  canShowOlderMedia(): boolean {
+    return this.heroMediaIndex < this.heroMediaItems.length - 1;
+  }
+
+  canShowNewerMedia(): boolean {
+    return this.heroMediaIndex > 0;
+  }
+
+  showOlderMedia(): void {
+    if (this.canShowOlderMedia()) {
+      this.heroMediaIndex += 1;
+      this.triggerRingStep('forward');
+      this.stepKiteFrame('forward');
+      this.triggerDateStep('forward');
+    }
+  }
+
+  showNewerMedia(): void {
+    if (this.canShowNewerMedia()) {
+      this.heroMediaIndex -= 1;
+      this.triggerRingStep('backward');
+      this.stepKiteFrame('backward');
+      this.triggerDateStep('backward');
+    }
+  }
+
+  private triggerDateStep(direction: 'forward' | 'backward'): void {
+    this.mediaSwitchDirection = direction;
+    if (this.mediaSwitchResetId !== null) {
+      clearTimeout(this.mediaSwitchResetId);
+    }
+    this.mediaSwitchResetId = setTimeout(() => {
+      this.mediaSwitchDirection = null;
+      this.mediaSwitchResetId = null;
+      this.safeDetectChanges();
+    }, 420);
+    this.safeDetectChanges();
+  }
+
+  private stepKiteFrame(direction: 'forward' | 'backward'): void {
+    if (direction === 'forward') {
+      this.kiteFrame = (((this.kiteFrame % 4) + 1) as 1 | 2 | 3 | 4);
+    } else {
+      this.kiteFrame = (((this.kiteFrame + 2) % 4 + 1) as 1 | 2 | 3 | 4);
+    }
+  }
+
+  onHeroPointerDown(event: PointerEvent): void {
+    this.activePointerId = event.pointerId;
+    this.pointerStartX = event.clientX;
+    this.pointerCurrentX = event.clientX;
+  }
+
+  onHeroPointerMove(event: PointerEvent): void {
+    if (this.activePointerId !== event.pointerId) {
+      return;
+    }
+    this.pointerCurrentX = event.clientX;
+  }
+
+  onHeroPointerUp(event: PointerEvent): void {
+    if (this.activePointerId !== event.pointerId) {
+      return;
+    }
+
+    const deltaX = this.pointerCurrentX - this.pointerStartX;
+    const threshold = 42;
+    if (deltaX <= -threshold) {
+      this.showOlderMedia();
+    } else if (deltaX >= threshold) {
+      this.showNewerMedia();
+    }
+    this.onHeroPointerCancel();
+  }
+
+  onHeroPointerCancel(): void {
+    this.activePointerId = null;
+    this.pointerStartX = 0;
+    this.pointerCurrentX = 0;
+  }
+
+  onRingStepAnimationEnd(): void {
+    this.ringStepDirection = null;
+    this.safeDetectChanges();
+  }
+
+  @HostListener('document:keydown.escape')
+  onModalEscape(): void {
+    if (this.selectedMedia) {
+      this.closeMediaDetail();
+    }
+  }
+
+  async openMediaDetail(item: TimelineMediaItem): Promise<void> {
+    this.selectedMedia = item;
+    this.mediaComments = [];
+    this.mediaCommentDraft = '';
+    this.mediaCommentError = '';
+    this.mediaCommentSuccess = '';
+    this.commentsLoadError = '';
+    this.safeDetectChanges();
+    await this.loadMediaComments(item);
+  }
+
+  closeMediaDetail(): void {
+    this.selectedMedia = null;
+    this.mediaComments = [];
+    this.mediaCommentDraft = '';
+    this.mediaCommentError = '';
+    this.mediaCommentSuccess = '';
+    this.commentsLoadError = '';
+    this.safeDetectChanges();
+  }
+
+  private async loadMediaComments(item: TimelineMediaItem, opts?: { silent?: boolean }): Promise<void> {
+    if (!opts?.silent) {
+      this.isLoadingComments = true;
+      this.commentsLoadError = '';
+      this.safeDetectChanges();
+    }
+    try {
+      const url = `${this.apiBaseUrl}/api/story/media/${encodeURIComponent(String(item.id))}/comments?_=${Date.now()}`;
+      const response = await fetch(url, { cache: 'no-store' });
+      const payload = (await response.json().catch(() => null)) as
+        | { ok?: boolean; items?: MediaComment[]; message?: string }
+        | null;
+      if (!response.ok || !payload?.ok) {
+        this.commentsLoadError = payload?.message || '加载留言失败';
+        if (!opts?.silent) this.mediaComments = [];
+        return;
+      }
+      this.mediaComments = Array.isArray(payload.items) ? payload.items : [];
+    } catch {
+      this.commentsLoadError = '网络错误,留言加载失败';
+      if (!opts?.silent) this.mediaComments = [];
+    } finally {
+      this.isLoadingComments = false;
+      this.safeDetectChanges();
+    }
+  }
+
+  async submitMediaComment(): Promise<void> {
+    if (!this.selectedMedia) {
+      return;
+    }
+    const message = this.mediaCommentDraft.trim();
+    if (!message) {
+      this.mediaCommentError = '请输入留言内容';
+      this.safeDetectChanges();
+      return;
+    }
+    const authorName = this.auth.isAuthenticated
+      ? (this.auth.username || '').trim()
+      : this.mediaCommentAuthor.trim();
+    if (!this.auth.isAuthenticated && !authorName) {
+      this.mediaCommentError = '请填写名字';
+      this.safeDetectChanges();
+      return;
+    }
+
+    this.isSubmittingComment = true;
+    this.mediaCommentError = '';
+    this.mediaCommentSuccess = '';
+    this.safeDetectChanges();
+    try {
+      const url = `${this.apiBaseUrl}/api/story/media/${encodeURIComponent(String(this.selectedMedia.id))}/comments`;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const authHeaders = this.auth.authHeaders?.() ?? {};
+      Object.assign(headers, authHeaders);
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ authorName, message })
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | { ok?: boolean; message?: string }
+        | null;
+      if (!response.ok || !payload?.ok) {
+        this.mediaCommentError = payload?.message || '留言发送失败';
+        return;
+      }
+      // Optimistic insert so user sees the new comment immediately
+      const optimistic: MediaComment = {
+        id: `local-${Date.now()}`,
+        author_name: authorName,
+        message,
+        created_at: new Date().toISOString()
+      };
+      this.mediaComments = [optimistic, ...this.mediaComments];
+      this.mediaCommentDraft = '';
+      this.mediaCommentSuccess = '已留言';
+      this.safeDetectChanges();
+      // Re-fetch fresh list silently to sync with server (replace optimistic with real)
+      await this.loadMediaComments(this.selectedMedia, { silent: true });
+      // Auto-clear success message after a moment
+      setTimeout(() => {
+        this.mediaCommentSuccess = '';
+        this.safeDetectChanges();
+      }, 2000);
+    } catch {
+      this.mediaCommentError = '网络错误,留言发送失败';
+    } finally {
+      this.isSubmittingComment = false;
+      this.safeDetectChanges();
+    }
+  }
+
+  private async loadHeroMedia(): Promise<void> {
+    const response = await fetch(`${this.apiBaseUrl}/api/story/timeline?page=1`);
+    const payload = (await response.json()) as {
+      ok?: boolean;
+      items?: Array<{
+        id?: number | string;
+        type?: string;
+        title?: string;
+        description?: string;
+        mediaUrl?: string;
+        displayDate?: string | null;
+        createdAt?: string | null;
+        likesCount?: number | string;
+        commentsCount?: number | string;
+      }>;
+    };
+
+    if (!response.ok || !payload.ok) {
+      this.heroMediaItems = [];
+      return;
+    }
+
+    const toCount = (v: unknown): number => {
+      const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v) : NaN;
+      return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
+    };
+
+    const sourceItems = Array.isArray(payload.items) ? payload.items : [];
+    this.heroMediaItems = sourceItems
+      .filter((item) => (item.type === 'image' || item.type === 'video') && Boolean(item.mediaUrl))
+      .map((item): TimelineMediaItem => ({
+        id: item.id ?? '',
+        type: item.type === 'video' ? 'video' : 'image',
+        title: String(item.title || ''),
+        description: String(item.description || ''),
+        mediaUrl: String(item.mediaUrl || ''),
+        displayDate: item.displayDate ?? null,
+        createdAt: item.createdAt ?? null,
+        likesCount: toCount(item.likesCount),
+        commentsCount: toCount(item.commentsCount)
+      }))
+      .sort((a, b) => {
+        const dayA = Date.parse(`${a.displayDate ?? '1970-01-01'}T00:00:00Z`);
+        const dayB = Date.parse(`${b.displayDate ?? '1970-01-01'}T00:00:00Z`);
+        if (dayB !== dayA) {
+          return dayB - dayA;
+        }
+        const tA = a.createdAt ? Date.parse(a.createdAt) : 0;
+        const tB = b.createdAt ? Date.parse(b.createdAt) : 0;
+        return tB - tA;
+      });
+    this.heroMediaIndex = 0;
+  }
+
+  private triggerRingStep(direction: 'forward' | 'backward'): void {
+    if (this.prefersReducedMotion) {
+      this.ringRotationDeg += direction === 'forward' ? 12 : -12;
+      this.ringStepDirection = null;
+      this.safeDetectChanges();
+      return;
+    }
+
+    this.ringStepDirection = direction;
+    this.ringRotationDeg += direction === 'forward' ? 12 : -12;
+    const schedule =
+      typeof requestAnimationFrame === 'function'
+        ? requestAnimationFrame
+        : (cb: FrameRequestCallback) => window.setTimeout(cb, 0);
+    schedule(() => {
+      this.safeDetectChanges();
+    });
   }
 
   private mergeSettings(raw?: Partial<SiteSettings>): SiteSettings {
