@@ -450,8 +450,8 @@
 
     .date-stack {
       position: absolute;
-      top: 5%;
-      left: calc(9% - 5vh);
+      top: calc(5% + 3vh);
+      left: calc(9% - 2vh);
       z-index: 4;
       display: flex;
       flex-direction: column;
@@ -883,7 +883,12 @@
     }
 
     .ring-layer {
-      position: absolute;
+      /* Anchored to the viewport bottom so the ring's center stays at
+         a predictable y-position regardless of hero/kite layout above.
+         translate(-50%, 50%) puts the IMAGE CENTER at (left, bottom);
+         so a "bottom: -X" pushes the center X below the viewport edge.
+         Tune X per breakpoint to control how much of the ring shows. */
+      position: fixed;
       bottom: -42vh;
       left: 50%;
       aspect-ratio: 1 / 1;
@@ -891,6 +896,7 @@
       display: block;
       user-select: none;
       pointer-events: none;
+      z-index: 4;
       transform: translate(-50%, 50%) rotate(0deg);
       transform-origin: 50% 50%;
     }
@@ -1023,9 +1029,9 @@
 
       .kite-frame {
         height: clamp(420px, 80vh, 760px);
-        bottom: 4vh;
+        bottom: 2vh;
       }
-      .ring-layer { bottom: -25vh; }
+      .ring-layer { bottom: -22vh; }
       .ring-buildings { width: 200vw; }
       .ring-shops { width: 158vw; }
       .ring-streets { width: 100vw; }
@@ -1058,9 +1064,9 @@
 
       .kite-frame {
         height: clamp(380px, 75vh, 700px);
-        bottom: 4vh;
+        bottom: 2vh;
       }
-      .ring-layer { bottom: -22vh; }
+      .ring-layer { bottom: -12vh; }
       .ring-buildings { width: 220vw; }
       .ring-shops { width: 172vw; }
       .ring-streets { width: 110vw; }
