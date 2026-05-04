@@ -91,7 +91,6 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
             <a [routerLink]="['/login']">{{ i18n.t('nav.login') }}</a>
           </ng-container>
           <ng-container *ngIf="auth.isAuthenticated">
-            <a *ngIf="auth.isPublisherOrAdmin" [routerLink]="['/manage-media']">{{ i18n.t('nav.media') }}</a>
             <a *ngIf="auth.isPublisherOrAdmin" [routerLink]="['/admin']">{{ i18n.t('nav.settings') }}</a>
           </ng-container>
           <app-language-picker></app-language-picker>

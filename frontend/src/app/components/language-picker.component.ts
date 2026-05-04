@@ -168,13 +168,27 @@ const OPTIONS: Option[] = [
       font-weight: 800;
     }
 
-    @media (max-width: 428px) {
+    /* Match nav-button sizing across breakpoints so the language picker
+       lines up with Story / Media / Logout etc. instead of being 8-10px
+       taller on every screen. */
+    @media (max-width: 900px) {
       .picker-btn {
-        height: 44px;
+        height: 30px;
+        padding: 0 10px;
+        font-size: 12px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .picker-btn {
+        height: 26px;
+        padding: 0 8px;
+        font-size: 11px;
       }
 
-      .menu-item {
-        padding: 12px 10px;
+      .caret {
+        width: 8px;
+        height: 5px;
       }
     }
   `

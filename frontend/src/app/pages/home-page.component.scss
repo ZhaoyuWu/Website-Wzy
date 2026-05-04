@@ -1005,11 +1005,20 @@
     @media (max-width: 900px) {
       .home { padding: 6px 12px 0; }
 
-      .top-nav { gap: 8px; padding: 6px 0; flex-wrap: wrap; }
-      .brand { font-size: 14px; gap: 6px; }
+      .top-nav { gap: 8px; padding: 6px 0; flex-wrap: nowrap; }
+      .brand { font-size: 14px; gap: 6px; flex: 0 0 auto; }
       .brand-mark { width: 30px; height: 30px; }
-      nav { gap: 6px; }
-      nav a, .nav-logout { height: 30px; padding: 0 10px; font-size: 12px; }
+      nav {
+        gap: 6px;
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow-x: auto;
+        overflow-y: hidden;
+        flex-wrap: nowrap;
+        scrollbar-width: none;
+      }
+      nav::-webkit-scrollbar { display: none; }
+      nav a, .nav-logout { height: 30px; padding: 0 10px; font-size: 12px; flex: 0 0 auto; }
 
       .hero-title-card { max-width: 78vw; padding: 8px 14px; }
       .hero-title { font-size: clamp(15px, 4vw, 20px); }
