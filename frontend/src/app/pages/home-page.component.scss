@@ -451,7 +451,7 @@
     .date-stack {
       position: absolute;
       top: 5%;
-      left: 9%;
+      left: calc(9% - 5vh);
       z-index: 4;
       display: flex;
       flex-direction: column;
@@ -884,7 +884,7 @@
 
     .ring-layer {
       position: absolute;
-      bottom: -30vh;
+      bottom: -42vh;
       left: 50%;
       aspect-ratio: 1 / 1;
       height: auto;
@@ -1023,9 +1023,9 @@
 
       .kite-frame {
         height: clamp(420px, 80vh, 760px);
-        bottom: 7vh;
+        bottom: 4vh;
       }
-      .ring-layer { bottom: -15vh; }
+      .ring-layer { bottom: -25vh; }
       .ring-buildings { width: 200vw; }
       .ring-shops { width: 158vw; }
       .ring-streets { width: 100vw; }
@@ -1058,9 +1058,9 @@
 
       .kite-frame {
         height: clamp(380px, 75vh, 700px);
-        bottom: 7vh;
+        bottom: 4vh;
       }
-      .ring-layer { bottom: -13vh; }
+      .ring-layer { bottom: -22vh; }
       .ring-buildings { width: 220vw; }
       .ring-shops { width: 172vw; }
       .ring-streets { width: 110vw; }
