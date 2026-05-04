@@ -760,9 +760,9 @@ export class HomePageComponent implements OnInit, AfterViewInit, OnDestroy {
     const deltaX = this.pointerCurrentX - this.pointerStartX;
     const threshold = 42;
     if (deltaX <= -threshold) {
-      this.showOlderMedia();
-    } else if (deltaX >= threshold) {
       this.showNewerMedia();
+    } else if (deltaX >= threshold) {
+      this.showOlderMedia();
     }
     this.onHeroPointerCancel();
   }
