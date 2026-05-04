@@ -51,20 +51,26 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
   template: `
     <main class="home" [class.theme-night]="theme === 'night'">
       <div class="bg-doodle-layer" aria-hidden="true">
-        <svg class="chalk-cloud cloud-a" viewBox="0 0 420 210" preserveAspectRatio="xMidYMid meet">
-          <path class="cloud-fill" d="M58 150 C 48 112, 72 86, 110 84 C 121 58, 153 44, 188 50 C 214 28, 254 30, 281 52 C 321 42, 356 66, 360 102 C 390 108, 404 132, 394 156 C 382 184, 344 190, 312 181 L 106 181 C 78 188, 62 174, 58 150 Z" />
-          <path class="cloud-outline" d="M58 150 C 48 112, 72 86, 110 84 C 121 58, 153 44, 188 50 C 214 28, 254 30, 281 52 C 321 42, 356 66, 360 102 C 390 108, 404 132, 394 156 C 382 184, 344 190, 312 181 L 106 181 C 78 188, 62 174, 58 150 Z" />
-          <path class="cloud-sketch" d="M95 145 C 92 123, 108 106, 136 106 M165 99 C 188 83, 216 85, 238 100 M272 102 C 296 92, 320 102, 333 122" />
+        <svg class="chalk-lines" viewBox="0 0 1200 900" preserveAspectRatio="none">
+          <path d="M40 230 C 170 170, 320 310, 500 230 S 860 170, 1160 250" />
+          <path d="M60 620 C 260 540, 430 700, 640 610 S 980 520, 1140 660" />
+          <path d="M120 770 C 290 710, 430 850, 620 770 S 940 700, 1120 790" />
         </svg>
+      </div>
+
+      <div class="cloud-back-layer" aria-hidden="true">
         <svg class="chalk-cloud cloud-b" viewBox="0 0 420 210" preserveAspectRatio="xMidYMid meet">
           <path class="cloud-fill" d="M44 144 C 42 116, 62 96, 90 95 C 102 66, 129 53, 160 58 C 181 32, 218 31, 244 52 C 276 46, 307 62, 320 90 C 352 90, 377 110, 379 137 C 382 170, 355 186, 325 182 L 110 182 C 70 188, 50 173, 44 144 Z" />
           <path class="cloud-outline" d="M44 144 C 42 116, 62 96, 90 95 C 102 66, 129 53, 160 58 C 181 32, 218 31, 244 52 C 276 46, 307 62, 320 90 C 352 90, 377 110, 379 137 C 382 170, 355 186, 325 182 L 110 182 C 70 188, 50 173, 44 144 Z" />
           <path class="cloud-sketch" d="M88 138 C 94 117, 112 104, 140 106 M171 99 C 193 86, 224 87, 248 101 M276 104 C 300 97, 320 108, 334 126" />
         </svg>
-        <svg class="chalk-lines" viewBox="0 0 1200 900" preserveAspectRatio="none">
-          <path d="M40 230 C 170 170, 320 310, 500 230 S 860 170, 1160 250" />
-          <path d="M60 620 C 260 540, 430 700, 640 610 S 980 520, 1140 660" />
-          <path d="M120 770 C 290 710, 430 850, 620 770 S 940 700, 1120 790" />
+      </div>
+
+      <div class="cloud-overlay" aria-hidden="true">
+        <svg class="chalk-cloud cloud-a" viewBox="0 0 420 210" preserveAspectRatio="xMidYMid meet">
+          <path class="cloud-fill" d="M58 150 C 48 112, 72 86, 110 84 C 121 58, 153 44, 188 50 C 214 28, 254 30, 281 52 C 321 42, 356 66, 360 102 C 390 108, 404 132, 394 156 C 382 184, 344 190, 312 181 L 106 181 C 78 188, 62 174, 58 150 Z" />
+          <path class="cloud-outline" d="M58 150 C 48 112, 72 86, 110 84 C 121 58, 153 44, 188 50 C 214 28, 254 30, 281 52 C 321 42, 356 66, 360 102 C 390 108, 404 132, 394 156 C 382 184, 344 190, 312 181 L 106 181 C 78 188, 62 174, 58 150 Z" />
+          <path class="cloud-sketch" d="M95 145 C 92 123, 108 106, 136 106 M165 99 C 188 83, 216 85, 238 100 M272 102 C 296 92, 320 102, 333 122" />
         </svg>
       </div>
 
@@ -171,21 +177,19 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
               loop
             ></video>
             <div class="kite-caption">{{ item.title || settings.profileName }}</div>
+            <div
+              class="date-stack"
+              aria-hidden="true"
+              [class.is-step-forward]="mediaSwitchDirection === 'forward'"
+              [class.is-step-backward]="mediaSwitchDirection === 'backward'"
+            >
+              <div class="date-item date-next">{{ formatMediaDate(nextMedia) }}</div>
+              <div class="date-item date-current">{{ formatMediaDate(currentHeroMedia) }}</div>
+              <div class="date-item date-prev">{{ formatMediaDate(prevMedia) }}</div>
+            </div>
           </div>
         </ng-container>
       </section>
-
-      <div
-        class="date-stack"
-        *ngIf="currentHeroMedia"
-        aria-hidden="true"
-        [class.is-step-forward]="mediaSwitchDirection === 'forward'"
-        [class.is-step-backward]="mediaSwitchDirection === 'backward'"
-      >
-        <div class="date-item date-next">{{ formatMediaDate(nextMedia) }}</div>
-        <div class="date-item date-current">{{ formatMediaDate(currentHeroMedia) }}</div>
-        <div class="date-item date-prev">{{ formatMediaDate(prevMedia) }}</div>
-      </div>
 
       <div
         class="media-modal-mask"

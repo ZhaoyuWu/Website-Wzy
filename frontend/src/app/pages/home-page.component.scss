@@ -1,7 +1,11 @@
     .home {
       height: 100dvh;
       min-height: 100vh;
-      padding: 8px 16px 0;
+      padding:
+        calc(8px + var(--safe-top, 0px))
+        calc(16px + var(--safe-right, 0px))
+        var(--safe-bottom, 0px)
+        calc(16px + var(--safe-left, 0px));
       background: var(--color-app-bg);
       overflow: hidden;
       position: relative;
@@ -65,6 +69,22 @@
       right: 0;
       bottom: clamp(280px, 58vh, 660px);
       z-index: 1;
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    .cloud-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 8;
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    .cloud-back-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 5;
       pointer-events: none;
       overflow: hidden;
     }
@@ -429,14 +449,14 @@
     }
 
     .date-stack {
-      position: fixed;
-      left: clamp(8px, 2vw, 36px);
-      bottom: clamp(95px, 33vh, 280px);
-      z-index: 5;
+      position: absolute;
+      top: 5%;
+      left: 9%;
+      z-index: 4;
       display: flex;
       flex-direction: column;
       align-items: flex-start;
-      gap: clamp(8px, 1.8vh, 22px);
+      gap: clamp(2px, 0.6vh, 8px);
       pointer-events: none;
       font-family: 'Kalam', 'Caveat', 'Segoe Script', cursive;
       color: var(--color-ink);
@@ -453,20 +473,20 @@
 
     .date-next {
       opacity: 0.32;
-      font-size: clamp(11px, 1.7vh, 20px);
+      font-size: clamp(9px, 1.2vh, 14px);
       transform: rotate(-14deg);
     }
 
     .date-current {
       opacity: 1;
       font-weight: 800;
-      font-size: clamp(16px, 2.8vh, 32px);
+      font-size: clamp(13px, 2vh, 22px);
       transform: rotate(0deg);
     }
 
     .date-prev {
       opacity: 0.32;
-      font-size: clamp(11px, 1.7vh, 20px);
+      font-size: clamp(9px, 1.2vh, 14px);
       transform: rotate(14deg);
     }
 
@@ -897,8 +917,8 @@
     }
 
     .doodle-sun {
-      top: 4px;
-      right: clamp(16px, 4vw, 56px);
+      top: calc(4px + var(--safe-top, 0px));
+      right: calc(clamp(16px, 4vw, 56px) + var(--safe-right, 0px));
       width: clamp(140px, 18vw, 240px);
       aspect-ratio: 1 / 1;
       height: auto;
@@ -963,6 +983,19 @@
       box-shadow: 3px 3px 0 var(--color-ink);
     }
 
+    @media (min-width: 901px) {
+      /* On PC the kite-frame is bottom-anchored and up to 120vh tall,
+         so its top edge lives ABOVE the viewport. Percentage-of-kite-frame
+         offsets don't map predictably to viewport y. Switch the date stack
+         to a viewport-anchored offset so it always lands below the title
+         card regardless of viewport height. */
+      .date-stack {
+        top: auto;
+        bottom: 82vh;
+        left: clamp(16px, 6vw, 80px);
+      }
+    }
+
     @media (max-width: 900px) {
       .home { padding: 6px 12px 0; }
 
@@ -975,18 +1008,22 @@
       .hero-title-card { max-width: 78vw; padding: 8px 14px; }
       .hero-title { font-size: clamp(15px, 4vw, 20px); }
 
-      .doodle-sun { width: clamp(110px, 22vw, 180px); top: 6px; right: 12px; }
+      .doodle-sun {
+        width: clamp(110px, 22vw, 180px);
+        top: calc(6px + var(--safe-top, 0px));
+        right: calc(12px + var(--safe-right, 0px));
+      }
 
-      .chalk-cloud { width: min(48vw, 340px); opacity: 0.85; }
-      .cloud-a { top: 14%; left: -10%; }
-      .cloud-b { top: 40%; right: -12%; width: min(44vw, 300px); }
+      .chalk-cloud { width: min(38vw, 240px); opacity: 0.8; }
+      .cloud-a { top: 4%; bottom: auto; left: -4%; }
+      .cloud-b { top: 26%; bottom: auto; right: -4%; width: min(36vw, 220px); }
       .chalk-lines { display: none; }
 
       .bg-doodle-layer { bottom: clamp(380px, 70vh, 620px); }
 
       .kite-frame {
-        height: clamp(560px, 110vh, 1000px);
-        bottom: 0;
+        height: clamp(420px, 80vh, 760px);
+        bottom: 7vh;
       }
       .ring-layer { bottom: -15vh; }
       .ring-buildings { width: 200vw; }
@@ -1008,16 +1045,20 @@
       .hero-title-card { max-width: 84vw; padding: 6px 12px; }
       .hero-title { font-size: 14px; }
 
-      .doodle-sun { width: 110px; top: 4px; right: 8px; }
+      .doodle-sun {
+        width: 110px;
+        top: calc(4px + var(--safe-top, 0px));
+        right: calc(8px + var(--safe-right, 0px));
+      }
 
-      .chalk-cloud { width: min(46vw, 280px); }
-      .cloud-b { width: min(42vw, 240px); top: 26%; }
+      .chalk-cloud { width: min(34vw, 200px); }
+      .cloud-b { width: min(32vw, 180px); top: 26%; bottom: auto; right: -4%; }
 
       .bg-doodle-layer { bottom: clamp(360px, 68vh, 540px); }
 
       .kite-frame {
-        height: clamp(520px, 105vh, 920px);
-        bottom: 0;
+        height: clamp(380px, 75vh, 700px);
+        bottom: 7vh;
       }
       .ring-layer { bottom: -13vh; }
       .ring-buildings { width: 220vw; }
