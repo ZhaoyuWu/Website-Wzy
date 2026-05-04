@@ -1,4 +1,2 @@
-:host {
-  display: block;
-  min-height: 100vh;
-}
+/* app-root layout (height + scroll + safe-area) lives in src/styles.scss
+   so the rules apply to the element-level selector and not :host. */

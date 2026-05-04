@@ -239,6 +239,35 @@ body {
   letter-spacing: 0.01em;
 }
 
+/* App-shell: body is the fixed viewport, app-root is the only scroll surface.
+   100dvh handles iOS dynamic toolbars correctly. overscroll-behavior: none
+   kills bounce on the body. Requires viewport-fit=cover in index.html.
+   Safe-area insets are applied per-page (not on app-root) so each page's
+   own background/absolute layout fills the viewport edge-to-edge while
+   only its content respects the dynamic island. */
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+app-root {
+  display: block;
+  height: 100dvh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+:root {
+  --safe-top: env(safe-area-inset-top);
+  --safe-bottom: env(safe-area-inset-bottom);
+  --safe-left: env(safe-area-inset-left);
+  --safe-right: env(safe-area-inset-right);
+}
+
 .btn-primary {
   border: 1px solid var(--color-ink);
   border-radius: var(--radius-sm);
@@ -304,7 +333,12 @@ body {
     display: none;
   }
 
-  app-home-page .doodle-sun { width: 48px; height: 48px; top: 10px; right: 12px; }
+  app-home-page .doodle-sun {
+    width: 48px;
+    height: 48px;
+    top: calc(10px + var(--safe-top, 0px));
+    right: calc(12px + var(--safe-right, 0px));
+  }
   app-home-page .doodle-grass { width: 90px; right: 10px; bottom: 6px; }
   app-home-page .doodle-heart { width: 30px; height: 30px; bottom: 12px; left: 14px; }
 
@@ -348,7 +382,6 @@ body {
 
   app-home-page .hero {
     padding: clamp(20px, 5vw, 32px);
-    box-shadow: 4px 4px 0 var(--color-ink);
   }
 
   app-home-page .hero-title {
