@@ -250,6 +250,11 @@ body {
   height: 100%;
   overflow: hidden;
   overscroll-behavior: none;
+  /* iOS Safari: prevent rubber-band on the document */
+  position: fixed;
+  width: 100%;
+  inset: 0;
+  touch-action: pan-y;
 }
 
 app-root {
@@ -259,6 +264,14 @@ app-root {
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+}
+
+/* Home page: lock to viewport height, no scrolling. The page is a
+   single-screen hero (sun, kite, clouds, walking figure on the road)
+   designed to fit on iPhone-class viewports. Other pages (admin,
+   login, manage-media, timeline) keep their natural scroll. */
+app-root:has(app-home-page) {
+  overflow: hidden;
 }
 
 :root {
