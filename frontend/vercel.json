@@ -2,7 +2,7 @@
   "cleanUrls": true,
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/((?!ngsw-worker\\.js|ngsw\\.json|safety-worker\\.js|worker-basic\\.min\\.js|manifest\\.webmanifest|.*\\.[a-z0-9]+$).*)",
       "destination": "/index.html"
     }
   ],
@@ -10,12 +10,26 @@
     {
       "source": "/runtime-config.js",
       "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-store, max-age=0"
-        }
+        { "key": "Cache-Control", "value": "no-store, max-age=0" }
+      ]
+    },
+    {
+      "source": "/ngsw-worker.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/ngsw.json",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/index.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
       ]
     }
   ]
 }
-

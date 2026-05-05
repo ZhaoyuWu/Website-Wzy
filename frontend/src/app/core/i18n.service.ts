@@ -24,6 +24,9 @@ const TRANSLATIONS: Record<Lang, Dictionary> = {
     'nav.logout.pending': '...',
     'nav.home': '← Home',
 
+    'app.update.available': 'A new version is ready.',
+    'app.update.reload': 'Reload',
+
     'home.eyebrow': 'Public Homepage',
     'home.profile.heading': 'About {name}',
     'home.profile.contact': 'Contact:',
@@ -195,6 +198,9 @@ const TRANSLATIONS: Record<Lang, Dictionary> = {
     'nav.logout.pending': '...',
     'nav.home': '← Startseite',
 
+    'app.update.available': 'Eine neue Version ist bereit.',
+    'app.update.reload': 'Neu laden',
+
     'home.eyebrow': 'Öffentliche Startseite',
     'home.profile.heading': 'Über {name}',
     'home.profile.contact': 'Kontakt:',
@@ -363,6 +369,9 @@ const TRANSLATIONS: Record<Lang, Dictionary> = {
     'nav.logout': '退出',
     'nav.logout.pending': '...',
     'nav.home': '← 首页',
+
+    'app.update.available': '有新版本可用。',
+    'app.update.reload': '刷新',
 
     'home.eyebrow': '公开主页',
     'home.profile.heading': '关于 {name}',
