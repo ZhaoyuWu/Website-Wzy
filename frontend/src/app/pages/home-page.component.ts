@@ -202,7 +202,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
             type="button"
             class="media-modal-close"
             (click)="closeMediaDetail()"
-            aria-label="关闭"
+            [attr.aria-label]="i18n.t('story.comment.modal.close')"
           >×</button>
           <div class="media-modal-image">
             <img *ngIf="item.type === 'image'" [src]="item.mediaUrl" [alt]="item.title" />
@@ -221,20 +221,20 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
                 [disabled]="isLikePending(item)"
                 (click)="toggleLike(item)"
                 [attr.aria-pressed]="isLiked(item)"
-                aria-label="点赞"
+                [attr.aria-label]="i18n.t(isLiked(item) ? 'story.like.unlike' : 'story.like.like', { title: item.title || settings.profileName })"
               >
                 <span class="like-heart" aria-hidden="true">{{ isLiked(item) ? '♥' : '♡' }}</span>
                 <span class="like-count">{{ item.likesCount }}</span>
               </button>
-              <span class="comment-count" aria-label="留言数">
+              <span class="comment-count" [attr.aria-label]="i18n.t('story.comment.label')">
                 <span aria-hidden="true">💬</span>
                 <span>{{ mediaComments.length || item.commentsCount }}</span>
               </span>
             </div>
 
             <section class="media-comments">
-              <h3 class="media-comments-heading">留言</h3>
-              <p class="comments-state" *ngIf="isLoadingComments">加载中…</p>
+              <h3 class="media-comments-heading">{{ i18n.t('story.comment.modal.title') }}</h3>
+              <p class="comments-state" *ngIf="isLoadingComments">{{ i18n.t('story.comment.modal.loading') }}</p>
               <p class="comments-state" *ngIf="commentsLoadError && !isLoadingComments">{{ commentsLoadError }}</p>
               <ul
                 class="media-comment-list"
@@ -251,7 +251,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
               <p
                 class="comments-state comments-empty"
                 *ngIf="!isLoadingComments && !commentsLoadError && mediaComments.length === 0"
-              >还没有留言。</p>
+              >{{ i18n.t('story.comment.modal.empty') }}</p>
 
               <form class="media-comment-form" (ngSubmit)="submitMediaComment()">
                 <input
@@ -261,7 +261,7 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
                   [(ngModel)]="mediaCommentAuthor"
                   name="author"
                   maxlength="60"
-                  placeholder="你的名字"
+                  [placeholder]="i18n.t('story.comment.modal.authorPlaceholder')"
                   [disabled]="isSubmittingComment"
                 />
                 <textarea
@@ -270,14 +270,14 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
                   name="message"
                   rows="3"
                   maxlength="800"
-                  placeholder="写点什么…"
+                  [placeholder]="i18n.t('story.comment.modal.placeholder')"
                   [disabled]="isSubmittingComment"
                 ></textarea>
                 <p class="comment-error" *ngIf="mediaCommentError">{{ mediaCommentError }}</p>
                 <p class="comment-success" *ngIf="mediaCommentSuccess">{{ mediaCommentSuccess }}</p>
                 <div class="comment-form-actions">
                   <button type="submit" [disabled]="isSubmittingComment">
-                    {{ isSubmittingComment ? '发送中…' : '发送留言' }}
+                    {{ isSubmittingComment ? i18n.t('story.comment.modal.submitting') : i18n.t('story.comment.modal.submit') }}
                   </button>
                 </div>
               </form>
@@ -818,13 +818,13 @@ export class HomePageComponent implements OnInit, AfterViewInit, OnDestroy {
         | { ok?: boolean; items?: MediaComment[]; message?: string }
         | null;
       if (!response.ok || !payload?.ok) {
-        this.commentsLoadError = payload?.message || '加载留言失败';
+        this.commentsLoadError = payload?.message || this.i18n.t('story.comment.error.loadFailed');
         if (!opts?.silent) this.mediaComments = [];
         return;
       }
       this.mediaComments = Array.isArray(payload.items) ? payload.items : [];
     } catch {
-      this.commentsLoadError = '网络错误,留言加载失败';
+      this.commentsLoadError = this.i18n.t('story.comment.error.loadFailed');
       if (!opts?.silent) this.mediaComments = [];
     } finally {
       this.isLoadingComments = false;
@@ -838,7 +838,7 @@ export class HomePageComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     const message = this.mediaCommentDraft.trim();
     if (!message) {
-      this.mediaCommentError = '请输入留言内容';
+      this.mediaCommentError = this.i18n.t('story.comment.error.empty');
       this.safeDetectChanges();
       return;
     }
@@ -846,7 +846,7 @@ export class HomePageComponent implements OnInit, AfterViewInit, OnDestroy {
       ? (this.auth.username || '').trim()
       : this.mediaCommentAuthor.trim();
     if (!this.auth.isAuthenticated && !authorName) {
-      this.mediaCommentError = '请填写名字';
+      this.mediaCommentError = this.i18n.t('story.comment.error.authorRequired');
       this.safeDetectChanges();
       return;
     }
@@ -869,7 +869,7 @@ export class HomePageComponent implements OnInit, AfterViewInit, OnDestroy {
         | { ok?: boolean; message?: string }
         | null;
       if (!response.ok || !payload?.ok) {
-        this.mediaCommentError = payload?.message || '留言发送失败';
+        this.mediaCommentError = payload?.message || this.i18n.t('story.comment.error.postFailed');
         return;
       }
       // Optimistic insert so user sees the new comment immediately
@@ -881,7 +881,7 @@ export class HomePageComponent implements OnInit, AfterViewInit, OnDestroy {
       };
       this.mediaComments = [optimistic, ...this.mediaComments];
       this.mediaCommentDraft = '';
-      this.mediaCommentSuccess = '已留言';
+      this.mediaCommentSuccess = this.i18n.t('story.comment.success.posted');
       this.safeDetectChanges();
       // Re-fetch fresh list silently to sync with server (replace optimistic with real)
       await this.loadMediaComments(this.selectedMedia, { silent: true });
@@ -891,7 +891,7 @@ export class HomePageComponent implements OnInit, AfterViewInit, OnDestroy {
         this.safeDetectChanges();
       }, 2000);
     } catch {
-      this.mediaCommentError = '网络错误,留言发送失败';
+      this.mediaCommentError = this.i18n.t('story.comment.error.postFailed');
     } finally {
       this.isSubmittingComment = false;
       this.safeDetectChanges();
