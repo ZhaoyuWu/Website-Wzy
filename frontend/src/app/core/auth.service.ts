@@ -16,13 +16,19 @@ type SessionSnapshot = {
 export class AuthService {
   private readonly apiBaseUrl = resolveApiBaseUrl();
   private readonly storageKey = 'nanami_supabase_session';
+  private refreshPromise: Promise<boolean> | null = null;
+  private refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
   loginPayload: SessionSnapshot | null = null;
 
   constructor() {
     this.loginPayload = this.readSession();
-    if (this.loginPayload && this.isExpired(this.loginPayload.expiresAt)) {
-      this.clearSession();
+    if (this.loginPayload) {
+      if (this.isExpired(this.loginPayload.expiresAt)) {
+        void this.refreshSession();
+      } else {
+        this.scheduleProactiveRefresh(this.loginPayload.expiresAt);
+      }
     }
   }
 
@@ -33,11 +39,60 @@ export class AuthService {
     }
 
     if (this.isExpired(session.expiresAt)) {
-      this.clearSession();
+      void this.refreshSession();
       return false;
     }
 
     return true;
+  }
+
+  /**
+   * Exchange the stored refresh token for a fresh access token.
+   * Clears the session when Supabase rejects the refresh token; keeps it
+   * on transient network errors so a later attempt can retry.
+   */
+  refreshSession(): Promise<boolean> {
+    if (this.refreshPromise) {
+      return this.refreshPromise;
+    }
+
+    const session = this.readSession();
+    const supabaseUrl = resolveSupabaseUrl();
+    const supabaseAnonKey = resolveSupabaseAnonKey();
+    const refreshToken = String(session?.refreshToken || '');
+    if (!session || !refreshToken || !supabaseUrl || !supabaseAnonKey) {
+      if (session && this.isExpired(session.expiresAt)) {
+        this.clearSession();
+      }
+      return Promise.resolve(false);
+    }
+
+    this.refreshPromise = (async () => {
+      try {
+        const response = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: supabaseAnonKey
+          },
+          body: JSON.stringify({ refresh_token: refreshToken })
+        });
+        if (!response.ok) {
+          this.clearSession();
+          return false;
+        }
+        const payload = (await response.json()) as Record<string, unknown>;
+        const next = this.parseSupabaseSession(payload);
+        this.writeSession({ ...next, role: session.role || next.role });
+        return true;
+      } catch {
+        return false;
+      } finally {
+        this.refreshPromise = null;
+      }
+    })();
+
+    return this.refreshPromise;
   }
 
   get username(): string | null {
@@ -292,13 +347,34 @@ export class AuthService {
     }
   }
 
+  private scheduleProactiveRefresh(expiresAt: string): void {
+    if (this.refreshTimer !== null) {
+      clearTimeout(this.refreshTimer);
+      this.refreshTimer = null;
+    }
+    const expiresAtMs = Date.parse(expiresAt);
+    if (Number.isNaN(expiresAtMs)) {
+      return;
+    }
+    const delayMs = Math.max(expiresAtMs - Date.now() - 5 * 60_000, 5_000);
+    this.refreshTimer = setTimeout(() => {
+      this.refreshTimer = null;
+      void this.refreshSession();
+    }, delayMs);
+  }
+
   private writeSession(session: SessionSnapshot): void {
     localStorage.setItem(this.storageKey, JSON.stringify(session));
     this.loginPayload = session;
+    this.scheduleProactiveRefresh(session.expiresAt);
   }
 
   private clearSession(): void {
     localStorage.removeItem(this.storageKey);
     this.loginPayload = null;
+    if (this.refreshTimer !== null) {
+      clearTimeout(this.refreshTimer);
+      this.refreshTimer = null;
+    }
   }
 }

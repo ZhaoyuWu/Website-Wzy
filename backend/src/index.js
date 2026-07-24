@@ -326,6 +326,13 @@ function createApp(options = {}) {
       Math.max(1, toPositiveInt(process.env.SUPABASE_SHOWCASE_COMMENTS_LIMIT, 50))
     ),
   };
+  const likesConfig = {
+    likesTable: String(process.env.SUPABASE_ENTRY_LIKES_TABLE ?? "entry_likes").trim(),
+  };
+  // Flips to true once Supabase reports the entry_likes table missing
+  // (migration not applied yet); in-memory maps then stay the only store
+  // until the next restart.
+  let likesTableUnavailable = false;
 
   async function requireAuth(req, res, next) {
     const token = parseBearerToken(req.headers.authorization);
@@ -972,6 +979,175 @@ function createApp(options = {}) {
     return Boolean(likesMap && likesMap.has(viewerKey));
   }
 
+  function isMissingTableResponse(status, payload) {
+    if (status === 404) {
+      return true;
+    }
+    const code = payload && typeof payload === "object" ? String(payload.code || "") : "";
+    return code === "42P01" || code === "PGRST205";
+  }
+
+  function likesTableEnabled() {
+    return Boolean(
+      likesConfig.likesTable &&
+        !likesTableUnavailable &&
+        mediaConfig.supabaseUrl &&
+        mediaConfig.serviceRoleKey
+    );
+  }
+
+  // Durable like-record helpers backed by the entry_likes table. Each returns
+  // null when Supabase is unusable for the call (missing table, malformed
+  // payload, network error) so callers fall back to the in-memory maps
+  // instead of failing the request.
+  async function dbHasUserLikedEntry(entryType, entryId, viewerKey) {
+    if (!likesTableEnabled() || !viewerKey) {
+      return null;
+    }
+    try {
+      const endpoint =
+        `/rest/v1/${encodeURIComponent(likesConfig.likesTable)}` +
+        `?select=id&entry_type=eq.${encodeURIComponent(entryType)}` +
+        `&entry_id=eq.${encodeURIComponent(String(entryId))}` +
+        `&viewer_key=eq.${encodeURIComponent(viewerKey)}&limit=1`;
+      const response = await callSupabase(endpoint, { method: "GET" });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        if (isMissingTableResponse(response.status, payload)) {
+          likesTableUnavailable = true;
+        }
+        return null;
+      }
+      return Array.isArray(payload) ? payload.length > 0 : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function dbRecordLike(entryType, entryId, viewer) {
+    if (!likesTableEnabled() || !viewer?.viewerLikeKey) {
+      return null;
+    }
+    try {
+      const response = await callSupabase(
+        `/rest/v1/${encodeURIComponent(likesConfig.likesTable)}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Prefer: "resolution=ignore-duplicates,return=representation",
+          },
+          body: JSON.stringify([
+            {
+              entry_type: entryType,
+              entry_id: entryId,
+              viewer_key: viewer.viewerLikeKey,
+              user_id: viewer.userId || null,
+              username: viewer.username || "",
+              is_authenticated: Boolean(viewer.isAuthenticated),
+            },
+          ]),
+        }
+      );
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        if (isMissingTableResponse(response.status, payload)) {
+          likesTableUnavailable = true;
+        }
+        return null;
+      }
+      return Array.isArray(payload) ? true : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function dbRemoveLike(entryType, entryId, viewerKey) {
+    if (!likesTableEnabled() || !viewerKey) {
+      return null;
+    }
+    try {
+      const endpoint =
+        `/rest/v1/${encodeURIComponent(likesConfig.likesTable)}` +
+        `?entry_type=eq.${encodeURIComponent(entryType)}` +
+        `&entry_id=eq.${encodeURIComponent(String(entryId))}` +
+        `&viewer_key=eq.${encodeURIComponent(viewerKey)}`;
+      const response = await callSupabase(endpoint, { method: "DELETE" });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        if (isMissingTableResponse(response.status, payload)) {
+          likesTableUnavailable = true;
+        }
+        return null;
+      }
+      return true;
+    } catch {
+      return null;
+    }
+  }
+
+  async function dbListEntryLikes(entryType, entryId) {
+    if (!likesTableEnabled()) {
+      return null;
+    }
+    try {
+      const endpoint =
+        `/rest/v1/${encodeURIComponent(likesConfig.likesTable)}` +
+        `?select=viewer_key,user_id,username,is_authenticated,created_at` +
+        `&entry_type=eq.${encodeURIComponent(entryType)}` +
+        `&entry_id=eq.${encodeURIComponent(String(entryId))}` +
+        `&order=created_at.desc&limit=500`;
+      const response = await callSupabase(endpoint, { method: "GET" });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        if (isMissingTableResponse(response.status, payload)) {
+          likesTableUnavailable = true;
+        }
+        return null;
+      }
+      if (!Array.isArray(payload)) {
+        return null;
+      }
+      return payload.map((row) => ({
+        viewerKey: String(row?.viewer_key || ""),
+        userId: row?.user_id ? String(row.user_id) : null,
+        username: String(row?.username || ""),
+        isAuthenticated: Boolean(row?.is_authenticated),
+        createdAt: row?.created_at ? String(row.created_at) : null,
+      }));
+    } catch {
+      return null;
+    }
+  }
+
+  async function dbLikedSetForViewer(viewerKey) {
+    if (!likesTableEnabled() || !viewerKey) {
+      return null;
+    }
+    try {
+      const endpoint =
+        `/rest/v1/${encodeURIComponent(likesConfig.likesTable)}` +
+        `?select=entry_type,entry_id` +
+        `&viewer_key=eq.${encodeURIComponent(viewerKey)}&limit=1000`;
+      const response = await callSupabase(endpoint, { method: "GET" });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        if (isMissingTableResponse(response.status, payload)) {
+          likesTableUnavailable = true;
+        }
+        return null;
+      }
+      if (!Array.isArray(payload)) {
+        return null;
+      }
+      return new Set(
+        payload.map((row) => entryLikeKey(String(row?.entry_type || ""), row?.entry_id))
+      );
+    } catch {
+      return null;
+    }
+  }
+
   async function resolveViewerLikeIdentity(req) {
     const authToken = parseBearerToken(req.headers.authorization);
     if (authToken && mediaConfig.supabaseUrl && mediaConfig.serviceRoleKey) {
@@ -1127,12 +1303,15 @@ function createApp(options = {}) {
       const clampedPage = Math.min(page, totalPages);
       const start = (clampedPage - 1) * STORY_PAGE_SIZE;
       const pageItems = merged.slice(start, start + STORY_PAGE_SIZE);
+      const dbLikedSet = viewerLikeKey ? await dbLikedSetForViewer(viewerLikeKey) : null;
       const items = await Promise.all(
         pageItems.map(async (item) => {
           const entryType = item.type === "text" ? "text" : "media";
           const entryId = toPositiveInt(item.id, 0);
           const commentsCount = await getStoryCommentCount(entryType, entryId);
-          const likedByMe = hasUserLikedEntry(entryType, entryId, viewerLikeKey);
+          const likedByMe =
+            Boolean(dbLikedSet && dbLikedSet.has(entryLikeKey(entryType, entryId))) ||
+            hasUserLikedEntry(entryType, entryId, viewerLikeKey);
           return { ...item, commentsCount, likedByMe };
         })
       );
@@ -1216,7 +1395,10 @@ function createApp(options = {}) {
         .json({ ok: false, message: "Too many like attempts. Try again later." });
     }
 
-    if (hasUserLikedEntry(entryType, entryId, viewerLikeKey)) {
+    const dbLiked = await dbHasUserLikedEntry(entryType, entryId, viewerLikeKey);
+    const alreadyLiked =
+      dbLiked === true || (dbLiked === null && hasUserLikedEntry(entryType, entryId, viewerLikeKey));
+    if (alreadyLiked) {
       const likesCount = await getEntryCurrentLikeCount(entryType, entryId);
       return res.json({
         ok: true,
@@ -1237,13 +1419,16 @@ function createApp(options = {}) {
           details: result.details,
         });
       }
-      const likesMap = getEntryLikesMap(entryType, entryId, true);
-      likesMap.set(viewerLikeKey, {
-        userId: viewer.userId,
-        username: viewer.username,
-        isAuthenticated: viewer.isAuthenticated,
-        createdAt: new Date().toISOString(),
-      });
+      const persisted = await dbRecordLike(entryType, entryId, viewer);
+      if (persisted !== true) {
+        const likesMap = getEntryLikesMap(entryType, entryId, true);
+        likesMap.set(viewerLikeKey, {
+          userId: viewer.userId,
+          username: viewer.username,
+          isAuthenticated: viewer.isAuthenticated,
+          createdAt: new Date().toISOString(),
+        });
+      }
       return res.json({
         ok: true,
         type: entryType,
@@ -1288,6 +1473,7 @@ function createApp(options = {}) {
           details: result.details,
         });
       }
+      await dbRemoveLike(entryType, entryId, viewerLikeKey);
       const likesMap = getEntryLikesMap(entryType, entryId, false);
       if (likesMap) {
         likesMap.delete(viewerLikeKey);
@@ -1310,16 +1496,33 @@ function createApp(options = {}) {
     }
   });
 
-  app.get("/api/story/:type/:id/likes", requireAuth, requireRole("Admin"), (req, res) => {
+  app.get("/api/story/:type/:id/likes", requireAuth, requireRole("Admin"), async (req, res) => {
     const entryType = String(req.params?.type || "").toLowerCase();
     const entryId = toPositiveInt(req.params?.id, 0);
     if (!entryId || (entryType !== "media" && entryType !== "text")) {
       return res.status(400).json({ ok: false, message: "Invalid entry target." });
     }
+
+    // Merge durable rows with in-memory records (likes that were taken while
+    // the entry_likes table was unavailable), deduped by viewer.
+    const byViewer = new Map();
+    const dbItems = await dbListEntryLikes(entryType, entryId);
+    for (const item of dbItems || []) {
+      if (item.viewerKey) {
+        byViewer.set(item.viewerKey, item);
+      }
+    }
     const likesMap = getEntryLikesMap(entryType, entryId, false);
-    const items = likesMap
-      ? Array.from(likesMap.values()).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
-      : [];
+    if (likesMap) {
+      for (const [viewerKey, record] of likesMap.entries()) {
+        if (!byViewer.has(viewerKey)) {
+          byViewer.set(viewerKey, { viewerKey, ...record });
+        }
+      }
+    }
+    const items = Array.from(byViewer.values()).sort(
+      (a, b) => Date.parse(b.createdAt || 0) - Date.parse(a.createdAt || 0)
+    );
     return res.json({ ok: true, type: entryType, id: entryId, total: items.length, items });
   });
 

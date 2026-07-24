@@ -270,4 +270,88 @@ describe('AuthService (logic)', () => {
     const service = new AuthService();
     expect(service.apiUrl('/api/health')).toBe('https://api.nanami.test/api/health');
   });
+
+  it('refreshSession exchanges refresh token and keeps the user signed in', async () => {
+    window.__NANAMI_APP_CONFIG__ = {
+      supabaseUrl: 'https://demo.supabase.co',
+      supabaseAnonKey: 'anon-key'
+    };
+    localStorage.setItem(
+      storageKey,
+      JSON.stringify({
+        accessToken: 'expired-token',
+        refreshToken: 'refresh-token-1',
+        tokenType: 'bearer',
+        userId: 'user-1',
+        username: 'admin',
+        email: 'admin@nanami.test',
+        role: 'Admin',
+        expiresAt: new Date(Date.now() - 60_000).toISOString()
+      })
+    );
+
+    const calls: string[] = [];
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      calls.push(url);
+      expect(url).toContain('grant_type=refresh_token');
+      expect(String(init?.body)).toContain('refresh-token-1');
+      return new Response(
+        JSON.stringify({
+          access_token: 'fresh-token',
+          refresh_token: 'refresh-token-2',
+          expires_in: 3600,
+          token_type: 'bearer',
+          user: {
+            id: 'user-1',
+            email: 'admin@nanami.test',
+            user_metadata: { username: 'admin' },
+            app_metadata: {}
+          }
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    };
+
+    const service = new AuthService();
+    const refreshed = await service.refreshSession();
+
+    expect(refreshed).toBe(true);
+    expect(service.isAuthenticated).toBe(true);
+    expect(service.getToken()).toBe('fresh-token');
+    expect(service.userRole).toBe('Admin');
+    expect(calls.length).toBeGreaterThan(0);
+  });
+
+  it('refreshSession clears the session when Supabase rejects the refresh token', async () => {
+    window.__NANAMI_APP_CONFIG__ = {
+      supabaseUrl: 'https://demo.supabase.co',
+      supabaseAnonKey: 'anon-key'
+    };
+    localStorage.setItem(
+      storageKey,
+      JSON.stringify({
+        accessToken: 'expired-token',
+        refreshToken: 'revoked-refresh-token',
+        tokenType: 'bearer',
+        userId: 'user-1',
+        username: 'admin',
+        email: 'admin@nanami.test',
+        role: 'Admin',
+        expiresAt: new Date(Date.now() - 60_000).toISOString()
+      })
+    );
+
+    globalThis.fetch = async () =>
+      new Response(JSON.stringify({ error: 'invalid_grant' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+    const service = new AuthService();
+    await service.refreshSession();
+
+    expect(service.isAuthenticated).toBe(false);
+    expect(localStorage.getItem(storageKey)).toBeNull();
+  });
 });
