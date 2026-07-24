@@ -40,6 +40,16 @@ class MockAuthService {
     return `http://localhost:4000${cleanPath}`;
   }
 
+  async apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+    return fetch(this.apiUrl(path), {
+      ...init,
+      headers: {
+        ...((init.headers as Record<string, string>) || {}),
+        ...this.authHeaders()
+      }
+    });
+  }
+
   async logout(): Promise<void> {
     this.logoutCallCount += 1;
     this.authenticated = false;

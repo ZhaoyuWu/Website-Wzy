@@ -554,8 +554,7 @@ export class AdminPageComponent implements OnInit {
 
   async ngOnInit(): Promise<void> {
     try {
-      const response = await fetch(this.auth.apiUrl('/api/admin/overview'), {
-        headers: this.auth.authHeaders()
+      const response = await this.auth.apiFetch('/api/admin/overview', {
       });
 
       const payload = (await response.json()) as { message?: string };
@@ -594,8 +593,7 @@ export class AdminPageComponent implements OnInit {
     this.isLoadingUsers = true;
     this.usersError = '';
     try {
-      const response = await fetch(this.auth.apiUrl('/api/admin/users'), {
-        headers: this.auth.authHeaders()
+      const response = await this.auth.apiFetch('/api/admin/users', {
       });
       const payload = (await response.json()) as { ok?: boolean; users?: UserRow[]; message?: string };
       if (!response.ok || !payload.ok) {
@@ -616,11 +614,10 @@ export class AdminPageComponent implements OnInit {
     this.savingRoleId = user.id;
 
     try {
-      const response = await fetch(this.auth.apiUrl(`/api/admin/users/${encodeURIComponent(user.id)}/role`), {
+      const response = await this.auth.apiFetch(`/api/admin/users/${encodeURIComponent(user.id)}/role`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          ...this.auth.authHeaders()
         },
         body: JSON.stringify({ role: newRole })
       });
@@ -646,8 +643,7 @@ export class AdminPageComponent implements OnInit {
   async loadBootstrapStatus(): Promise<void> {
     this.claimAdminError = '';
     try {
-      const response = await fetch(this.auth.apiUrl('/api/admin/bootstrap/status'), {
-        headers: this.auth.authHeaders()
+      const response = await this.auth.apiFetch('/api/admin/bootstrap/status', {
       });
       const payload = (await response.json()) as {
         ok?: boolean;
@@ -669,9 +665,8 @@ export class AdminPageComponent implements OnInit {
     this.claimAdminSuccess = '';
     this.isClaimingAdmin = true;
     try {
-      const response = await fetch(this.auth.apiUrl('/api/admin/bootstrap/claim'), {
+      const response = await this.auth.apiFetch('/api/admin/bootstrap/claim', {
         method: 'POST',
-        headers: this.auth.authHeaders()
       });
       const payload = (await response.json()) as { ok?: boolean; message?: string };
       if (!response.ok || !payload.ok) {
@@ -693,8 +688,7 @@ export class AdminPageComponent implements OnInit {
     this.settingsSuccess = '';
 
     try {
-      const response = await fetch(this.auth.apiUrl('/api/admin/settings'), {
-        headers: this.auth.authHeaders()
+      const response = await this.auth.apiFetch('/api/admin/settings', {
       });
       const payload = (await response.json()) as {
         ok?: boolean;
@@ -746,11 +740,10 @@ export class AdminPageComponent implements OnInit {
 
     this.isSavingSettings = true;
     try {
-      const response = await fetch(this.auth.apiUrl('/api/admin/settings'), {
+      const response = await this.auth.apiFetch('/api/admin/settings', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          ...this.auth.authHeaders()
         },
         body: JSON.stringify({
           profileName,
