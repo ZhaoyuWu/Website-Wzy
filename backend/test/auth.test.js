@@ -1,20 +1,16 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { hashPassword } = require("../src/password");
 const {
   createApp,
   isValidEmail,
-  isValidPassword,
   isValidUsername,
   parseBearerToken,
 } = require("../src/index");
 
 function startTestServer(options = {}) {
-  const dbPool = options.dbPool || { query: async () => ({ rowCount: 0, rows: [] }) };
   const nowState = { value: options.initialNow ?? Date.now() };
   const app = createApp({
-    dbPool,
     randomBytes: () => Buffer.alloc(32, 7),
     now: () => nowState.value,
     fetchImpl: options.fetchImpl,
@@ -52,6 +48,31 @@ async function postJson(baseUrl, path, body, headers = {}) {
   return { response, payload };
 }
 
+function withSupabaseEnv(run) {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role";
+  return run().finally(() => {
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+  });
+}
+
+function supabaseUserFetch(userId, role, fallback) {
+  return async (url, init = {}) => {
+    const urlText = String(url);
+    if (urlText.includes("/auth/v1/user")) {
+      return createJsonResponse({ id: userId, email: `${userId}@example.com`, app_metadata: {} });
+    }
+    if (urlText.includes(`/rest/v1/profiles?id=eq.${userId}`)) {
+      return createJsonResponse([{ id: userId, role }]);
+    }
+    if (typeof fallback === "function") {
+      return fallback(url, init);
+    }
+    return createJsonResponse([]);
+  };
+}
+
 test("parseBearerToken handles valid and invalid authorization headers", () => {
   assert.equal(parseBearerToken("Bearer abc123"), "abc123");
   assert.equal(parseBearerToken("bearer abc123"), null);
@@ -59,181 +80,156 @@ test("parseBearerToken handles valid and invalid authorization headers", () => {
   assert.equal(parseBearerToken(undefined), null);
 });
 
-test("registration validators enforce username/email/password rules", () => {
+test("profile validators enforce username/email rules", () => {
   assert.equal(isValidUsername("ab"), false);
   assert.equal(isValidUsername("nanami_admin"), true);
 
   assert.equal(isValidEmail("not-an-email"), false);
   assert.equal(isValidEmail("nanami@example.com"), true);
-
-  assert.equal(isValidPassword("short"), false);
-  assert.equal(isValidPassword("good-length-password"), true);
 });
 
-test("login returns 400 when username/password are missing (edge case)", async () => {
-  const ctx = await startTestServer();
-  try {
-    const { response, payload } = await postJson(ctx.baseUrl, "/api/auth/login", { username: "" });
-    assert.equal(response.status, 400);
-    assert.equal(payload.ok, false);
-  } finally {
-    ctx.server.close();
-  }
+test("protected endpoint rejects request without token", async () => {
+  await withSupabaseEnv(async () => {
+    const ctx = await startTestServer();
+    try {
+      const response = await fetch(`${ctx.baseUrl}/api/admin/overview`);
+      assert.equal(response.status, 401);
+    } finally {
+      ctx.server.close();
+    }
+  });
 });
 
-test("register creates user and returns session token (happy path)", async () => {
-  const dbPool = {
-    query: async (sql, values) => {
-      if (String(sql).includes("SELECT 1 FROM users WHERE username = $1 OR email = $2")) {
-        return { rowCount: 0, rows: [] };
+test("protected endpoint rejects invalid Supabase token", async () => {
+  await withSupabaseEnv(async () => {
+    const fetchImpl = async (url) => {
+      if (String(url).includes("/auth/v1/user")) {
+        return createJsonResponse({ message: "invalid token" }, 401);
       }
-      if (String(sql).includes("INSERT INTO users")) {
-        return { rowCount: 1, rows: [{ username: values[0], role: "Viewer" }] };
-      }
-      return { rowCount: 0, rows: [] };
-    },
-  };
-
-  const ctx = await startTestServer({ dbPool });
-  try {
-    const { response, payload } = await postJson(ctx.baseUrl, "/api/auth/register", {
-      username: "nanami_user",
-      email: "nanami@example.com",
-      password: "very-secure-2026",
-    });
-    assert.equal(response.status, 201);
-    assert.equal(payload.ok, true);
-    assert.equal(payload.username, "nanami_user");
-    assert.equal(typeof payload.token, "string");
-  } finally {
-    ctx.server.close();
-  }
+      return createJsonResponse([]);
+    };
+    const ctx = await startTestServer({ fetchImpl });
+    try {
+      const response = await fetch(`${ctx.baseUrl}/api/admin/overview`, {
+        headers: { Authorization: "Bearer bad-token" },
+      });
+      assert.equal(response.status, 401);
+    } finally {
+      ctx.server.close();
+    }
+  });
 });
 
-test("register rejects duplicate username or email", async () => {
-  const dbPool = {
-    query: async (sql) => {
-      if (String(sql).includes("SELECT 1 FROM users WHERE username = $1 OR email = $2")) {
-        return { rowCount: 1, rows: [{ "?column?": 1 }] };
-      }
-      return { rowCount: 0, rows: [] };
-    },
-  };
+test("viewer role is forbidden from admin-restricted endpoints", async () => {
+  await withSupabaseEnv(async () => {
+    const ctx = await startTestServer({ fetchImpl: supabaseUserFetch("user-viewer-9", "Viewer") });
+    try {
+      const settingsRes = await fetch(`${ctx.baseUrl}/api/admin/settings`, {
+        headers: { Authorization: "Bearer supabase-token" },
+      });
+      assert.equal(settingsRes.status, 403);
 
-  const ctx = await startTestServer({ dbPool });
-  try {
-    const { response, payload } = await postJson(ctx.baseUrl, "/api/auth/register", {
-      username: "nanami_user",
-      email: "nanami@example.com",
-      password: "very-secure-2026",
-    });
-    assert.equal(response.status, 409);
-    assert.equal(payload.ok, false);
-  } finally {
-    ctx.server.close();
-  }
+      const usersRes = await fetch(`${ctx.baseUrl}/api/admin/users`, {
+        headers: { Authorization: "Bearer supabase-token" },
+      });
+      assert.equal(usersRes.status, 403);
+    } finally {
+      ctx.server.close();
+    }
+  });
 });
 
-test("login + session + admin + logout flow works and invalidates token (happy/regression)", async () => {
-  const dbPool = {
-    query: async (sql, values) => {
-      if (String(sql).includes("FROM users") && values[0] === "admin") {
-        return {
-          rowCount: 1,
-          rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
-        };
-      }
-      if (String(sql).includes("SELECT NOW()")) {
-        return { rowCount: 1, rows: [{ server_time: new Date().toISOString() }] };
-      }
-      return { rowCount: 0, rows: [] };
-    },
-  };
-
-  const ctx = await startTestServer({ dbPool });
-  try {
-    const login = await postJson(ctx.baseUrl, "/api/auth/login", {
-      username: "admin",
-      password: "admin123456",
-    });
-    assert.equal(login.response.status, 200);
-    assert.equal(login.payload.ok, true);
-    assert.equal(typeof login.payload.token, "string");
-    const token = login.payload.token;
-
-    const sessionRes = await fetch(`${ctx.baseUrl}/api/auth/session`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    assert.equal(sessionRes.status, 200);
-
-    const adminRes = await fetch(`${ctx.baseUrl}/api/admin/overview`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    assert.equal(adminRes.status, 200);
-
-    const logoutRes = await fetch(`${ctx.baseUrl}/api/auth/logout`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    assert.equal(logoutRes.status, 200);
-
-    const afterLogoutRes = await fetch(`${ctx.baseUrl}/api/admin/overview`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    assert.equal(afterLogoutRes.status, 401);
-  } finally {
-    ctx.server.close();
-  }
+test("admin role passes role-gate for admin settings path", async () => {
+  await withSupabaseEnv(async () => {
+    const ctx = await startTestServer({ fetchImpl: supabaseUserFetch("user-admin-9", "Admin") });
+    try {
+      const settingsRes = await fetch(`${ctx.baseUrl}/api/admin/settings`, {
+        headers: { Authorization: "Bearer supabase-token" },
+      });
+      assert.notEqual(settingsRes.status, 403);
+      assert.notEqual(settingsRes.status, 401);
+    } finally {
+      ctx.server.close();
+    }
+  });
 });
 
-test("login returns 401 on wrong password (edge case)", async () => {
-  const dbPool = {
-    query: async () => ({
-      rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("correct-password"), role: "Admin" }],
-    }),
-  };
-  const ctx = await startTestServer({ dbPool });
-  try {
-    const { response, payload } = await postJson(ctx.baseUrl, "/api/auth/login", {
-      username: "admin",
-      password: "wrong-password",
-    });
-    assert.equal(response.status, 401);
-    assert.equal(payload.ok, false);
-  } finally {
-    ctx.server.close();
-  }
+test("comment throttle enforces per-IP cooldown and window ceiling with Retry-After", async () => {
+  process.env.COMMENT_COOLDOWN_MS = "5000";
+  process.env.COMMENT_WINDOW_MS = "60000";
+  process.env.COMMENT_MAX_PER_WINDOW = "2";
+
+  await withSupabaseEnv(async () => {
+    const fetchImpl = async (url, init = {}) => {
+      if (String(url).includes("/rest/v1/showcase_comments") && init.method === "POST") {
+        return createJsonResponse(
+          [{ id: 1, author_name: "Fan", message: "Cute!", created_at: "2026-07-24T10:00:00Z" }],
+          201
+        );
+      }
+      return createJsonResponse([]);
+    };
+    const ctx = await startTestServer({ fetchImpl, initialNow: 3_000_000_000_000 });
+    const commentBody = { authorName: "Fan", message: "Cute!" };
+    try {
+      const first = await postJson(ctx.baseUrl, "/api/showcase/comments", commentBody);
+      assert.equal(first.response.status, 201);
+
+      const duringCooldown = await postJson(ctx.baseUrl, "/api/showcase/comments", commentBody);
+      assert.equal(duringCooldown.response.status, 429);
+      assert.ok(Number(duringCooldown.response.headers.get("retry-after")) >= 1);
+
+      ctx.advanceNow(5001);
+      const second = await postJson(ctx.baseUrl, "/api/showcase/comments", commentBody);
+      assert.equal(second.response.status, 201);
+
+      ctx.advanceNow(5001);
+      const overWindowCap = await postJson(ctx.baseUrl, "/api/showcase/comments", commentBody);
+      assert.equal(overWindowCap.response.status, 429);
+
+      ctx.advanceNow(60001);
+      const afterWindowReset = await postJson(ctx.baseUrl, "/api/showcase/comments", commentBody);
+      assert.equal(afterWindowReset.response.status, 201);
+    } finally {
+      delete process.env.COMMENT_COOLDOWN_MS;
+      delete process.env.COMMENT_WINDOW_MS;
+      delete process.env.COMMENT_MAX_PER_WINDOW;
+      ctx.server.close();
+    }
+  });
 });
 
-test("session expires after ttl and becomes unauthorized (regression)", async () => {
-  process.env.SESSION_TTL_MS = "50";
-  const dbPool = {
-    query: async () => ({
-      rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
-    }),
-  };
+test("invalid comment payload is rejected before consuming throttle quota", async () => {
+  process.env.COMMENT_COOLDOWN_MS = "5000";
 
-  const ctx = await startTestServer({ dbPool, initialNow: 1_700_000_000_000 });
-  try {
-    const login = await postJson(ctx.baseUrl, "/api/auth/login", {
-      username: "admin",
-      password: "admin123456",
-    });
-    assert.equal(login.response.status, 200);
-    const token = login.payload.token;
+  await withSupabaseEnv(async () => {
+    const fetchImpl = async (url, init = {}) => {
+      if (String(url).includes("/rest/v1/showcase_comments") && init.method === "POST") {
+        return createJsonResponse(
+          [{ id: 1, author_name: "Fan", message: "Cute!", created_at: "2026-07-24T10:00:00Z" }],
+          201
+        );
+      }
+      return createJsonResponse([]);
+    };
+    const ctx = await startTestServer({ fetchImpl, initialNow: 3_100_000_000_000 });
+    try {
+      const invalid = await postJson(ctx.baseUrl, "/api/showcase/comments", {
+        authorName: "",
+        message: "hello",
+      });
+      assert.equal(invalid.response.status, 400);
 
-    ctx.advanceNow(100);
-
-    const expiredRes = await fetch(`${ctx.baseUrl}/api/auth/session`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    assert.equal(expiredRes.status, 401);
-  } finally {
-    delete process.env.SESSION_TTL_MS;
-    ctx.server.close();
-  }
+      const valid = await postJson(ctx.baseUrl, "/api/showcase/comments", {
+        authorName: "Fan",
+        message: "Cute!",
+      });
+      assert.equal(valid.response.status, 201);
+    } finally {
+      delete process.env.COMMENT_COOLDOWN_MS;
+      ctx.server.close();
+    }
+  });
 });
 
 test("performance baseline: health endpoint p95 is under 250ms for local burst", async () => {
@@ -256,76 +252,26 @@ test("performance baseline: health endpoint p95 is under 250ms for local burst",
 });
 
 test("performance baseline: authenticated admin overview p95 is under 250ms", async () => {
-  const dbPool = {
-    query: async () => ({
-      rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
-    }),
-  };
-  const ctx = await startTestServer({ dbPool });
-  try {
-    const login = await postJson(ctx.baseUrl, "/api/auth/login", {
-      username: "admin",
-      password: "admin123456",
-    });
-    assert.equal(login.response.status, 200);
-    const token = login.payload.token;
+  await withSupabaseEnv(async () => {
+    const ctx = await startTestServer({ fetchImpl: supabaseUserFetch("user-admin-9", "Admin") });
+    try {
+      const durations = [];
+      for (let index = 0; index < 30; index += 1) {
+        const startedAt = performance.now();
+        const response = await fetch(`${ctx.baseUrl}/api/admin/overview`, {
+          headers: { Authorization: "Bearer supabase-token" },
+        });
+        assert.equal(response.status, 200);
+        durations.push(performance.now() - startedAt);
+      }
 
-    const durations = [];
-    for (let index = 0; index < 30; index += 1) {
-      const startedAt = performance.now();
-      const response = await fetch(`${ctx.baseUrl}/api/admin/overview`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      assert.equal(response.status, 200);
-      durations.push(performance.now() - startedAt);
+      const sorted = durations.slice().sort((a, b) => a - b);
+      const p95 = sorted[Math.floor(sorted.length * 0.95) - 1];
+      assert.ok(p95 < 250, `Expected p95 < 250ms, got ${p95.toFixed(2)}ms`);
+    } finally {
+      ctx.server.close();
     }
-
-    const sorted = durations.slice().sort((a, b) => a - b);
-    const p95 = sorted[Math.floor(sorted.length * 0.95) - 1];
-    assert.ok(p95 < 250, `Expected p95 < 250ms, got ${p95.toFixed(2)}ms`);
-  } finally {
-    ctx.server.close();
-  }
-});
-
-test("rate limit blocks login after repeated failures and returns 429", async () => {
-  process.env.LOGIN_ATTEMPT_MAX = "2";
-  process.env.LOGIN_ATTEMPT_WINDOW_MS = "60000";
-  process.env.LOGIN_BLOCK_MS = "60000";
-
-  const dbPool = {
-    query: async () => ({
-      rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("correct-password"), role: "Admin" }],
-    }),
-  };
-  const ctx = await startTestServer({ dbPool, initialNow: 2_000_000_000_000 });
-  try {
-    const first = await postJson(ctx.baseUrl, "/api/auth/login", {
-      username: "admin",
-      password: "wrong-1",
-    });
-    assert.equal(first.response.status, 401);
-
-    const second = await postJson(ctx.baseUrl, "/api/auth/login", {
-      username: "admin",
-      password: "wrong-2",
-    });
-    assert.equal(second.response.status, 401);
-
-    const blocked = await postJson(ctx.baseUrl, "/api/auth/login", {
-      username: "admin",
-      password: "correct-password",
-    });
-    assert.equal(blocked.response.status, 429);
-    assert.equal(blocked.payload.ok, false);
-  } finally {
-    delete process.env.LOGIN_ATTEMPT_MAX;
-    delete process.env.LOGIN_ATTEMPT_WINDOW_MS;
-    delete process.env.LOGIN_BLOCK_MS;
-    ctx.server.close();
-  }
+  });
 });
 
 test("bootstrap status allows claim when there is no admin user", async () => {
@@ -531,65 +477,6 @@ test("admin role update writes profiles role and response reflects updated role"
   } finally {
     delete process.env.SUPABASE_URL;
     delete process.env.SUPABASE_SERVICE_ROLE_KEY;
-    ctx.server.close();
-  }
-});
-
-test("viewer role is forbidden from admin-restricted endpoints", async () => {
-  const dbPool = {
-    query: async () => ({
-      rowCount: 1,
-      rows: [{ username: "viewer", password_hash: hashPassword("viewer-pass-123"), role: "Viewer" }],
-    }),
-  };
-
-  const ctx = await startTestServer({ dbPool });
-  try {
-    const login = await postJson(ctx.baseUrl, "/api/auth/login", {
-      username: "viewer",
-      password: "viewer-pass-123",
-    });
-    assert.equal(login.response.status, 200);
-    assert.equal(login.payload.role, "Viewer");
-    const token = login.payload.token;
-
-    const settingsRes = await fetch(`${ctx.baseUrl}/api/admin/settings`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    assert.equal(settingsRes.status, 403);
-
-    const usersRes = await fetch(`${ctx.baseUrl}/api/admin/users`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    assert.equal(usersRes.status, 403);
-  } finally {
-    ctx.server.close();
-  }
-});
-
-test("admin role passes role-gate for admin settings path", async () => {
-  const dbPool = {
-    query: async () => ({
-      rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
-    }),
-  };
-
-  const ctx = await startTestServer({ dbPool });
-  try {
-    const login = await postJson(ctx.baseUrl, "/api/auth/login", {
-      username: "admin",
-      password: "admin123456",
-    });
-    assert.equal(login.response.status, 200);
-    assert.equal(login.payload.role, "Admin");
-    const token = login.payload.token;
-
-    const settingsRes = await fetch(`${ctx.baseUrl}/api/admin/settings`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    assert.notEqual(settingsRes.status, 403);
-  } finally {
     ctx.server.close();
   }
 });

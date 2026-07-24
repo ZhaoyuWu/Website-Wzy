@@ -1,7 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { hashPassword } = require("../src/password");
 const {
   MAX_IMAGE_SIZE_BYTES,
   MAX_VIDEO_SIZE_BYTES,
@@ -13,12 +12,35 @@ const {
   sanitizeObjectName,
 } = require("../src/index");
 
+const ADMIN_USER_ID = "admin-user-1";
+
+function withAdminSupabaseAuth(fetchImpl) {
+  return async (url, init = {}) => {
+    const urlText = String(url);
+    const authHeader = String(init.headers?.Authorization || "");
+    if (urlText.includes("/auth/v1/user") && authHeader === "Bearer supabase-admin-token") {
+      return new Response(
+        JSON.stringify({ id: ADMIN_USER_ID, email: "admin@example.com", app_metadata: {} }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (urlText.includes(`/rest/v1/profiles?id=eq.${ADMIN_USER_ID}`)) {
+      return new Response(JSON.stringify([{ id: ADMIN_USER_ID, role: "Admin" }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (typeof fetchImpl === "function") {
+      return fetchImpl(url, init);
+    }
+    return new Response("[]", { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+}
+
 function startTestServer(options = {}) {
-  const dbPool = options.dbPool || { query: async () => ({ rowCount: 0, rows: [] }) };
   const app = createApp({
-    dbPool,
     randomBytes: () => Buffer.alloc(32, 9),
-    fetchImpl: options.fetchImpl,
+    fetchImpl: withAdminSupabaseAuth(options.fetchImpl),
   });
 
   return new Promise((resolve) => {
@@ -66,14 +88,8 @@ async function patchJson(baseUrl, path, body, headers = {}) {
   return { response, payload };
 }
 
-async function loginAndGetToken(baseUrl) {
-  const { response, payload } = await postJson(baseUrl, "/api/auth/login", {
-    username: "admin",
-    password: "admin123456",
-  });
-  assert.equal(response.status, 200);
-  assert.equal(typeof payload.token, "string");
-  return payload.token;
+async function loginAndGetToken() {
+  return "supabase-admin-token";
 }
 
 test("media helper validation behaves as expected", () => {
@@ -121,14 +137,8 @@ test("upload endpoint rejects unsupported file type with readable message", asyn
   process.env.SUPABASE_URL = "https://example.supabase.co";
   process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
 
-  const dbPool = {
-    query: async () => ({
-      rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
-    }),
-  };
 
-  const ctx = await startTestServer({ dbPool, fetchImpl: async () => new Response("[]", { status: 200 }) });
+  const ctx = await startTestServer({ fetchImpl: async () => new Response("[]", { status: 200 }) });
   try {
     const token = await loginAndGetToken(ctx.baseUrl);
 
@@ -158,14 +168,8 @@ test("upload endpoint rejects inconsistent payload size", async () => {
   process.env.SUPABASE_URL = "https://example.supabase.co";
   process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
 
-  const dbPool = {
-    query: async () => ({
-      rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
-    }),
-  };
 
-  const ctx = await startTestServer({ dbPool, fetchImpl: async () => new Response("[]", { status: 200 }) });
+  const ctx = await startTestServer({ fetchImpl: async () => new Response("[]", { status: 200 }) });
   try {
     const token = await loginAndGetToken(ctx.baseUrl);
     const raw = Buffer.from("1234567890");
@@ -196,14 +200,8 @@ test("upload endpoint rejects oversize image with readable message", async () =>
   process.env.SUPABASE_URL = "https://example.supabase.co";
   process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
 
-  const dbPool = {
-    query: async () => ({
-      rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
-    }),
-  };
 
-  const ctx = await startTestServer({ dbPool, fetchImpl: async () => new Response("[]", { status: 200 }) });
+  const ctx = await startTestServer({ fetchImpl: async () => new Response("[]", { status: 200 }) });
   try {
     const token = await loginAndGetToken(ctx.baseUrl);
     const raw = Buffer.alloc(MAX_IMAGE_SIZE_BYTES + 1, 1);
@@ -236,12 +234,6 @@ test("upload endpoint stores media in Supabase and writes metadata", async () =>
   process.env.SUPABASE_STORAGE_BUCKET = "media";
   process.env.SUPABASE_MEDIA_TABLE = "media_items";
 
-  const dbPool = {
-    query: async () => ({
-      rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
-    }),
-  };
 
   const fetchCalls = [];
   const fetchImpl = async (url, init = {}) => {
@@ -269,7 +261,7 @@ test("upload endpoint stores media in Supabase and writes metadata", async () =>
     return new Response(JSON.stringify([]), { status: 200, headers: { "Content-Type": "application/json" } });
   };
 
-  const ctx = await startTestServer({ dbPool, fetchImpl });
+  const ctx = await startTestServer({ fetchImpl });
   try {
     const token = await loginAndGetToken(ctx.baseUrl);
     const buffer = Buffer.from("fake image");
@@ -304,12 +296,6 @@ test("metadata patch endpoint updates title/description through Supabase", async
   process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
   process.env.SUPABASE_MEDIA_TABLE = "media_items";
 
-  const dbPool = {
-    query: async () => ({
-      rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
-    }),
-  };
 
   const fetchImpl = async (url, init = {}) => {
     if (String(url).includes("/rest/v1/media_items") && String(init.method) === "PATCH") {
@@ -330,7 +316,7 @@ test("metadata patch endpoint updates title/description through Supabase", async
     return new Response(JSON.stringify([]), { status: 200, headers: { "Content-Type": "application/json" } });
   };
 
-  const ctx = await startTestServer({ dbPool, fetchImpl });
+  const ctx = await startTestServer({ fetchImpl });
   try {
     const token = await loginAndGetToken(ctx.baseUrl);
 
@@ -357,14 +343,8 @@ test("metadata patch endpoint rejects control characters in title", async () => 
   process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
   process.env.SUPABASE_MEDIA_TABLE = "media_items";
 
-  const dbPool = {
-    query: async () => ({
-      rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
-    }),
-  };
 
-  const ctx = await startTestServer({ dbPool, fetchImpl: async () => new Response("[]", { status: 200 }) });
+  const ctx = await startTestServer({ fetchImpl: async () => new Response("[]", { status: 200 }) });
   try {
     const token = await loginAndGetToken(ctx.baseUrl);
 
@@ -564,14 +544,8 @@ test("admin story-posts create persists to Supabase with author_id", async () =>
     });
   };
 
-  const dbPool = {
-    query: async () => ({
-      rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
-    }),
-  };
 
-  const ctx = await startTestServer({ fetchImpl, dbPool });
+  const ctx = await startTestServer({ fetchImpl });
   try {
     const token = await loginAndGetToken(ctx.baseUrl);
     const response = await postJson(
@@ -597,14 +571,8 @@ test("upload endpoint rejects missing or malformed displayDate", async () => {
   process.env.SUPABASE_URL = "https://example.supabase.co";
   process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
 
-  const dbPool = {
-    query: async () => ({
-      rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
-    }),
-  };
 
-  const ctx = await startTestServer({ dbPool, fetchImpl: async () => new Response("[]", { status: 200 }) });
+  const ctx = await startTestServer({ fetchImpl: async () => new Response("[]", { status: 200 }) });
   try {
     const token = await loginAndGetToken(ctx.baseUrl);
     const basePayload = {
@@ -709,14 +677,8 @@ test("admin story-posts create rejects missing title or body", async () => {
   process.env.SUPABASE_URL = "https://example.supabase.co";
   process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
 
-  const dbPool = {
-    query: async () => ({
-      rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
-    }),
-  };
 
-  const ctx = await startTestServer({ fetchImpl: async () => new Response("null"), dbPool });
+  const ctx = await startTestServer({ fetchImpl: async () => new Response("null") });
   try {
     const token = await loginAndGetToken(ctx.baseUrl);
     const noBody = await postJson(
@@ -753,14 +715,8 @@ test("admin media endpoint keeps configured upper limit above showcase cap", asy
     return new Response(JSON.stringify([]), { status: 200, headers: { "Content-Type": "application/json" } });
   };
 
-  const dbPool = {
-    query: async () => ({
-      rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
-    }),
-  };
 
-  const ctx = await startTestServer({ fetchImpl, dbPool });
+  const ctx = await startTestServer({ fetchImpl });
   try {
     const token = await loginAndGetToken(ctx.baseUrl);
     const response = await fetch(`${ctx.baseUrl}/api/admin/media`, {
@@ -782,12 +738,6 @@ test("metadata patch endpoint stamps updated_at on every edit", async () => {
   process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
   process.env.SUPABASE_MEDIA_TABLE = "media_items";
 
-  const dbPool = {
-    query: async () => ({
-      rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
-    }),
-  };
 
   let capturedBody = null;
   const fetchImpl = async (url, init = {}) => {
@@ -815,7 +765,7 @@ test("metadata patch endpoint stamps updated_at on every edit", async () => {
     });
   };
 
-  const ctx = await startTestServer({ dbPool, fetchImpl });
+  const ctx = await startTestServer({ fetchImpl });
   try {
     const token = await loginAndGetToken(ctx.baseUrl);
 
@@ -846,12 +796,6 @@ test("delete endpoint removes storage object and metadata row", async () => {
   process.env.SUPABASE_STORAGE_BUCKET = "media";
   process.env.SUPABASE_MEDIA_TABLE = "media_items";
 
-  const dbPool = {
-    query: async () => ({
-      rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
-    }),
-  };
 
   const fetchCalls = [];
   const fetchImpl = async (url, init = {}) => {
@@ -892,7 +836,7 @@ test("delete endpoint removes storage object and metadata row", async () => {
     });
   };
 
-  const ctx = await startTestServer({ dbPool, fetchImpl });
+  const ctx = await startTestServer({ fetchImpl });
   try {
     const token = await loginAndGetToken(ctx.baseUrl);
     const response = await fetch(`${ctx.baseUrl}/api/admin/media/42`, {
@@ -927,12 +871,6 @@ test("delete endpoint returns 404 when media id is missing", async () => {
   process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
   process.env.SUPABASE_MEDIA_TABLE = "media_items";
 
-  const dbPool = {
-    query: async () => ({
-      rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
-    }),
-  };
 
   const fetchImpl = async () =>
     new Response(JSON.stringify([]), {
@@ -940,7 +878,7 @@ test("delete endpoint returns 404 when media id is missing", async () => {
       headers: { "Content-Type": "application/json" },
     });
 
-  const ctx = await startTestServer({ dbPool, fetchImpl });
+  const ctx = await startTestServer({ fetchImpl });
   try {
     const token = await loginAndGetToken(ctx.baseUrl);
     const response = await fetch(`${ctx.baseUrl}/api/admin/media/99999`, {
@@ -962,12 +900,6 @@ test("delete endpoint rejects public_url outside configured bucket", async () =>
   process.env.SUPABASE_STORAGE_BUCKET = "media";
   process.env.SUPABASE_MEDIA_TABLE = "media_items";
 
-  const dbPool = {
-    query: async () => ({
-      rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
-    }),
-  };
 
   const fetchCalls = [];
   const fetchImpl = async (url, init = {}) => {
@@ -994,7 +926,7 @@ test("delete endpoint rejects public_url outside configured bucket", async () =>
     });
   };
 
-  const ctx = await startTestServer({ dbPool, fetchImpl });
+  const ctx = await startTestServer({ fetchImpl });
   try {
     const token = await loginAndGetToken(ctx.baseUrl);
     const response = await fetch(`${ctx.baseUrl}/api/admin/media/43`, {
@@ -1110,12 +1042,6 @@ test("storage usage endpoint sums file_size and reports status thresholds", asyn
   process.env.STORAGE_SOFT_LIMIT_BYTES = String(10 * 1024 * 1024);
   process.env.STORAGE_HARD_LIMIT_BYTES = String(20 * 1024 * 1024);
 
-  const dbPool = {
-    query: async () => ({
-      rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
-    }),
-  };
 
   const fetchImpl = async (url) => {
     if (String(url).includes("/rest/v1/media_items?select=file_size")) {
@@ -1127,7 +1053,7 @@ test("storage usage endpoint sums file_size and reports status thresholds", asyn
     return new Response("[]", { status: 200 });
   };
 
-  const ctx = await startTestServer({ dbPool, fetchImpl });
+  const ctx = await startTestServer({ fetchImpl });
   try {
     const token = await loginAndGetToken(ctx.baseUrl);
     const response = await fetch(`${ctx.baseUrl}/api/admin/storage/usage`, {
@@ -1334,23 +1260,26 @@ test("comment delete requires Admin role, Publisher gets 403", async () => {
   process.env.SUPABASE_URL = "https://example.supabase.co";
   process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
 
-  const dbPool = {
-    query: async () => ({
-      rowCount: 1,
-      rows: [{ username: "publisher", password_hash: hashPassword("admin123456"), role: "Publisher" }],
-    }),
+  const fetchImpl = async (url) => {
+    const urlText = String(url);
+    if (urlText.includes("/auth/v1/user")) {
+      return new Response(
+        JSON.stringify({ id: "publisher-user-1", email: "publisher@example.com", app_metadata: {} }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (urlText.includes("/rest/v1/profiles?id=eq.publisher-user-1")) {
+      return new Response(JSON.stringify([{ id: "publisher-user-1", role: "Publisher" }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return new Response("[]");
   };
 
-  const ctx = await startTestServer({ dbPool, fetchImpl: async () => new Response("[]") });
+  const ctx = await startTestServer({ fetchImpl });
   try {
-    const token = await (async () => {
-      const { response, payload } = await postJson(ctx.baseUrl, "/api/auth/login", {
-        username: "publisher",
-        password: "admin123456",
-      });
-      assert.equal(response.status, 200);
-      return payload.token;
-    })();
+    const token = "supabase-publisher-token";
 
     const response = await fetch(`${ctx.baseUrl}/api/story/media/1/comments/9`, {
       method: "DELETE",
@@ -1366,12 +1295,6 @@ test("comment delete returns 404 when Supabase response is empty", async () => {
   process.env.SUPABASE_URL = "https://example.supabase.co";
   process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
 
-  const dbPool = {
-    query: async () => ({
-      rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
-    }),
-  };
 
   const fetchImpl = async (url, init = {}) => {
     if (String(url).includes("/rest/v1/story_comments") && init.method === "DELETE") {
@@ -1383,7 +1306,7 @@ test("comment delete returns 404 when Supabase response is empty", async () => {
     return new Response("[]");
   };
 
-  const ctx = await startTestServer({ dbPool, fetchImpl });
+  const ctx = await startTestServer({ fetchImpl });
   try {
     const token = await loginAndGetToken(ctx.baseUrl);
     const response = await fetch(`${ctx.baseUrl}/api/story/media/1/comments/9999`, {
@@ -1401,12 +1324,6 @@ test("story likes listing endpoint is Admin-only and returns recorded viewers", 
   process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
   process.env.LIKE_COOLDOWN_MS = "0";
 
-  const dbPool = {
-    query: async () => ({
-      rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
-    }),
-  };
 
   const fetchImpl = async (url) => {
     const urlText = String(url);
@@ -1419,7 +1336,7 @@ test("story likes listing endpoint is Admin-only and returns recorded viewers", 
     return new Response("[]", { status: 200 });
   };
 
-  const ctx = await startTestServer({ dbPool, fetchImpl });
+  const ctx = await startTestServer({ fetchImpl });
   try {
     await fetch(`${ctx.baseUrl}/api/story/media/55/like`, { method: "POST" });
 

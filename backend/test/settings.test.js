@@ -1,14 +1,35 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { hashPassword } = require("../src/password");
 const { DEFAULT_SITE_SETTINGS, createApp } = require("../src/index");
 
+const ADMIN_USER_ID = "admin-user-1";
+
+function withAdminSupabaseAuth(fetchImpl) {
+  return async (url, init = {}) => {
+    const urlText = String(url);
+    if (urlText.includes("/auth/v1/user")) {
+      return new Response(
+        JSON.stringify({ id: ADMIN_USER_ID, email: "admin@example.com", app_metadata: {} }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (urlText.includes(`/rest/v1/profiles?id=eq.${ADMIN_USER_ID}`)) {
+      return new Response(JSON.stringify([{ id: ADMIN_USER_ID, role: "Admin" }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (typeof fetchImpl === "function") {
+      return fetchImpl(url, init);
+    }
+    return new Response("[]", { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+}
+
 function startTestServer(options = {}) {
-  const dbPool = options.dbPool || { query: async () => ({ rowCount: 0, rows: [] }) };
   const app = createApp({
-    dbPool,
-    fetchImpl: options.fetchImpl,
+    fetchImpl: withAdminSupabaseAuth(options.fetchImpl),
   });
 
   return new Promise((resolve) => {
@@ -72,14 +93,8 @@ async function getJson(baseUrl, path, headers = {}) {
   return { response, payload };
 }
 
-async function loginAndGetToken(baseUrl) {
-  const { response, payload } = await postJson(baseUrl, "/api/auth/login", {
-    username: "admin",
-    password: "admin123456",
-  });
-  assert.equal(response.status, 200);
-  assert.equal(typeof payload.token, "string");
-  return payload.token;
+async function loginAndGetToken() {
+  return "supabase-admin-token";
 }
 
 test("public settings endpoint returns default values when no row exists", async () => {
@@ -133,14 +148,7 @@ test("admin settings patch validates malformed input", async () => {
   process.env.SUPABASE_URL = "https://example.supabase.co";
   process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role";
 
-  const dbPool = {
-    query: async () => ({
-      rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
-    }),
-  };
   const ctx = await startTestServer({
-    dbPool,
     fetchImpl: async () =>
       new Response(JSON.stringify([]), {
         status: 200,
@@ -168,14 +176,7 @@ test("admin settings patch rejects unsafe control chars and non-boolean visibili
   process.env.SUPABASE_URL = "https://example.supabase.co";
   process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role";
 
-  const dbPool = {
-    query: async () => ({
-      rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
-    }),
-  };
   const ctx = await startTestServer({
-    dbPool,
     fetchImpl: async () =>
       new Response(JSON.stringify([]), {
         status: 200,
@@ -247,14 +248,8 @@ test("admin settings patch persists and public settings reflect updated values",
     });
   };
 
-  const dbPool = {
-    query: async () => ({
-      rowCount: 1,
-      rows: [{ username: "admin", password_hash: hashPassword("admin123456"), role: "Admin" }],
-    }),
-  };
 
-  const ctx = await startTestServer({ dbPool, fetchImpl });
+  const ctx = await startTestServer({ fetchImpl });
   try {
     const token = await loginAndGetToken(ctx.baseUrl);
 
