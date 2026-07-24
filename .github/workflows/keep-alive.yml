@@ -1,0 +1,23 @@
+name: keep-alive
+
+# Free uptime strategy (public repo = unlimited Actions minutes):
+# - Hitting /api/settings keeps the Render free instance awake (sleeps
+#   after 15 min idle) AND counts as Supabase activity (free projects
+#   pause after 7 idle days - this outage went unnoticed for 3 months once).
+# - If the ping fails after retries the job fails and GitHub emails the
+#   repo owner, which doubles as free downtime alerting.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping backend through to Supabase
+        run: |
+          body=$(curl -sf --max-time 90 --retry 3 --retry-all-errors \
+            https://nanami-backend.onrender.com/api/settings)
+          echo "$body" | head -c 200
+          echo "$body" | grep -q '"ok":true' || { echo "backend responded without ok:true"; exit 1; }

@@ -36,7 +36,7 @@ User reported "admin 账号无法登录" on https://frontend-six-snowy-32.vercel
 
 ### Completed
 - Supabase admin password reset via admin API (service role key from local `backend/.env`):
-  - `PUT /auth/v1/admin/users/77ecd6a0-d8f9-4c30-bc92-1e12b38adb31 {"password":"Wzy=61275970"}` → `200`, `updated_at=2026-04-19T10:12:44Z`.
+  - `PUT /auth/v1/admin/users/77ecd6a0-d8f9-4c30-bc92-1e12b38adb31 {"password":"[REDACTED 2026-07-24: 密码已从文档移除，公开仓库不留明文凭据]"}` → `200`, `updated_at=2026-04-19T10:12:44Z`.
   - Verified by replay: `POST /auth/v1/token?grant_type=password` → `200` with `access_token` + `app_metadata.role=Admin`.
 - Surveyed backend dependencies:
   - Frontend admin panel (`overview`, `settings`, `media`, `users`) hits **Supabase only** (profiles, media_items, site_settings, storage). No managed Postgres needed for production.
@@ -74,7 +74,7 @@ User reported "admin 账号无法登录" on https://frontend-six-snowy-32.vercel
   - `OPTIONS /api/admin/overview` with `Origin: https://frontend-six-snowy-32.vercel.app` → 204, `access-control-allow-origin` echoed
 
 ### Validation Evidence
-- `curl -s -X POST -H "apikey: sb_publishable_..." -d '{"email":"zhaoyu.wu1993@gmail.com","password":"Wzy=61275970"}' https://pltveorkgsxfccyuwidk.supabase.co/auth/v1/token?grant_type=password` → 200 with JWT, `app_metadata.role=Admin`.
+- `curl -s -X POST -H "apikey: sb_publishable_..." -d '{"email":"zhaoyu.wu1993@gmail.com","password":"[REDACTED 2026-07-24: 密码已从文档移除，公开仓库不留明文凭据]"}' https://pltveorkgsxfccyuwidk.supabase.co/auth/v1/token?grant_type=password` → 200 with JWT, `app_metadata.role=Admin`.
 - `curl -I -X OPTIONS https://nanami-backend.onrender.com/api/admin/overview -H "Origin: https://frontend-six-snowy-32.vercel.app" -H "Access-Control-Request-Method: GET" -H "Access-Control-Request-Headers: authorization"` → `HTTP/2 204`, `access-control-allow-origin: https://frontend-six-snowy-32.vercel.app`.
 - `xxd` of pulled Vercel env shows `NANAMI_API_BASE_URL="https://nanami-backend.onrender.com"` with newline strictly outside the quotes.
 - Vercel deploy: `readyState: READY` for `dpl_6Y4Kp8cRfo8AaZwXiLHeowzJDUwB`.
@@ -85,12 +85,12 @@ User reported "admin 账号无法登录" on https://frontend-six-snowy-32.vercel
    - Keep free, add external keep-alive (cron-job.org / UptimeRobot pinging `/api/health` every 10–14 min). Gray-area per Render TOS.
    - Accept the cold start (admin-only traffic; at most a few hits/day).
 2. **Legacy `/api/auth/*` and `/api/db-check` routes** — These still try to connect to PG via `DATABASE_URL` / `DB_*` env vars, which are not set on Render. Any call to them would throw. Frontend does not call them today; consider removing or gating behind a feature flag in a later cleanup task.
-3. **Admin password stored in this file** — `Wzy=61275970` is in plaintext here. If this file is ever shared publicly, rotate the password via Supabase admin API.
+3. **Admin password stored in this file** — `[REDACTED 2026-07-24: 密码已从文档移除，公开仓库不留明文凭据]` is in plaintext here. If this file is ever shared publicly, rotate the password via Supabase admin API.
 4. **Service role key still referenced locally** — `backend/.env` on the dev machine contains the Supabase service role JWT. It is out of VCS but on disk; treat the machine as privileged.
 
 ### Next Actions (for next deployer run / maintenance)
 1. User-facing browser verification after cold start warm-up:
-   - Hard reload `/login`, log in as `zhaoyu.wu1993@gmail.com` / `Wzy=61275970`.
+   - Hard reload `/login`, log in as `zhaoyu.wu1993@gmail.com` / `[REDACTED 2026-07-24: 密码已从文档移除，公开仓库不留明文凭据]`.
    - Navigate admin → settings, media, users — all `/api/*` should hit `nanami-backend.onrender.com` with 200/204.
 2. Decide on cold-start mitigation (upgrade, keep-alive, or accept). If upgrading: flip `plan: free` → `plan: starter` in `.release-worktree/render.yaml`, commit, push; Render auto-migrates.
 3. Optional cleanup: delete or guard legacy PG-backed endpoints in `backend/src/index.js` (`/api/auth/register|login|logout`, `/api/db-check`) since they cannot run on Render.
