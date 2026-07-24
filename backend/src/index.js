@@ -3,7 +3,6 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const crypto = require("crypto");
-const { hashPassword, verifyPassword } = require("./password");
 
 const PORT = Number(process.env.PORT || 4000);
 
@@ -73,10 +72,6 @@ function sanitizeDerivedUsername(raw) {
 
 function isValidEmail(email) {
   return typeof email === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
-function isValidPassword(password) {
-  return typeof password === "string" && password.length >= 8 && password.length <= 128;
 }
 
 function normalizeMediaTitle(title) {
@@ -279,14 +274,13 @@ function normalizeRole(rawRole) {
 }
 
 function createApp(options = {}) {
-  const dbPool = options.dbPool;
   const sessionTtlMs = Number(process.env.SESSION_TTL_MS || 1000 * 60 * 60 * 8);
-  const loginAttemptWindowMs = Number(process.env.LOGIN_ATTEMPT_WINDOW_MS || 10 * 60 * 1000);
-  const loginAttemptMax = Number(process.env.LOGIN_ATTEMPT_MAX || 5);
-  const loginBlockMs = Number(process.env.LOGIN_BLOCK_MS || 15 * 60 * 1000);
   const likeCooldownMs = Number(process.env.LIKE_COOLDOWN_MS || 1500);
   const likeWindowMs = Number(process.env.LIKE_WINDOW_MS || 60 * 1000);
   const likeMaxPerWindow = Number(process.env.LIKE_MAX_PER_WINDOW || 30);
+  const commentCooldownMs = Number(process.env.COMMENT_COOLDOWN_MS || 10 * 1000);
+  const commentWindowMs = Number(process.env.COMMENT_WINDOW_MS || 10 * 60 * 1000);
+  const commentMaxPerWindow = Number(process.env.COMMENT_MAX_PER_WINDOW || 8);
   const storageSoftLimitBytes = Number(
     process.env.STORAGE_SOFT_LIMIT_BYTES || 800 * 1024 * 1024
   );
@@ -296,9 +290,8 @@ function createApp(options = {}) {
   const now = typeof options.now === "function" ? options.now : Date.now;
   const randomBytes = options.randomBytes || crypto.randomBytes;
   const fetchImpl = options.fetchImpl || globalThis.fetch;
-  const sessions = new Map();
-  const loginAttempts = new Map();
   const likeAttempts = new Map();
+  const commentAttempts = new Map();
   const likeRecordsByEntry = new Map();
   const app = express();
 
@@ -334,31 +327,8 @@ function createApp(options = {}) {
     ),
   };
 
-  function createSession(username, role) {
-    const token = randomBytes(32).toString("hex");
-    const expiresAt = now() + sessionTtlMs;
-    sessions.set(token, { username, role: role || "Viewer", expiresAt });
-    return { token, expiresAt };
-  }
-
-  function clearExpiredSessions() {
-    const current = now();
-    for (const [token, session] of sessions.entries()) {
-      if (session.expiresAt <= current) {
-        sessions.delete(token);
-      }
-    }
-  }
-
   async function requireAuth(req, res, next) {
-    clearExpiredSessions();
     const token = parseBearerToken(req.headers.authorization);
-    const session = token ? sessions.get(token) : null;
-
-    if (session) {
-      req.auth = { token, username: session.username, role: session.role || "Viewer", expiresAt: session.expiresAt };
-      return next();
-    }
 
     if (token && mediaConfig.supabaseUrl && mediaConfig.serviceRoleKey) {
       try {
@@ -419,60 +389,60 @@ function createApp(options = {}) {
     };
   }
 
-  function getThrottleKey(req, username) {
-    const ip = req.ip || req.socket?.remoteAddress || "unknown";
-    return `${ip}:${String(username).toLowerCase()}`;
+  function getClientIp(req) {
+    return req.ip || req.socket?.remoteAddress || "unknown";
   }
 
-  function clearExpiredLoginAttempts() {
+  function pruneStaleIpStates(map, isStale, maxSize = 1000) {
+    if (map.size <= maxSize) {
+      return;
+    }
     const current = now();
-    for (const [key, state] of loginAttempts.entries()) {
-      const expiredWindow = current - state.windowStart > loginAttemptWindowMs;
-      const expiredBlock = !state.blockedUntil || state.blockedUntil <= current;
-      if (expiredWindow && expiredBlock) {
-        loginAttempts.delete(key);
+    for (const [key, state] of map.entries()) {
+      if (isStale(state, current)) {
+        map.delete(key);
       }
     }
   }
 
-  function isLoginBlocked(key) {
-    clearExpiredLoginAttempts();
-    const state = loginAttempts.get(key);
-    if (!state || !state.blockedUntil) {
-      return false;
-    }
-    return state.blockedUntil > now();
-  }
-
-  function registerLoginFailure(key) {
+  function checkCommentThrottle(req) {
+    const ip = getClientIp(req);
     const current = now();
-    const existing = loginAttempts.get(key);
-    const shouldResetWindow = !existing || current - existing.windowStart > loginAttemptWindowMs;
-    const state = shouldResetWindow
-      ? { count: 0, windowStart: current, blockedUntil: 0 }
-      : existing;
+    pruneStaleIpStates(
+      commentAttempts,
+      (state, at) => at - state.windowStart > commentWindowMs && at - state.lastAt > commentCooldownMs
+    );
+    const state = commentAttempts.get(ip) || { windowStart: current, count: 0, lastAt: 0 };
+
+    if (current - state.windowStart > commentWindowMs) {
+      state.windowStart = current;
+      state.count = 0;
+    }
+
+    if (current - state.lastAt < commentCooldownMs) {
+      return { allowed: false, retryAfterMs: commentCooldownMs - (current - state.lastAt) };
+    }
+
+    if (state.count >= commentMaxPerWindow) {
+      return { allowed: false, retryAfterMs: commentWindowMs - (current - state.windowStart) };
+    }
 
     state.count += 1;
-    if (state.count >= loginAttemptMax) {
-      state.blockedUntil = current + loginBlockMs;
-      state.count = 0;
-      state.windowStart = current;
-    }
-
-    loginAttempts.set(key, state);
+    state.lastAt = current;
+    commentAttempts.set(ip, state);
+    return { allowed: true };
   }
 
-  function clearLoginFailures(key) {
-    loginAttempts.delete(key);
-  }
-
-  function getClientIp(req) {
-    return req.ip || req.socket?.remoteAddress || "unknown";
+  function rejectThrottled(res, retryAfterMs, message) {
+    const retryAfter = Math.max(1, Math.ceil(retryAfterMs / 1000));
+    res.set("Retry-After", String(retryAfter));
+    return res.status(429).json({ ok: false, message });
   }
 
   function checkLikeThrottle(req, entryType, entryId) {
     const ip = getClientIp(req);
     const current = now();
+    pruneStaleIpStates(likeAttempts, (state, at) => at - state.windowStart > likeWindowMs * 2);
     const state = likeAttempts.get(ip) || {
       windowStart: current,
       count: 0,
@@ -727,6 +697,11 @@ function createApp(options = {}) {
       });
     }
 
+    const throttle = checkCommentThrottle(req);
+    if (!throttle.allowed) {
+      return rejectThrottled(res, throttle.retryAfterMs, "Too many comments. Try again later.");
+    }
+
     return callSupabase(`/rest/v1/${encodeURIComponent(commentsConfig.showcaseCommentsTable)}`, {
       method: "POST",
       headers: {
@@ -824,6 +799,11 @@ function createApp(options = {}) {
         ok: false,
         message: "Message is required and must be 1-500 readable characters.",
       });
+    }
+
+    const throttle = checkCommentThrottle(req);
+    if (!throttle.allowed) {
+      return rejectThrottled(res, throttle.retryAfterMs, "Too many comments. Try again later.");
     }
 
     try {
@@ -1341,133 +1321,6 @@ function createApp(options = {}) {
       ? Array.from(likesMap.values()).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
       : [];
     return res.json({ ok: true, type: entryType, id: entryId, total: items.length, items });
-  });
-
-  app.post("/api/auth/register", async (req, res) => {
-    const username = typeof req.body?.username === "string" ? req.body.username.trim() : "";
-    const email =
-      typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
-    const password = typeof req.body?.password === "string" ? req.body.password : "";
-
-    if (!isValidUsername(username)) {
-      return res.status(400).json({
-        ok: false,
-        message:
-          "Username must be 3-32 chars and contain only letters, numbers, dot, underscore, or dash.",
-      });
-    }
-
-    if (!isValidEmail(email)) {
-      return res.status(400).json({ ok: false, message: "Please provide a valid email address." });
-    }
-
-    if (!isValidPassword(password)) {
-      return res
-        .status(400)
-        .json({ ok: false, message: "Password must be between 8 and 128 characters." });
-    }
-
-    try {
-      const existing = await dbPool.query(
-        "SELECT 1 FROM users WHERE username = $1 OR email = $2 LIMIT 1",
-        [username, email]
-      );
-
-      if (existing.rowCount > 0) {
-        return res.status(409).json({ ok: false, message: "Username or email already exists." });
-      }
-
-      const passwordHash = hashPassword(password);
-      const insertResult = await dbPool.query(
-        `
-          INSERT INTO users (username, email, password_hash, role)
-          VALUES ($1, $2, $3, 'Viewer')
-          RETURNING username, role
-        `,
-        [username, email, passwordHash]
-      );
-
-      const createdUsername = insertResult.rows[0]?.username || username;
-      const createdRole = insertResult.rows[0]?.role || "Viewer";
-      const session = createSession(createdUsername, createdRole);
-      return res.status(201).json({
-        ok: true,
-        token: session.token,
-        expiresAt: new Date(session.expiresAt).toISOString(),
-        username: createdUsername,
-        role: createdRole,
-      });
-    } catch (error) {
-      if (error && typeof error === "object" && error.code === "23505") {
-        return res.status(409).json({ ok: false, message: "Username or email already exists." });
-      }
-      console.error("Registration failed:", error.message);
-      return res.status(500).json({ ok: false, message: "Registration service unavailable" });
-    }
-  });
-
-  app.post("/api/auth/login", async (req, res) => {
-    const username = typeof req.body?.username === "string" ? req.body.username.trim() : "";
-    const password = typeof req.body?.password === "string" ? req.body.password : "";
-
-    if (!username || !password) {
-      return res.status(400).json({ ok: false, message: "Username and password are required" });
-    }
-
-    const throttleKey = getThrottleKey(req, username);
-    if (isLoginBlocked(throttleKey)) {
-      return res.status(429).json({
-        ok: false,
-        message: "Too many login attempts. Please try again later.",
-      });
-    }
-
-    try {
-      const result = await dbPool.query(
-        "SELECT username, password_hash, role FROM users WHERE username = $1 LIMIT 1",
-        [username]
-      );
-
-      if (result.rowCount === 0) {
-        registerLoginFailure(throttleKey);
-        return res.status(401).json({ ok: false, message: "Invalid username or password" });
-      }
-
-      const user = result.rows[0];
-      const isPasswordValid = verifyPassword(password, user.password_hash);
-      if (!isPasswordValid) {
-        registerLoginFailure(throttleKey);
-        return res.status(401).json({ ok: false, message: "Invalid username or password" });
-      }
-
-      const userRole = user.role || "Viewer";
-      const session = createSession(user.username, userRole);
-      clearLoginFailures(throttleKey);
-      return res.json({
-        ok: true,
-        token: session.token,
-        expiresAt: new Date(session.expiresAt).toISOString(),
-        username: user.username,
-        role: userRole,
-      });
-    } catch (error) {
-      console.error("Login failed:", error.message);
-      return res.status(500).json({ ok: false, message: "Authentication service unavailable" });
-    }
-  });
-
-  app.get("/api/auth/session", requireAuth, (req, res) => {
-    res.json({
-      ok: true,
-      username: req.auth.username,
-      role: req.auth.role,
-      expiresAt: new Date(req.auth.expiresAt).toISOString(),
-    });
-  });
-
-  app.post("/api/auth/logout", requireAuth, (req, res) => {
-    sessions.delete(req.auth.token);
-    res.json({ ok: true });
   });
 
   app.post("/api/auth/sync-profile", async (req, res) => {
@@ -2387,15 +2240,6 @@ function createApp(options = {}) {
     }
   });
 
-  app.get("/api/db-check", async (_req, res) => {
-    try {
-      const result = await dbPool.query("SELECT NOW() AS server_time");
-      res.json({ ok: true, dbTime: result.rows[0].server_time });
-    } catch (error) {
-      res.status(500).json({ ok: false, message: "Database connection failed", error: error.message });
-    }
-  });
-
   return app;
 }
 
@@ -2420,7 +2264,6 @@ module.exports = {
   isValidEmail,
   isValidMediaDescription,
   isValidMediaTitle,
-  isValidPassword,
   isValidUsername,
   normalizeSettingText,
   parseBase64Payload,

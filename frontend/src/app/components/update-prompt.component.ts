@@ -59,6 +59,7 @@ export class UpdatePromptComponent implements OnInit, OnDestroy {
 
   updateAvailable = false;
   private sub: Subscription | null = null;
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
 
   ngOnInit(): void {
     if (!this.swUpdate.isEnabled) return;
@@ -71,7 +72,7 @@ export class UpdatePromptComponent implements OnInit, OnDestroy {
       });
 
     // Background poll every 30 min so long-lived PWA tabs find updates.
-    setInterval(() => {
+    this.pollTimer = setInterval(() => {
       this.swUpdate.checkForUpdate().catch(() => {});
     }, 30 * 60 * 1000);
   }
@@ -85,5 +86,8 @@ export class UpdatePromptComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.sub?.unsubscribe();
+    if (this.pollTimer !== null) {
+      clearInterval(this.pollTimer);
+    }
   }
 }

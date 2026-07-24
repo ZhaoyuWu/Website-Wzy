@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
-    "db:init": "node scripts/init-db.js",
     "test": "node --test"
   },
   "keywords": [],
@@ -18,7 +17,6 @@
   "dependencies": {
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
-    "express": "^5.2.1",
-    "pg": "^8.20.0"
+    "express": "^5.2.1"
   }
 }

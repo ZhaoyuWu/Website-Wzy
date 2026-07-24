@@ -3,7 +3,7 @@
 Full-stack starter:
 - Frontend: Angular (`frontend`)
 - Backend: Node.js + Express (`backend`)
-- Database: PostgreSQL (`docker-compose.yml`)
+- Database/Auth/Storage: Supabase (cloud) — no local database is used
 
 ## Harness Commands (No Skill Index Required)
 
@@ -33,37 +33,19 @@ Use two environments:
 
 ### 1) Backend env
 1. Copy `backend/.env.example` to `backend/.env`.
-2. Fill local DB and optional Supabase values.
+2. Fill `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` (the backend talks to Supabase for auth, media, and settings — even in local development).
 
-### 2) Start PostgreSQL
-Use Docker:
-
-```bash
-docker compose up -d
-```
-
-Or native PostgreSQL:
-1. Install PostgreSQL and keep it running on `5432`.
-2. Update `backend/.env` DB fields.
-3. Initialize schema:
-
-```bash
-cd backend
-npm run db:init
-```
-
-### 3) Start backend
+### 2) Start backend
 
 ```bash
 cd backend
 npm run dev
 ```
 
-Backend checks:
+Backend check:
 1. `GET http://localhost:4000/api/health`
-2. `GET http://localhost:4000/api/db-check`
 
-### 4) Start frontend
+### 3) Start frontend
 
 ```bash
 cd frontend
@@ -95,8 +77,11 @@ Frontend URL:
 Frontend API base priority:
 1. `window.__NANAMI_APP_CONFIG__.apiBaseUrl`
 2. `window.API_BASE_URL` / `window.NANAMI_API_BASE_URL`
-3. `localStorage.API_BASE_URL`
-4. fallback `http://localhost:4000`
+3. fallback `http://localhost:4000`
+
+`localStorage` overrides are intentionally not supported: a persistent writable
+override could permanently redirect API calls (with auth headers) to a hostile
+host after a single XSS or shared-device tamper.
 
 ## Deploy Smoke Checklist
 1. Open `/`, `/login`, `/register`, `/admin`, `/manage-media` directly with hard refresh. The homepage renders the story timeline inline (anchor `#story`); `/showcase` is kept as a legacy redirect to `/`.
