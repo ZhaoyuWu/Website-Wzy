@@ -1,0 +1,158 @@
+<main class="admin-layout">
+  <section class="admin-card">
+    <div class="header">
+      <div>
+        <p class="eyebrow">{{ i18n.t('admin.eyebrow') }}</p>
+        <h1>{{ i18n.t('admin.heading') }}</h1>
+        <p class="desc">
+          {{ i18n.t('admin.loggedIn', { name: auth.username ?? 'unknown' }) }}
+          <span class="role-badge role-{{ auth.userRole.toLowerCase() }}">{{ auth.userRole }}</span>
+        </p>
+      </div>
+      <div class="header-actions">
+        <a class="back-home" [routerLink]="['/']">{{ i18n.t('nav.home') }}</a>
+        <app-language-picker></app-language-picker>
+        <button type="button" class="logout" (click)="logout()" [disabled]="isLoggingOut()">
+          {{ isLoggingOut() ? i18n.t('common.logout.pending') : i18n.t('common.logout') }}
+        </button>
+      </div>
+    </div>
+
+    <div class="status-row">
+      <span>{{ i18n.t('admin.authCheck') }}</span>
+      <strong>{{ authCheckStatus() }}</strong>
+    </div>
+    <p class="message" *ngIf="serverMessage()">{{ serverMessage() }}</p>
+  </section>
+
+  <section class="admin-card" *ngIf="auth.isAdmin">
+    <div class="list-header">
+      <h2>{{ i18n.t('admin.section.users') }}</h2>
+      <button type="button" class="secondary" (click)="loadUsers()" [disabled]="isLoadingUsers()">
+        {{ isLoadingUsers() ? i18n.t('admin.users.loading') : i18n.t('admin.users.refresh') }}
+      </button>
+    </div>
+    <p class="hint">{{ i18n.t('admin.users.hint') }}</p>
+    <p class="error" *ngIf="usersError()">{{ usersError() }}</p>
+    <p class="hint" *ngIf="!isLoadingUsers() && users().length === 0 && !usersError()">{{ i18n.t('admin.users.empty') }}</p>
+
+    <article class="user-row" *ngFor="let user of users(); trackBy: trackByUserId">
+      <strong>{{ user.email }}</strong>
+      <div class="role-wrap">
+        <select
+          [ngModel]="user.role"
+          [ngModelOptions]="{ standalone: true }"
+          (ngModelChange)="updateUserRole(user, $event)"
+          [disabled]="savingRoleId() === user.id"
+        >
+          <option *ngFor="let role of assignableRoles" [value]="role">{{ role }}</option>
+        </select>
+        <span class="message" *ngIf="savingRoleId() === user.id">{{ i18n.t('admin.users.savingRole') }}</span>
+        <span class="success" *ngIf="savedRoleId() === user.id">{{ i18n.t('admin.users.savedRole') }}</span>
+      </div>
+    </article>
+    <p class="error" *ngIf="roleUpdateError()">{{ roleUpdateError() }}</p>
+  </section>
+
+  <section class="admin-card" *ngIf="!auth.isAdmin && canClaimAdmin()">
+    <h2>{{ i18n.t('admin.section.bootstrap') }}</h2>
+    <p class="hint">{{ i18n.t('admin.bootstrap.hint') }}</p>
+    <p class="error" *ngIf="claimAdminError()">{{ claimAdminError() }}</p>
+    <p class="success" *ngIf="claimAdminSuccess()">{{ claimAdminSuccess() }}</p>
+    <button type="button" (click)="claimAdminRole()" [disabled]="isClaimingAdmin()">
+      {{ isClaimingAdmin() ? i18n.t('admin.bootstrap.claiming') : i18n.t('admin.bootstrap.claim') }}
+    </button>
+  </section>
+
+  <section class="admin-card" *ngIf="auth.isAdmin">
+    <h2>{{ i18n.t('admin.section.settings') }}</h2>
+    <p class="hint">{{ i18n.t('admin.settings.hint') }}</p>
+
+    <form class="form-grid" (ngSubmit)="saveSettings()" *ngIf="settingsForm() as settingsForm">
+      <label>
+        <span>{{ i18n.t('admin.field.profileName') }}</span>
+        <input
+          type="text"
+          [(ngModel)]="settingsForm.profileName"
+          name="profileName"
+          maxlength="80"
+          required
+          [disabled]="isSavingSettings() || isLoadingSettings()"
+        />
+      </label>
+
+      <label>
+        <span>{{ i18n.t('admin.field.heroTagline') }}</span>
+        <input
+          type="text"
+          [(ngModel)]="settingsForm.heroTagline"
+          name="heroTagline"
+          maxlength="180"
+          required
+          [disabled]="isSavingSettings() || isLoadingSettings()"
+        />
+      </label>
+
+      <label>
+        <span>{{ i18n.t('admin.field.aboutText') }}</span>
+        <textarea
+          [(ngModel)]="settingsForm.aboutText"
+          name="aboutText"
+          maxlength="1200"
+          rows="4"
+          required
+          [disabled]="isSavingSettings() || isLoadingSettings()"
+        ></textarea>
+      </label>
+
+      <label>
+        <span>{{ i18n.t('admin.field.contactEmail') }}</span>
+        <input
+          type="email"
+          [(ngModel)]="settingsForm.contactEmail"
+          name="contactEmail"
+          maxlength="120"
+          [disabled]="isSavingSettings() || isLoadingSettings()"
+        />
+      </label>
+
+      <label class="checkbox-label">
+        <input
+          type="checkbox"
+          [(ngModel)]="settingsForm.showContactEmail"
+          name="showContactEmail"
+          [disabled]="isSavingSettings() || isLoadingSettings()"
+        />
+        <span>{{ i18n.t('admin.field.showContact') }}</span>
+      </label>
+
+      <p class="message" *ngIf="settingsForm.updatedAt">
+        {{ i18n.t('admin.settings.lastUpdated', { time: formatDateTime(settingsForm.updatedAt) }) }}
+      </p>
+      <p class="error" *ngIf="settingsError()">{{ settingsError() }}</p>
+      <p class="success" *ngIf="settingsSuccess()">{{ settingsSuccess() }}</p>
+
+      <div class="row-actions">
+        <button type="submit" [disabled]="isSavingSettings() || isLoadingSettings()">
+          {{ isSavingSettings() ? i18n.t('admin.savingSettings') : i18n.t('admin.saveSettings') }}
+        </button>
+        <button
+          type="button"
+          class="secondary"
+          (click)="loadSettings()"
+          [disabled]="isSavingSettings() || isLoadingSettings()"
+        >
+          {{ isLoadingSettings() ? i18n.t('admin.loadingSettings') : i18n.t('admin.reloadSettings') }}
+        </button>
+      </div>
+    </form>
+  </section>
+
+  <section class="admin-card" *ngIf="auth.isPublisherOrAdmin">
+    <h2>{{ i18n.t('admin.section.media') }}</h2>
+    <p class="hint">
+      {{ i18n.t('admin.media.hint') }}
+      <a class="inline-link" [routerLink]="['/manage-media']">{{ i18n.t('admin.media.link') }}</a>
+    </p>
+  </section>
+</main>
