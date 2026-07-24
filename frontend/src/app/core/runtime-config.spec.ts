@@ -63,13 +63,13 @@ describe('runtime-config', () => {
     expect(resolveApiBaseUrl()).toBe('https://api.nanami.test');
   });
 
-  it('falls back to API_BASE_URL and then localStorage', () => {
+  it('falls back to window API_BASE_URL but never to localStorage', () => {
     (window as unknown as Record<string, unknown>)['API_BASE_URL'] = 'https://env-api.test/';
     expect(resolveApiBaseUrl()).toBe('https://env-api.test');
 
     delete (window as unknown as Record<string, unknown>)['API_BASE_URL'];
     localStorage.setItem('API_BASE_URL', 'https://storage-api.test/');
-    expect(resolveApiBaseUrl()).toBe('https://storage-api.test');
+    expect(resolveApiBaseUrl()).toBe(defaultBase);
   });
 
   it('returns localhost default when no runtime override exists', () => {
@@ -85,7 +85,7 @@ describe('runtime-config', () => {
     expect(resolveSupabaseAnonKey()).toBe('runtime-anon-key');
   });
 
-  it('falls back to window and localStorage values for supabase config', () => {
+  it('falls back to window values but never to localStorage for supabase config', () => {
     (window as unknown as Record<string, unknown>)['SUPABASE_URL'] = 'https://fallback.supabase.co/';
     (window as unknown as Record<string, unknown>)['SUPABASE_ANON_KEY'] = 'fallback-anon-key';
     expect(resolveSupabaseUrl()).toBe('https://fallback.supabase.co');
@@ -95,8 +95,8 @@ describe('runtime-config', () => {
     delete (window as unknown as Record<string, unknown>)['SUPABASE_ANON_KEY'];
     localStorage.setItem('SUPABASE_URL', 'https://storage.supabase.co/');
     localStorage.setItem('SUPABASE_ANON_KEY', 'storage-anon-key');
-    expect(resolveSupabaseUrl()).toBe('https://storage.supabase.co');
-    expect(resolveSupabaseAnonKey()).toBe('storage-anon-key');
+    expect(resolveSupabaseUrl()).toBe('');
+    expect(resolveSupabaseAnonKey()).toBe('');
   });
 
   it('returns empty supabase config when no runtime value exists', () => {

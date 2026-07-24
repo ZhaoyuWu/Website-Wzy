@@ -32,15 +32,9 @@ export function resolveApiBaseUrl(): string {
     return configuredApiBase.replace(/\/+$/, '');
   }
 
-  try {
-    const localStorageBase = String(localStorage.getItem('API_BASE_URL') || '').trim();
-    if (localStorageBase) {
-      return localStorageBase.replace(/\/+$/, '');
-    }
-  } catch {
-    // Ignore browser storage read errors and fallback to local default.
-  }
-
+  // Intentionally no localStorage fallback: a writable persistent override
+  // would let a one-time XSS or shared-device tamper redirect every API call
+  // (including auth headers) to an attacker-controlled host.
   return DEFAULT_API_BASE_URL;
 }
 
@@ -58,17 +52,7 @@ function readSupabaseConfig(key: 'supabaseUrl' | 'supabaseAnonKey', ...windowKey
     }
   }
 
-  try {
-    for (const windowKey of windowKeys) {
-      const value = String(localStorage.getItem(windowKey) || '').trim();
-      if (value) {
-        return value;
-      }
-    }
-  } catch {
-    // Ignore storage read errors and use empty fallback.
-  }
-
+  // Intentionally no localStorage fallback (see resolveApiBaseUrl).
   return '';
 }
 

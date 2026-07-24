@@ -2,6 +2,7 @@ import { HomePageComponent } from './home-page.component';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { AuthService } from '../core/auth.service';
+import { I18nService } from '../core/i18n.service';
 
 describe('HomePageComponent logic (T-005)', () => {
   let originalFetch: typeof fetch;
@@ -386,7 +387,7 @@ describe('HomePageComponent logic (T-005)', () => {
       };
       c.mediaCommentDraft = '   ';
       await c.submitMediaComment();
-      expect(c.mediaCommentError).toBe('请输入留言内容');
+      expect(c.mediaCommentError).toBe(TestBed.inject(I18nService).t('story.comment.error.empty'));
     });
 
     it('requires a name when not authenticated', async () => {
@@ -400,7 +401,9 @@ describe('HomePageComponent logic (T-005)', () => {
       c.mediaCommentDraft = 'hello';
       c.mediaCommentAuthor = '';
       await c.submitMediaComment();
-      expect(c.mediaCommentError).toBe('请填写名字');
+      expect(c.mediaCommentError).toBe(
+        TestBed.inject(I18nService).t('story.comment.error.authorRequired')
+      );
     });
 
     it('optimistically inserts the new comment on success', async () => {
@@ -431,7 +434,9 @@ describe('HomePageComponent logic (T-005)', () => {
       c.mediaCommentDraft = 'looks great!';
       c.mediaCommentAuthor = 'Tester';
       await c.submitMediaComment();
-      expect(c.mediaCommentSuccess).toBe('已留言');
+      expect(c.mediaCommentSuccess).toBe(
+        TestBed.inject(I18nService).t('story.comment.success.posted')
+      );
       expect(c.mediaCommentDraft).toBe('');
       // Server returned [] but optimistic insert made list briefly contain the entry.
       // After silent refetch overwriting with [], length is 0 — guard for both.
