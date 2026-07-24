@@ -860,8 +860,7 @@ export class MediaPageComponent implements OnInit {
 
   async ngOnInit(): Promise<void> {
     try {
-      const response = await fetch(this.auth.apiUrl('/api/admin/overview'), {
-        headers: this.auth.authHeaders()
+      const response = await this.auth.apiFetch('/api/admin/overview', {
       });
       if (!response.ok) {
         throw new Error('Unauthorized session');
@@ -877,8 +876,7 @@ export class MediaPageComponent implements OnInit {
 
   async loadStorageUsage(): Promise<void> {
     try {
-      const response = await fetch(this.auth.apiUrl('/api/admin/storage/usage'), {
-        headers: this.auth.authHeaders()
+      const response = await this.auth.apiFetch('/api/admin/storage/usage', {
       });
       if (!response.ok) {
         this.storage = null;
@@ -966,8 +964,7 @@ export class MediaPageComponent implements OnInit {
     this.listError = '';
 
     try {
-      const response = await fetch(this.auth.apiUrl('/api/admin/media'), {
-        headers: this.auth.authHeaders()
+      const response = await this.auth.apiFetch('/api/admin/media', {
       });
 
       const payload = (await response.json()) as {
@@ -1058,21 +1055,54 @@ export class MediaPageComponent implements OnInit {
 
     this.isUploading = true;
     try {
-      const fileBase64 = await this.fileToBase64(file);
-      const response = await fetch(this.auth.apiUrl('/api/admin/media'), {
+      // Step 1: ask the backend for a short-lived signed upload URL.
+      const urlResponse = await this.auth.apiFetch('/api/admin/media/upload-url', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...this.auth.authHeaders()
+        },
+        body: JSON.stringify({
+          fileName: file.name,
+          fileType: file.type,
+          fileSize: file.size
+        })
+      });
+      const urlPayload = (await urlResponse.json()) as {
+        ok?: boolean;
+        message?: string;
+        uploadUrl?: string;
+        objectPath?: string;
+      };
+      if (!urlResponse.ok || !urlPayload.ok || !urlPayload.uploadUrl || !urlPayload.objectPath) {
+        throw new Error(urlPayload.message || 'Upload failed.');
+      }
+
+      // Step 2: send the raw file straight to Supabase Storage.
+      const putResponse = await fetch(urlPayload.uploadUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': file.type,
+          'x-upsert': 'false'
+        },
+        body: file
+      });
+      if (!putResponse.ok) {
+        throw new Error('File transfer to storage failed. Please try again.');
+      }
+
+      // Step 3: let the backend verify the object and save the metadata.
+      const response = await this.auth.apiFetch('/api/admin/media/finalize', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           title,
           description,
           displayDate,
-          fileName: file.name,
+          objectPath: urlPayload.objectPath,
           fileType: file.type,
-          fileSize: file.size,
-          fileBase64
+          fileSize: file.size
         })
       });
 
@@ -1151,13 +1181,12 @@ export class MediaPageComponent implements OnInit {
     this.editError = '';
     this.isSavingEdit = true;
     try {
-      const response = await fetch(
-        this.auth.apiUrl(`/api/admin/media/${encodeURIComponent(String(item.id))}`),
+      const response = await this.auth.apiFetch(
+        `/api/admin/media/${encodeURIComponent(String(item.id))}`,
         {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
-            ...this.auth.authHeaders()
           },
           body: JSON.stringify({ title, description, displayDate })
         }
@@ -1199,11 +1228,10 @@ export class MediaPageComponent implements OnInit {
 
     this.deletingId = item.id;
     try {
-      const response = await fetch(
-        this.auth.apiUrl(`/api/admin/media/${encodeURIComponent(String(item.id))}`),
+      const response = await this.auth.apiFetch(
+        `/api/admin/media/${encodeURIComponent(String(item.id))}`,
         {
           method: 'DELETE',
-          headers: this.auth.authHeaders()
         }
       );
 
@@ -1239,8 +1267,7 @@ export class MediaPageComponent implements OnInit {
     this.isRefreshingStories = true;
     this.storyListError = '';
     try {
-      const response = await fetch(this.auth.apiUrl('/api/admin/story-posts'), {
-        headers: this.auth.authHeaders()
+      const response = await this.auth.apiFetch('/api/admin/story-posts', {
       });
       const payload = (await response.json()) as {
         ok?: boolean;
@@ -1282,11 +1309,10 @@ export class MediaPageComponent implements OnInit {
 
     this.isSavingStory = true;
     try {
-      const response = await fetch(this.auth.apiUrl('/api/admin/story-posts'), {
+      const response = await this.auth.apiFetch('/api/admin/story-posts', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...this.auth.authHeaders()
         },
         body: JSON.stringify({ title, body, displayDate })
       });
@@ -1350,13 +1376,12 @@ export class MediaPageComponent implements OnInit {
     this.isSavingStoryEdit = true;
     this.storyEditError = '';
     try {
-      const response = await fetch(
-        this.auth.apiUrl(`/api/admin/story-posts/${encodeURIComponent(String(post.id))}`),
+      const response = await this.auth.apiFetch(
+        `/api/admin/story-posts/${encodeURIComponent(String(post.id))}`,
         {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
-            ...this.auth.authHeaders()
           },
           body: JSON.stringify({ title, body, displayDate })
         }
@@ -1393,11 +1418,10 @@ export class MediaPageComponent implements OnInit {
 
     this.deletingStoryId = post.id;
     try {
-      const response = await fetch(
-        this.auth.apiUrl(`/api/admin/story-posts/${encodeURIComponent(String(post.id))}`),
+      const response = await this.auth.apiFetch(
+        `/api/admin/story-posts/${encodeURIComponent(String(post.id))}`,
         {
           method: 'DELETE',
-          headers: this.auth.authHeaders()
         }
       );
       const payload = (await response.json().catch(() => ({}))) as {
@@ -1475,20 +1499,4 @@ export class MediaPageComponent implements OnInit {
     return null;
   }
 
-  private async fileToBase64(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onerror = () => reject(new Error('Unable to read selected file.'));
-      reader.onload = () => {
-        if (typeof reader.result !== 'string') {
-          reject(new Error('Unable to encode selected file.'));
-          return;
-        }
-
-        const commaIndex = reader.result.indexOf(',');
-        resolve(commaIndex >= 0 ? reader.result.slice(commaIndex + 1) : reader.result);
-      };
-      reader.readAsDataURL(file);
-    });
-  }
 }

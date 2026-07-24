@@ -1479,3 +1479,146 @@ test("timeline respects 10-per-page ceiling", async () => {
     ctx.server.close();
   }
 });
+
+test("signed upload flow issues URL then finalize verifies object and saves metadata", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+
+  let insertedRow = null;
+  const fetchImpl = async (url, init = {}) => {
+    const urlText = String(url);
+    const method = String(init.method || "GET").toUpperCase();
+    if (urlText.includes("/storage/v1/object/upload/sign/media/uploads/") && method === "POST") {
+      const objectSegment = urlText.split("/storage/v1/object/upload/sign/")[1];
+      return new Response(
+        JSON.stringify({ url: `/object/upload/sign/${objectSegment}?token=signed-token` }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (urlText.includes("/storage/v1/object/public/media/uploads/") && method === "HEAD") {
+      return new Response(null, { status: 200, headers: { "content-length": "2048" } });
+    }
+    if (urlText.includes("/rest/v1/media_items") && method === "POST") {
+      insertedRow = JSON.parse(String(init.body || "[]"))[0];
+      return new Response(JSON.stringify([{ id: 99, ...insertedRow }]), {
+        status: 201,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return new Response("[]", { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+
+  const ctx = await startTestServer({ fetchImpl });
+  try {
+    const token = await loginAndGetToken(ctx.baseUrl);
+
+    const urlStep = await postJson(
+      ctx.baseUrl,
+      "/api/admin/media/upload-url",
+      { fileName: "Cute Photo.JPG", fileType: "image/jpeg", fileSize: 2048 },
+      { Authorization: `Bearer ${token}` }
+    );
+    assert.equal(urlStep.response.status, 200);
+    assert.equal(urlStep.payload.ok, true);
+    assert.match(String(urlStep.payload.objectPath), /^uploads\/[a-z0-9._-]+$/);
+    assert.match(String(urlStep.payload.uploadUrl), /token=signed-token/);
+
+    const finalizeStep = await postJson(
+      ctx.baseUrl,
+      "/api/admin/media/finalize",
+      {
+        title: "Nanami",
+        description: "direct upload",
+        displayDate: "2026-07-24",
+        objectPath: urlStep.payload.objectPath,
+        fileType: "image/jpeg",
+        fileSize: 2048,
+      },
+      { Authorization: `Bearer ${token}` }
+    );
+    assert.equal(finalizeStep.response.status, 201);
+    assert.equal(finalizeStep.payload.ok, true);
+    assert.equal(insertedRow.file_size, 2048);
+    assert.match(String(insertedRow.public_url), /object\/public\/media\/uploads\//);
+  } finally {
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    ctx.server.close();
+  }
+});
+
+test("upload-url rejects unsupported types and oversize declarations", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+
+  const ctx = await startTestServer({ fetchImpl: async () => new Response("[]") });
+  try {
+    const token = await loginAndGetToken(ctx.baseUrl);
+
+    const badType = await postJson(
+      ctx.baseUrl,
+      "/api/admin/media/upload-url",
+      { fileName: "doc.pdf", fileType: "application/pdf", fileSize: 100 },
+      { Authorization: `Bearer ${token}` }
+    );
+    assert.equal(badType.response.status, 400);
+
+    const oversize = await postJson(
+      ctx.baseUrl,
+      "/api/admin/media/upload-url",
+      { fileName: "big.mp4", fileType: "video/mp4", fileSize: 51 * 1024 * 1024 },
+      { Authorization: `Bearer ${token}` }
+    );
+    assert.equal(oversize.response.status, 400);
+    assert.match(String(oversize.payload.message || ""), /50MB/);
+  } finally {
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    ctx.server.close();
+  }
+});
+
+test("finalize rejects missing storage object and traversal paths", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+
+  const fetchImpl = async (url, init = {}) => {
+    if (String(init.method || "").toUpperCase() === "HEAD") {
+      return new Response(null, { status: 404 });
+    }
+    return new Response("[]", { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+
+  const ctx = await startTestServer({ fetchImpl });
+  try {
+    const token = await loginAndGetToken(ctx.baseUrl);
+    const base = {
+      title: "Nanami",
+      description: "",
+      displayDate: "2026-07-24",
+      fileType: "image/jpeg",
+      fileSize: 10,
+    };
+
+    const traversal = await postJson(
+      ctx.baseUrl,
+      "/api/admin/media/finalize",
+      { ...base, objectPath: "uploads/../secrets" },
+      { Authorization: `Bearer ${token}` }
+    );
+    assert.equal(traversal.response.status, 400);
+
+    const missing = await postJson(
+      ctx.baseUrl,
+      "/api/admin/media/finalize",
+      { ...base, objectPath: "uploads/1-abc-photo.jpg" },
+      { Authorization: `Bearer ${token}` }
+    );
+    assert.equal(missing.response.status, 400);
+    assert.match(String(missing.payload.message || ""), /not found in storage/i);
+  } finally {
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    ctx.server.close();
+  }
+});

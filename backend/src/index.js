@@ -1831,6 +1831,170 @@ function createApp(options = {}) {
     }
   });
 
+  // Direct-to-storage upload, step 1: hand the client a short-lived signed
+  // upload URL so the file goes straight from the browser to Supabase
+  // Storage. The backend never buffers it (the legacy base64 endpoint above
+  // effectively capped videos at ~48MB through the 64mb JSON body limit).
+  app.post(
+    "/api/admin/media/upload-url",
+    requireAuth,
+    requireRole("Admin", "Publisher"),
+    async (req, res) => {
+      const fileName = typeof req.body?.fileName === "string" ? req.body.fileName.trim() : "";
+      const fileType =
+        typeof req.body?.fileType === "string" ? req.body.fileType.trim().toLowerCase() : "";
+      const fileSize = Number(req.body?.fileSize || 0);
+      const mediaType = inferMediaType(fileType);
+
+      if (!mediaType) {
+        return res.status(400).json({
+          ok: false,
+          message:
+            "Unsupported file type. Allowed: image/jpeg, image/png, image/webp, image/gif, video/mp4, video/webm, video/quicktime.",
+        });
+      }
+
+      const maxSize = mediaType === "image" ? MAX_IMAGE_SIZE_BYTES : MAX_VIDEO_SIZE_BYTES;
+      if (!Number.isFinite(fileSize) || fileSize <= 0 || fileSize > maxSize) {
+        const limitMb = mediaType === "image" ? 10 : 50;
+        return res
+          .status(400)
+          .json({ ok: false, message: `${mediaType} file exceeds ${limitMb}MB limit.` });
+      }
+
+      try {
+        const safeName = sanitizeObjectName(fileName || `${mediaType}-${Date.now()}`);
+        const objectPath = `uploads/${Date.now()}-${randomBytes(6).toString("hex")}-${safeName}`;
+        const signPath = buildSupabaseObjectPath(mediaConfig.storageBucket, objectPath);
+        const signResponse = await callSupabase(`/storage/v1/object/upload/sign/${signPath}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        const signPayload = await signResponse.json().catch(() => null);
+        if (!signResponse.ok || typeof signPayload?.url !== "string") {
+          return res.status(signResponse.ok ? 500 : signResponse.status).json({
+            ok: false,
+            message: "Failed to create signed upload URL.",
+            details: signPayload,
+          });
+        }
+
+        return res.json({
+          ok: true,
+          objectPath,
+          uploadUrl: `${mediaConfig.supabaseUrl}/storage/v1${signPayload.url}`,
+        });
+      } catch (error) {
+        return res
+          .status(500)
+          .json({ ok: false, message: error.message || "Failed to create signed upload URL." });
+      }
+    }
+  );
+
+  // Direct-to-storage upload, step 2: after the client PUT the file to the
+  // signed URL, verify the object really landed (and its true size), then
+  // save the metadata row.
+  app.post(
+    "/api/admin/media/finalize",
+    requireAuth,
+    requireRole("Admin", "Publisher"),
+    async (req, res) => {
+      const title = normalizeMediaTitle(req.body?.title);
+      const description = normalizeMediaDescription(req.body?.description);
+      const displayDate = normalizeDisplayDate(req.body?.displayDate);
+      const objectPath = typeof req.body?.objectPath === "string" ? req.body.objectPath.trim() : "";
+      const fileType =
+        typeof req.body?.fileType === "string" ? req.body.fileType.trim().toLowerCase() : "";
+      const mediaType = inferMediaType(fileType);
+
+      if (!isValidMediaTitle(title)) {
+        return res
+          .status(400)
+          .json({ ok: false, message: "Title is required and must be at most 120 characters." });
+      }
+      if (!isValidMediaDescription(description)) {
+        return res
+          .status(400)
+          .json({ ok: false, message: "Description must be at most 500 characters." });
+      }
+      if (!isValidDisplayDate(displayDate)) {
+        return res
+          .status(400)
+          .json({ ok: false, message: "Display date is required and must be a valid YYYY-MM-DD." });
+      }
+      if (!mediaType) {
+        return res.status(400).json({ ok: false, message: "Unsupported file type." });
+      }
+      if (!/^uploads\/[a-z0-9._-]+$/.test(objectPath) || objectPath.includes("..")) {
+        return res.status(400).json({ ok: false, message: "Invalid upload object path." });
+      }
+
+      try {
+        const storagePath = buildSupabaseObjectPath(mediaConfig.storageBucket, objectPath);
+        const headResponse = await callSupabase(`/storage/v1/object/public/${storagePath}`, {
+          method: "HEAD",
+        });
+        if (!headResponse.ok) {
+          return res.status(400).json({
+            ok: false,
+            message: "Uploaded file was not found in storage. Please retry the upload.",
+          });
+        }
+
+        const actualSize = Number.parseInt(headResponse.headers.get("content-length") || "", 10);
+        const maxSize = mediaType === "image" ? MAX_IMAGE_SIZE_BYTES : MAX_VIDEO_SIZE_BYTES;
+        if (Number.isFinite(actualSize) && actualSize > maxSize) {
+          await callSupabase(`/storage/v1/object/${storagePath}`, { method: "DELETE" }).catch(
+            () => null
+          );
+          const limitMb = mediaType === "image" ? 10 : 50;
+          return res
+            .status(400)
+            .json({ ok: false, message: `${mediaType} file exceeds ${limitMb}MB limit.` });
+        }
+
+        const publicUrl = `${mediaConfig.supabaseUrl}/storage/v1/object/public/${storagePath}`;
+        const insertResponse = await callSupabase(
+          `/rest/v1/${encodeURIComponent(mediaConfig.mediaTable)}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Prefer: "return=representation",
+            },
+            body: JSON.stringify([
+              {
+                title,
+                description,
+                media_type: mediaType,
+                public_url: publicUrl,
+                display_date: displayDate,
+                file_size: Number.isFinite(actualSize) && actualSize > 0 ? actualSize : null,
+              },
+            ]),
+          }
+        );
+        const insertPayload = await insertResponse.json();
+        if (!insertResponse.ok) {
+          return res.status(insertResponse.status).json({
+            ok: false,
+            message: "Media uploaded, but metadata save failed.",
+            details: insertPayload,
+          });
+        }
+
+        const item = Array.isArray(insertPayload) ? insertPayload[0] : insertPayload;
+        return res.status(201).json({ ok: true, item });
+      } catch (error) {
+        return res
+          .status(500)
+          .json({ ok: false, message: error.message || "Media finalize failed" });
+      }
+    }
+  );
+
   app.get(
     "/api/admin/storage/usage",
     requireAuth,

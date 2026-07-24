@@ -232,6 +232,31 @@ export class AuthService {
     return `${this.apiBaseUrl}${cleanPath}`;
   }
 
+  /**
+   * Central fetch for backend API calls: injects the bearer token and, on a
+   * 401, silently refreshes the session once and retries the request. Call
+   * sites no longer need to spread authHeaders() themselves.
+   */
+  async apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+    const doFetch = () =>
+      fetch(this.apiUrl(path), {
+        ...init,
+        headers: {
+          ...((init.headers as Record<string, string>) || {}),
+          ...this.authHeaders()
+        }
+      });
+
+    let response = await doFetch();
+    if (response.status === 401 && this.readSession()?.refreshToken) {
+      const refreshed = await this.refreshSession();
+      if (refreshed) {
+        response = await doFetch();
+      }
+    }
+    return response;
+  }
+
   private async refreshRoleFromBackend(): Promise<void> {
     try {
       const response = await fetch(`${this.apiBaseUrl}/api/admin/overview`, {
