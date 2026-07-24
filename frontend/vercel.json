@@ -2,7 +2,7 @@
   "cleanUrls": true,
   "rewrites": [
     {
-      "source": "/((?!ngsw-worker\\.js|ngsw\\.json|safety-worker\\.js|worker-basic\\.min\\.js|manifest\\.webmanifest|.*\\.[a-z0-9]+$).*)",
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ],
