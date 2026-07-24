@@ -24,6 +24,16 @@ class MockAuthService {
     return `http://localhost:4000${path}`;
   }
 
+  async apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+    return fetch(this.apiUrl(path), {
+      ...init,
+      headers: {
+        ...((init.headers as Record<string, string>) || {}),
+        ...this.authHeaders()
+      }
+    });
+  }
+
   async logout(): Promise<void> {
     return;
   }
@@ -79,8 +89,8 @@ describe('MediaPageComponent (logic + performance)', () => {
 
     component.onFileSelected(event);
 
-    expect(component.selectedFile).toBeNull();
-    expect(component.uploadError).toContain('Unsupported file type');
+    expect(component.selectedFile()).toBeNull();
+    expect(component.uploadError()).toContain('Unsupported file type');
   });
 
   it('uses fallback string when date value is missing', () => {
