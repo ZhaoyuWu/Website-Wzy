@@ -1256,6 +1256,76 @@ test("story like endpoint is idempotent for the same anon viewer", async () => {
   }
 });
 
+test("like records persist across backend restarts via entry_likes table", async () => {
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+  process.env.LIKE_COOLDOWN_MS = "0";
+
+  const likeRows = [];
+  const rpcHits = [];
+  const jsonResponse = (payload, status = 200) =>
+    new Response(JSON.stringify(payload), {
+      status,
+      headers: { "Content-Type": "application/json" },
+    });
+  const fetchImpl = async (url, init = {}) => {
+    const urlText = String(url);
+    const method = String(init.method || "GET").toUpperCase();
+    if (urlText.endsWith("/auth/v1/user")) {
+      return new Response("{}", { status: 401 });
+    }
+    if (urlText.includes("/rest/v1/rpc/increment_media_likes")) {
+      rpcHits.push(urlText);
+      return new Response("1", { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    if (urlText.includes("/rest/v1/entry_likes")) {
+      if (method === "POST") {
+        const row = JSON.parse(String(init.body || "[]"))[0];
+        likeRows.push({ ...row, created_at: "2026-07-24T10:00:00.000Z" });
+        return jsonResponse([row], 201);
+      }
+      const matches = likeRows.filter(
+        (row) =>
+          urlText.includes(`entry_id=eq.${row.entry_id}`) &&
+          urlText.includes(encodeURIComponent(row.viewer_key))
+      );
+      return jsonResponse(matches.map((row, index) => ({ id: index + 1, ...row })));
+    }
+    if (urlText.includes("/rest/v1/media_items") && urlText.includes("likes_count")) {
+      return jsonResponse([{ likes_count: 1 }]);
+    }
+    return new Response("null", { status: 200 });
+  };
+
+  const ctxA = await startTestServer({ fetchImpl });
+  try {
+    const first = await fetch(`${ctxA.baseUrl}/api/story/media/77/like`, { method: "POST" });
+    assert.equal(first.status, 200);
+    const firstPayload = await first.json();
+    assert.equal(firstPayload.alreadyLiked, false);
+    assert.equal(likeRows.length, 1);
+  } finally {
+    ctxA.server.close();
+  }
+
+  // Fresh server instance = empty in-memory maps. The durable row alone must
+  // prevent the double-like and the extra RPC increment.
+  const ctxB = await startTestServer({ fetchImpl });
+  try {
+    const second = await fetch(`${ctxB.baseUrl}/api/story/media/77/like`, { method: "POST" });
+    assert.equal(second.status, 200);
+    const secondPayload = await second.json();
+    assert.equal(secondPayload.alreadyLiked, true);
+    assert.equal(secondPayload.likesCount, 1);
+    assert.equal(rpcHits.length, 1);
+  } finally {
+    ctxB.server.close();
+    delete process.env.LIKE_COOLDOWN_MS;
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+  }
+});
+
 test("comment delete requires Admin role, Publisher gets 403", async () => {
   process.env.SUPABASE_URL = "https://example.supabase.co";
   process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
@@ -1332,6 +1402,10 @@ test("story likes listing endpoint is Admin-only and returns recorded viewers", 
     }
     if (urlText.includes("/rest/v1/rpc/increment_media_likes")) {
       return new Response("1", { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    if (urlText.includes("/rest/v1/entry_likes")) {
+      // Simulate an unusable durable store so the in-memory fallback records the like.
+      return new Response("null", { status: 200 });
     }
     return new Response("[]", { status: 200 });
   };
