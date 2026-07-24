@@ -80,12 +80,12 @@ describe('StoryTimelineComponent logic', () => {
     const component = makeComponent();
     await component.ngOnInit();
 
-    expect(component.entries.length).toBe(2);
-    expect(component.entries[0].type).toBe('text');
-    expect(component.entries[0].body).toBe('Hello timeline');
-    expect(component.entries[1].type).toBe('image');
-    expect(component.entries[1].likesCount).toBe(3);
-    expect(component.totalPages).toBe(1);
+    expect(component.entries().length).toBe(2);
+    expect(component.entries()[0].type).toBe('text');
+    expect(component.entries()[0].body).toBe('Hello timeline');
+    expect(component.entries()[1].type).toBe('image');
+    expect(component.entries()[1].likesCount).toBe(3);
+    expect(component.totalPages()).toBe(1);
   });
 
   it('drops entries with unsafe or missing media URLs but keeps text entries', async () => {
@@ -111,7 +111,7 @@ describe('StoryTimelineComponent logic', () => {
     const component = makeComponent();
     await component.ngOnInit();
 
-    expect(component.entries.map((e) => e.id)).toEqual([2, 3]);
+    expect(component.entries().map((e) => e.id)).toEqual([2, 3]);
   });
 
   it('toggles likes against the typed endpoint', async () => {
@@ -143,7 +143,7 @@ describe('StoryTimelineComponent logic', () => {
 
     const component = makeComponent();
     await component.ngOnInit();
-    const entry = component.entries[0];
+    const entry = component.entries()[0];
 
     await component.onToggleLike(entry);
     expect(calls[0]).toEqual({
@@ -189,7 +189,7 @@ describe('StoryTimelineComponent logic', () => {
     const component = makeComponent();
     await component.ngOnInit();
 
-    const entry = component.entries[0];
+    const entry = component.entries()[0];
     expect(component.isLiked(entry)).toBe(true);
     const stored = localStorage.getItem('nanami.story.likes');
     expect(stored).toContain('"image"');
@@ -243,16 +243,16 @@ describe('StoryTimelineComponent logic', () => {
     const component = makeComponent();
     await component.ngOnInit();
 
-    component.openCommentModal(component.entries[0]);
+    component.openCommentModal(component.entries()[0]);
     await Promise.resolve();
     await Promise.resolve();
 
-    component.commentDraft = 'hello';
+    component.commentDraft.set('hello');
     await component.submitComment();
 
-    expect(component.activeComments.length).toBe(1);
-    expect(component.activeComments[0].message).toBe('hello');
-    expect(component.entries[0].commentsCount).toBe(1);
+    expect(component.activeComments().length).toBe(1);
+    expect(component.activeComments()[0].message).toBe('hello');
+    expect(component.entries()[0].commentsCount).toBe(1);
     expect(calls.some((c) => c.method === 'POST' && c.url.endsWith('/comments'))).toBe(true);
   });
 
@@ -274,15 +274,15 @@ describe('StoryTimelineComponent logic', () => {
 
     const component = makeComponent();
     await component.ngOnInit();
-    component.commentModalEntry = component.entries[0];
+    component.commentModalEntry.set(component.entries()[0]);
 
-    component.commentDraft = '   ';
+    component.commentDraft.set('   ');
     await component.submitComment();
-    expect(component.commentError).toMatch(/1-500|1–500/);
+    expect(component.commentError()).toMatch(/1-500|1–500/);
 
-    component.commentDraft = 'a'.repeat(501);
+    component.commentDraft.set('a'.repeat(501));
     await component.submitComment();
-    expect(component.commentError).toMatch(/1-500|1–500/);
+    expect(component.commentError()).toMatch(/1-500|1–500/);
   });
 
   it('opens the lightbox only for image entries and closes on escape', async () => {
@@ -307,13 +307,13 @@ describe('StoryTimelineComponent logic', () => {
     const component = makeComponent();
     await component.ngOnInit();
 
-    component.openFullscreen(component.entries[1]);
-    expect(component.activeImage).toBeNull();
+    component.openFullscreen(component.entries()[1]);
+    expect(component.activeImage()).toBeNull();
 
-    component.openFullscreen(component.entries[0]);
-    expect(component.activeImage?.id).toBe(1);
+    component.openFullscreen(component.entries()[0]);
+    expect(component.activeImage()?.id).toBe(1);
 
     component.onEscape();
-    expect(component.activeImage).toBeNull();
+    expect(component.activeImage()).toBeNull();
   });
 });

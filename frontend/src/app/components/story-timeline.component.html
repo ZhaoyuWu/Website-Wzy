@@ -1,0 +1,217 @@
+<div class="timeline-wrap">
+  <header class="timeline-head">
+    <p class="eyebrow font-caveat">{{ i18n.t('story.eyebrow') }}</p>
+    <h2>{{ i18n.t('story.heading') }}</h2>
+  </header>
+
+  <section class="state state-loading" *ngIf="isLoading()">{{ i18n.t('story.state.loading') }}</section>
+  <section class="state state-error" *ngIf="errorMessage()">{{ errorMessage() }}</section>
+  <section class="state state-empty" *ngIf="!isLoading() && !errorMessage() && entries().length === 0">
+    {{ i18n.t('story.state.empty') }}
+  </section>
+
+  <ol
+    class="timeline"
+    *ngIf="!isLoading() && !errorMessage() && entries().length > 0"
+  >
+    <li
+      class="entry entry-reveal"
+      *ngFor="let entry of entries(); let i = index; trackBy: trackByKey"
+      #entryNode
+      [class.align-right]="i % 2 === 1"
+      [style.--stagger-index]="i % 6"
+      [attr.data-entry-key]="trackByKey(i, entry)"
+      [attr.data-type]="entry.type"
+    >
+      <div class="anchor" aria-hidden="true">
+        <span class="dot"></span>
+        <span class="anchor-date" *ngIf="entry.displayDate || entry.createdAt">
+          {{ formatDay(entry.displayDate || entry.createdAt) }}
+        </span>
+      </div>
+
+      <article class="card" [class.card-text]="entry.type === 'text'">
+        <div class="media-frame" *ngIf="entry.type !== 'text' && entry.mediaUrl">
+          <button
+            *ngIf="entry.type === 'image'"
+            type="button"
+            class="media-button"
+            [attr.aria-label]="i18n.t('story.lightbox.open', { title: entry.title })"
+            (click)="openFullscreen(entry)"
+          >
+            <img
+              [src]="entry.mediaUrl"
+              [alt]="entry.title"
+              loading="lazy"
+              decoding="async"
+              (error)="onImageError($event)"
+            />
+          </button>
+
+          <video
+            *ngIf="entry.type === 'video'"
+            [src]="entry.mediaUrl"
+            [poster]="entry.thumbnailUrl || undefined"
+            controls
+            preload="metadata"
+            playsinline
+          ></video>
+        </div>
+
+        <div class="meta">
+          <h3>{{ entry.title }}</h3>
+          <p class="desc" *ngIf="entry.type !== 'text' && entry.description">{{ entry.description }}</p>
+          <p class="body" *ngIf="entry.type === 'text' && entry.body">{{ entry.body }}</p>
+          <div class="foot">
+            <div class="engagement">
+              <button
+                type="button"
+                class="like-button"
+                [class.liked]="isLiked(entry)"
+                [disabled]="isLikePending(entry)"
+                [attr.aria-pressed]="isLiked(entry)"
+                [attr.aria-label]="i18n.t(isLiked(entry) ? 'story.like.unlike' : 'story.like.like', { title: entry.title })"
+                (click)="onToggleLike(entry)"
+              >
+                <span class="heart" aria-hidden="true">{{ isLiked(entry) ? '♥' : '♡' }}</span>
+                <span class="count">{{ entry.likesCount }}</span>
+              </button>
+              <button
+                type="button"
+                class="comment-button"
+                [attr.aria-label]="i18n.t('story.comment.open', { title: entry.title })"
+                (click)="openCommentModal(entry)"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M5 5h14v10H9l-4 4V5z" />
+                </svg>
+                <span>{{ i18n.t('story.comment.label') }}</span>
+                <span class="count">{{ entry.commentsCount }}</span>
+              </button>
+            </div>
+            <time *ngIf="entry.displayDate || entry.createdAt">{{ formatFull(entry.displayDate || entry.createdAt) }}</time>
+          </div>
+        </div>
+      </article>
+    </li>
+  </ol>
+
+  <nav class="pager" *ngIf="totalPages() > 1" [attr.aria-label]="i18n.t('story.pager.aria')">
+    <button
+      type="button"
+      class="pager-edge"
+      (click)="goToPage(page() - 1)"
+      [disabled]="page() <= 1 || isLoading()"
+    >
+      ‹
+    </button>
+    <button
+      type="button"
+      class="pager-num"
+      *ngFor="let n of pageNumbers()"
+      [class.active]="n === page()"
+      [disabled]="isLoading()"
+      (click)="goToPage(n)"
+    >
+      {{ n }}
+    </button>
+    <button
+      type="button"
+      class="pager-edge"
+      (click)="goToPage(page() + 1)"
+      [disabled]="page() >= totalPages() || isLoading()"
+    >
+      ›
+    </button>
+  </nav>
+</div>
+
+<div
+  class="lightbox"
+  *ngIf="activeImage() as activeImage"
+  role="dialog"
+  aria-modal="true"
+  [attr.aria-label]="activeImage.title"
+  (click)="closeFullscreen()"
+>
+  <button
+    type="button"
+    class="lightbox-close"
+    [attr.aria-label]="i18n.t('story.lightbox.close')"
+    (click)="closeFullscreen(); $event.stopPropagation()"
+  >
+    ×
+  </button>
+  <figure class="lightbox-figure" (click)="$event.stopPropagation()">
+    <img [src]="activeImage.mediaUrl || ''" [alt]="activeImage.title" />
+    <figcaption>
+      <strong>{{ activeImage.title }}</strong>
+      <span *ngIf="activeImage.description">{{ activeImage.description }}</span>
+    </figcaption>
+  </figure>
+</div>
+
+<div
+  class="comment-modal-mask"
+  *ngIf="commentModalEntry() as commentModalEntry"
+  role="dialog"
+  aria-modal="true"
+  [attr.aria-label]="i18n.t('story.comment.modal.title')"
+  (click)="closeCommentModal()"
+>
+  <section class="comment-modal" (click)="$event.stopPropagation()">
+    <header>
+      <h3>{{ i18n.t('story.comment.modal.title') }}</h3>
+      <button type="button" class="comment-close" (click)="closeCommentModal()" [attr.aria-label]="i18n.t('story.comment.modal.close')">x</button>
+    </header>
+
+    <p class="comment-target">{{ commentModalEntry.title }}</p>
+    <p class="comment-author">{{ i18n.t('story.comment.modal.authorLabel') }} {{ auth.username || i18n.t('story.comment.modal.loginHint') }}</p>
+
+    <textarea
+      [ngModel]="commentDraft()"
+      (ngModelChange)="commentDraft.set($event)"
+      rows="4"
+      maxlength="500"
+      [attr.placeholder]="i18n.t('story.comment.modal.placeholder')"
+      [disabled]="isCommentSubmitting()"
+    ></textarea>
+
+    <p class="comment-error" *ngIf="commentError()">{{ commentError() }}</p>
+    <p class="comment-success" *ngIf="commentSuccess()">{{ commentSuccess() }}</p>
+
+    <div class="comment-actions">
+      <button type="button" class="comment-submit" (click)="submitComment()" [disabled]="isCommentSubmitting()">
+        {{ isCommentSubmitting() ? i18n.t('story.comment.modal.submitting') : i18n.t('story.comment.modal.submit') }}
+      </button>
+      <button type="button" class="comment-cancel" (click)="closeCommentModal()" [disabled]="isCommentSubmitting()">
+        {{ i18n.t('story.comment.modal.cancel') }}
+      </button>
+    </div>
+
+    <div class="comment-list">
+      <p *ngIf="isCommentLoading()">{{ i18n.t('story.comment.modal.loading') }}</p>
+      <p class="comment-error" *ngIf="commentLoadError()">{{ commentLoadError() }}</p>
+      <p *ngIf="!isCommentLoading() && !commentLoadError() && activeComments().length === 0">{{ i18n.t('story.comment.modal.empty') }}</p>
+      <article class="comment-row" *ngFor="let item of activeComments(); trackBy: trackByCommentId">
+        <header>
+          <strong>{{ item.author_name }}</strong>
+          <div class="comment-row-tools">
+            <time>{{ formatFull(item.created_at) }}</time>
+            <button
+              *ngIf="auth.isAdmin"
+              type="button"
+              class="comment-delete"
+              [disabled]="isCommentDeleting(item)"
+              [attr.aria-label]="i18n.t('story.comment.modal.deleteAria', { id: item.id })"
+              (click)="deleteComment(item)"
+            >
+              x
+            </button>
+          </div>
+        </header>
+        <p>{{ item.message }}</p>
+      </article>
+    </div>
+  </section>
+</div>
