@@ -121,6 +121,36 @@ Build a warm, media-first personal website to showcase the dog Nanami, with reli
   - Save/success/like/error interactions use consistent motion timing/easing tokens.
   - Interaction style is coherent across home/media/admin pages.
 
+### G7 Maintenance Child Tasks (2026-07 Overhaul)
+All entries are deltas under the Task Revision Policy; each references its parent baseline task.
+
+- `A-006-1` (parent `T-006`) Full-stack maintenance audit (2026-07-24):
+  - Whole-repo review of architecture completeness, security posture, test reality, and deploy health.
+  - Findings drove every child task below; consolidated record in `handover/history.md` and `handover/public.md`.
+- `T-006-1` (parent `T-006`) Supabase-only backend cleanup:
+  - Removed dead local-Postgres auth surface (`/api/auth/register|login|session|logout`, `/api/db-check`, in-memory sessions, scrypt module, `docker-compose.yml`, `init-db`, `pg` dependency). `requireAuth` validates Supabase access tokens only.
+  - 2026-07-28 follow-up: deleted unused `StoryTimelineComponent` (superseded by the homepage kite carousel) and the broken `#story` nav anchor.
+- `T-003-1` (parent `T-003`) Anonymous engagement hardening:
+  - Per-IP cooldown + window ceiling on anonymous comment POSTs (`429` + `Retry-After`), mirroring the existing like throttle; stale throttle state pruned.
+  - New `entry_likes` table (`handover/sql/entry-likes-persistence.sql`, migration row 8) persists per-viewer like records across backend restarts; backend degrades to in-memory records while the migration is unapplied.
+- `T-006-2` (parent `T-006`) Deploy, security, and free-tier operations:
+  - Fixed hard 404s on direct SPA routes (`/login`, `/admin`): Vercel's current router drops the negative-lookahead rewrite and `cleanUrls` swallows the fallback; replaced with a plain catch-all and removed `cleanUrls`.
+  - Hardened response headers (nosniff, `X-Frame-Options: DENY`, Referrer-Policy, Permissions-Policy, HSTS); removed the `localStorage` runtime-config override channel (persistent redirect backdoor).
+  - `keep-alive.yml` GitHub Action pings `/api/settings` every 10 minutes: keeps Render awake, keeps the Supabase free project active (it had paused unnoticed for ~3 months, taking the data layer down), and failure e-mails double as free uptime alerting.
+- `T-001-1` (parent `T-001`) Resilient sessions:
+  - Silent refresh-token exchange: proactive 5 minutes before expiry plus on-demand when an expired session is found; session clears only on refresh rejection.
+  - Central `AuthService.apiFetch` injects the bearer token and retries exactly once after a 401-triggered refresh; all admin/media call sites migrated off hand-rolled `fetch`+`authHeaders`.
+- `T-004-1` (parent `T-004`) Direct-to-storage uploads:
+  - `POST /api/admin/media/upload-url` (signed URL) -> browser `PUT` straight to Supabase Storage -> `POST /api/admin/media/finalize` verifies object existence and true size before metadata insert.
+  - Removes the base64-in-JSON detour that buffered files in backend memory and silently capped videos at ~48MB; legacy endpoint retained for compatibility.
+- `T-006-3` (parent `T-006`) Frontend modernization:
+  - Lazy-loaded `login`/`register`/`admin`/`manage-media` routes; initial bundle 452 -> 390 kB.
+  - `admin-page`, `media-page`, `story-timeline`: inline templates/styles extracted to companion files; async state migrated to signals/`computed`; every manual `detectChanges()`/`markForCheck()` and the `ChangeDetectorRef` dependencies removed.
+  - `home-page`: template extracted only — signal migration intentionally skipped (single CD call, event-driven state, animation-timing risk on the landing page).
+  - `admin-page` test suite added (8 logic tests). Totals: backend 58, frontend 64.
+- `T-006-4` (parent `T-006`) Portfolio packaging:
+  - README rebuilt as a showcase page (production screenshots via Playwright, mermaid architecture, engineering highlights, badges); `tests.yml` CI runs both suites + production build on every push; MIT `LICENSE`; developer/ops content split into `docs/DEVELOPMENT.md`.
+
 ## Definition of Done (Project)
 - Tasks `T-001` to `T-007` are implemented and demoable.
 - Principles check passes with no unresolved blocker.

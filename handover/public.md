@@ -1,3 +1,29 @@
+## 2026-07-24/28 Maintenance Overhaul - Audit, Recovery, Hardening, Modernization, Portfolio (A-006-1 + G7 children)
+
+## Source Files
+- backend/src/index.js (Supabase-only auth, comment throttle, entry_likes, signed-upload endpoints)
+- backend/test/{auth,media,settings}.test.js (rewritten to Supabase-mocked fixtures)
+- frontend/src/app/core/{auth.service.ts,runtime-config.ts} (token refresh, apiFetch, override removal)
+- frontend/src/app/pages/* and components/* (template extraction, signals, dead-code removal)
+- frontend/vercel.json, frontend/src/app/app.routes.ts
+- .github/workflows/{keep-alive.yml,tests.yml}, LICENSE, README.md, docs/DEVELOPMENT.md
+- handover/sql/entry-likes-persistence.sql (migration row 8)
+
+## Preconditions Check
+pass (audit-driven): work began from full-stack audit `A-006-1`; every change maps to a G7 child task in `handover/tasks/task.md`; each round shipped only after backend + frontend suites and a production build passed, then was deployed and probed on production.
+
+## Shared Summary
+- Round 1 (backend truth): removed the dead local-Postgres auth stack (server never built a pg pool; frontend authenticates against Supabase GoTrue directly). Added per-IP comment throttling. Rewrote test fixtures. `T-006-1`, `T-003-1`.
+- Round 1 incident: Supabase free project had auto-paused (~3 months idle, domain NXDOMAIN) - data layer was down unnoticed. Restored by user; `keep-alive.yml` (10-min ping from `main`) now prevents recurrence and provides free failure-email alerting. `T-006-2`.
+- Round 2 (security/ops): fixed hard 404s on direct SPA routes (dropped `cleanUrls` + lookahead rewrite for a plain catch-all), security headers everywhere, removed the `localStorage` runtime-config override backdoor, silent session refresh, durable `entry_likes` with in-memory fallback, redacted the plaintext admin password from `deployer.md`. `T-006-2`, `T-001-1`, `T-003-1`.
+- Round 3 (pipeline): direct-to-storage uploads via signed URLs with server-side existence/true-size verification (real 50MB videos); lazy admin routes (452 -> 390 kB initial); central `apiFetch` migration for all admin/media call sites. `T-004-1`, `T-006-3`.
+- Round 4 (modernization): `admin-page`/`media-page`/`story-timeline` extracted templates/styles and migrated async state to signals/`computed` - zero manual change-detection calls remain; `home-page` template extracted with signal migration intentionally skipped (animation-timing risk on the landing page). `T-006-3`.
+- Round 5 (portfolio): deleted the unused `StoryTimelineComponent` (2200 lines) and broken `#story` anchor found while screenshotting production; showcase README with Playwright-captured screenshots + mermaid architecture; `tests.yml` CI (first run green); MIT LICENSE; `docs/DEVELOPMENT.md`; first `admin-page` test suite. `T-006-1`, `T-006-4`.
+- Validation: backend `58/58`, frontend `64/64`, production build green, CI green on `main`; production probed after every deploy (routes 200, timeline serving data, removed endpoints 404).
+
+## Final Status
+done (scoped) - open user actions: apply migration row 8 in Supabase SQL editor; rotate the admin password (old value remains in public git history); rename repo to `nanami-website`; create Publisher demo account for the README.
+
 ## 2026-04-23 Scoped Update - Generator7 Style Budget Slimming (No Visual Regression)
 
 ## Source Files
