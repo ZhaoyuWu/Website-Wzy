@@ -1,5 +1,36 @@
 # Handover History
 
+## 2026-07-28 - Frontend Modernization + Portfolio Packaging (T-006-3 / T-006-4 / T-001-1 / T-004-1)
+- Type: public handover update (maintenance overhaul, rounds 3-5)
+- Scope: signals migration, upload pipeline, API layer, dead-code removal, portfolio-grade repo packaging
+- Source docs:
+  - `handover/tasks/task.md` (G7 Maintenance Child Tasks)
+  - `handover/public.md`
+  - `handover/local/deployer.md` (Session 4)
+- Key outcomes:
+  - Direct-to-storage uploads via signed URLs with server-side existence/size verification (`T-004-1`); true 50MB video ceiling restored.
+  - Central `AuthService.apiFetch` with silent refresh-token exchange and single 401 retry (`T-001-1`); sessions no longer expire hourly.
+  - Lazy admin routes (initial bundle 452 -> 390 kB); `admin-page`/`media-page`/`story-timeline` moved to extracted templates + signals with zero manual change-detection calls; `home-page` template extracted with signals intentionally deferred (animation-timing risk documented in commit history).
+  - Deleted the unused 2200-line `StoryTimelineComponent` and the broken `#story` nav anchor discovered during production screenshotting.
+  - Portfolio packaging: showcase README with production screenshots and mermaid architecture, `tests.yml` CI (both suites + production build, first run green), MIT LICENSE, `docs/DEVELOPMENT.md` split. `admin-page` gained its first test suite; totals backend `58/58`, frontend `64/64`.
+- Decision: continue
+- Next owner: user (repo rename to `nanami-website`, Publisher demo account, admin password rotation, apply migration row 8 in Supabase)
+
+## 2026-07-24 - Production Recovery + Security Hardening (A-006-1 / T-006-1 / T-006-2 / T-003-1)
+- Type: public handover update (maintenance overhaul, rounds 1-2)
+- Scope: full-stack audit, dead backend removal, production incident recovery, anti-abuse and ops hardening
+- Source docs:
+  - `handover/tasks/task.md` (G7 Maintenance Child Tasks)
+  - `handover/public.md`
+  - `handover/local/deployer.md` (Session 4)
+- Key outcomes:
+  - Audit `A-006-1` confirmed the local-Postgres auth stack was dead code (server never constructed a pg pool; frontend authenticates against Supabase directly) — removed endpoints, sessions, scrypt, docker-compose, `pg` dependency (`T-006-1`); tests rewritten against Supabase-mocked fixtures.
+  - **Production incident**: the Supabase free project had auto-paused after ~3 months of inactivity (domain NXDOMAIN); the entire data layer was down unnoticed. User restored the project; `keep-alive.yml` now prevents recurrence and doubles as free uptime alerting (`T-006-2`).
+  - Fixed hard 404s on all direct SPA routes: `cleanUrls` + lookahead rewrite broke under Vercel's current router; replaced with a plain catch-all (`T-006-2`).
+  - Anonymous comment throttling (`429` + `Retry-After`) and durable `entry_likes` records with in-memory fallback (`T-003-1`); security headers added; `localStorage` runtime-config override removed; plaintext admin password redacted from `deployer.md` (still present in git history — rotation pending).
+- Decision: continue
+- Next owner: user (Supabase migration row 8, admin password rotation)
+
 ## 2026-04-23 - Generator7 Style Budget Slimming (Scoped)
 - Type: public handover update (scoped)
 - Scope: evaluator remediation for latest generator7 UI bundle to remove component-style budget pressure without visual/interaction regression
