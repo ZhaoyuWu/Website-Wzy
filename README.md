@@ -77,8 +77,8 @@ off the client, enforces validation and rate limits, and owns the privileged flo
 - **Free-tier operations** — a scheduled GitHub Action pings the backend every 10 minutes:
   it keeps the Render instance awake, keeps the Supabase free project from pausing,
   and its failure e-mails double as uptime alerting. Monthly cost: **0 €**.
-- **114 automated tests** — 58 backend (`node:test`, Supabase mocked at the fetch seam)
-  and 56 frontend (Vitest), all run in CI on every push together with a production build.
+- **122 automated tests** — 58 backend (`node:test`, Supabase mocked at the fetch seam)
+  and 64 frontend (Vitest), all run in CI on every push together with a production build.
 
 ## Tech stack
 
