@@ -29,12 +29,6 @@
       <span>{{ settings.profileName }} {{ i18n.t('brand.journal') }}</span>
     </a>
     <nav>
-      <a
-        [routerLink]="['/']"
-        fragment="story"
-        [class.is-active]="activeTopLink === 'story'"
-        [attr.aria-current]="activeTopLink === 'story' ? 'location' : null"
-      >{{ i18n.t('nav.story') }}</a>
       <ng-container *ngIf="!auth.isAuthenticated">
         <a [routerLink]="['/register']">{{ i18n.t('nav.register') }}</a>
         <a [routerLink]="['/login']">{{ i18n.t('nav.login') }}</a>
