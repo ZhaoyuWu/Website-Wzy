@@ -29,6 +29,7 @@
       <span>{{ settings.profileName }} {{ i18n.t('brand.journal') }}</span>
     </a>
     <nav>
+      <a [routerLink]="['/tech']">{{ i18n.t('nav.tech') }}</a>
       <ng-container *ngIf="!auth.isAuthenticated">
         <a [routerLink]="['/register']">{{ i18n.t('nav.register') }}</a>
         <a [routerLink]="['/login']">{{ i18n.t('nav.login') }}</a>

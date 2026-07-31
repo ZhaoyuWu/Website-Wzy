@@ -28,6 +28,11 @@ export const routes: Routes = [
       import('./pages/media-page.component').then((m) => m.MediaPageComponent),
     canActivate: [roleGuard('Admin', 'Publisher')]
   },
+  {
+    path: 'tech',
+    loadComponent: () =>
+      import('./pages/tech-page.component').then((m) => m.TechPageComponent)
+  },
   { path: 'showcase', redirectTo: '', pathMatch: 'full' },
   { path: '**', redirectTo: '' }
 ];

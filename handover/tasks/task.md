@@ -148,6 +148,9 @@ All entries are deltas under the Task Revision Policy; each references its paren
   - `admin-page`, `media-page`, `story-timeline`: inline templates/styles extracted to companion files; async state migrated to signals/`computed`; every manual `detectChanges()`/`markForCheck()` and the `ChangeDetectorRef` dependencies removed.
   - `home-page`: template extracted only — signal migration intentionally skipped (single CD call, event-driven state, animation-timing risk on the landing page).
   - `admin-page` test suite added (8 logic tests). Totals: backend 58, frontend 64.
+- `T-002-1` (parent `T-002`) Public tech/colophon page:
+  - New lazy `/tech` route linked from the homepage nav: stack + versions (Angular 21.2, TypeScript 5.9, Node 22 / Express 5.2), platforms (Supabase, Vercel, Render), tooling (GitHub Actions CI, Vitest + node:test, AI-assisted workflow), and creator credits with a source-repo link.
+  - Fully translated EN/DE/ZH; spec asserts every key resolves in all three languages.
 - `T-006-4` (parent `T-006`) Portfolio packaging:
   - README rebuilt as a showcase page (production screenshots via Playwright, mermaid architecture, engineering highlights, badges); `tests.yml` CI runs both suites + production build on every push; MIT `LICENSE`; developer/ops content split into `docs/DEVELOPMENT.md`.
 
