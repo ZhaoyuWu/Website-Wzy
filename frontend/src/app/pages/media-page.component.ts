@@ -6,7 +6,7 @@ import { AuthService } from '../core/auth.service';
 import { I18nService } from '../core/i18n.service';
 import { LanguagePickerComponent } from '../components/language-picker.component';
 
-type MediaItem = {
+interface MediaItem {
   id: number | string;
   title: string;
   description?: string;
@@ -15,15 +15,15 @@ type MediaItem = {
   display_date?: string;
   created_at?: string;
   updated_at?: string;
-};
+}
 
-type EditDraft = {
+interface EditDraft {
   title: string;
   description: string;
   displayDate: string;
-};
+}
 
-type StoryPost = {
+interface StoryPost {
   id: number | string;
   title: string;
   body: string;
@@ -32,26 +32,26 @@ type StoryPost = {
   display_date?: string;
   created_at?: string;
   updated_at?: string;
-};
+}
 
-type StoryEditDraft = {
+interface StoryEditDraft {
   title: string;
   body: string;
   displayDate: string;
-};
+}
 
 type UnifiedEntry =
   | { kind: 'media'; id: number | string; displayDate: string; item: MediaItem }
   | { kind: 'story'; id: number | string; displayDate: string; post: StoryPost };
 
-type StorageUsage = {
+interface StorageUsage {
   usedBytes: number;
   softLimitBytes: number;
   hardLimitBytes: number;
   percentOfHard: number;
   trackedItems: number;
   status: 'ok' | 'warn' | 'critical';
-};
+}
 
 const IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 const VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime']);

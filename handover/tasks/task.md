@@ -153,6 +153,16 @@ All entries are deltas under the Task Revision Policy; each references its paren
   - Fully translated EN/DE/ZH; spec asserts every key resolves in all three languages.
 - `T-006-4` (parent `T-006`) Portfolio packaging:
   - README rebuilt as a showcase page (production screenshots via Playwright, mermaid architecture, engineering highlights, badges); `tests.yml` CI runs both suites + production build on every push; MIT `LICENSE`; developer/ops content split into `docs/DEVELOPMENT.md`.
+- `A-006-2` (parent `T-006`) Normative conformance audit (2026-07-31):
+  - Repo-wide standards review: licensing metadata, legacy naming residue, accessibility/SEO signals, line-ending policy, linting coverage, and web-platform conventions. All findings fixed under `T-006-5`.
+- `T-006-5` (parent `T-006`) Normative conformance pass:
+  - Metadata: backend license `ISC` -> `MIT` (matches repo `LICENSE`), packages renamed `nanami-frontend`/`nanami-backend`, last "Website 1st" residue removed from package metadata and `standards/principles.md`.
+  - Accessibility/SEO: `<html lang>` now tracks the active language via `I18nService` (WCAG 3.1.1); meta description, canonical, Open Graph/Twitter cards with a 1200x630 `og-image.jpg`; `robots.txt` (admin routes disallowed) + `sitemap.xml`; manifest gains `id`/`lang`.
+  - Repo hygiene: `.gitattributes` normalizes line endings to LF (CRLF working copies repeatedly broke tooling); root `.editorconfig` now covers backend and docs.
+  - Linting: ESLint on both packages (angular-eslint incl. template accessibility rules; flat config + `@eslint/js` on backend); `npm run lint` gates both CI jobs; all templates migrated to built-in control flow (`@if`/`@for`) via the official Angular schematic; keyboard support added to the language picker and the media modal backdrop.
+  - Routing: hand-drawn 404 page on the wildcard route (was a silent redirect to home); per-route document titles via a custom `TitleStrategy` that resolves i18n keys and re-applies on language switch.
+  - Assets: Chinese-named PNGs renamed to ASCII (`sun.png`, `walk-1.png`, ...) with references updated.
+  - Tests: backend `58/58`, frontend `69/69` (project total 127).
 
 ## Definition of Done (Project)
 - Tasks `T-001` to `T-007` are implemented and demoable.

@@ -1,5 +1,21 @@
 # Handover History
 
+## 2026-07-31 - Normative Conformance Pass (A-006-2 / T-006-5)
+- Type: public handover update (standards audit + remediation)
+- Scope: repo-wide conformance — licensing, naming, a11y/SEO, line endings, linting, routing conventions
+- Source docs:
+  - `handover/tasks/task.md` (G7: `A-006-2`, `T-006-5`)
+- Key outcomes:
+  - Fixed license contradiction (backend `ISC` vs repo MIT) and removed the last "Website 1st" naming residue; packages renamed `nanami-frontend`/`nanami-backend`.
+  - `<html lang>` now follows the active language (WCAG 3.1.1); added meta description, canonical, Open Graph/Twitter cards (`og-image.jpg`), `robots.txt`, `sitemap.xml`, and manifest `id`/`lang`.
+  - `.gitattributes` LF policy (repo renormalized) + root `.editorconfig` — closes the recurring CRLF tooling hazard.
+  - ESLint introduced on both packages and wired into CI (`npm run lint` before tests); official Angular schematic migrated all templates to `@if`/`@for`; template-a11y findings fixed (keyboard support on language picker and modal backdrop).
+  - New hand-drawn 404 page (wildcard no longer silently redirects home) and language-aware per-route document titles via custom `TitleStrategy`.
+  - Chinese-named public assets renamed to ASCII with references updated.
+  - Verification: backend `58/58` + lint clean, frontend `69/69` + lint clean, production build green.
+- Decision: continue
+- Next owner: user (repo rename, Publisher demo account, admin password rotation, Supabase migration row 8 — all still pending)
+
 ## 2026-07-28 - Frontend Modernization + Portfolio Packaging (T-006-3 / T-006-4 / T-001-1 / T-004-1)
 - Type: public handover update (maintenance overhaul, rounds 3-5)
 - Scope: signals migration, upload pipeline, API layer, dead-code removal, portfolio-grade repo packaging

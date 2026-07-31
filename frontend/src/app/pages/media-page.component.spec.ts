@@ -4,17 +4,9 @@ import { MediaPageComponent } from './media-page.component';
 import { AuthService } from '../core/auth.service';
 
 class MockAuthService {
-  get isAuthenticated(): boolean {
-    return true;
-  }
-
-  get username(): string {
-    return 'admin';
-  }
-
-  get userRole(): string {
-    return 'Admin';
-  }
+  readonly isAuthenticated = true;
+  readonly username = 'admin';
+  readonly userRole = 'Admin';
 
   authHeaders(): HeadersInit {
     return { Authorization: 'Bearer fake-token' };

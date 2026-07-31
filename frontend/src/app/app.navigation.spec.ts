@@ -15,21 +15,10 @@ class MockAuthService {
     return this.authenticated;
   }
 
-  get username(): string {
-    return 'admin';
-  }
-
-  get userRole(): string {
-    return 'Admin';
-  }
-
-  get isAdmin(): boolean {
-    return true;
-  }
-
-  get isPublisherOrAdmin(): boolean {
-    return true;
-  }
+  readonly username = 'admin';
+  readonly userRole = 'Admin';
+  readonly isAdmin = true;
+  readonly isPublisherOrAdmin = true;
 
   authHeaders(): HeadersInit {
     return { Authorization: 'Bearer fake-token' };

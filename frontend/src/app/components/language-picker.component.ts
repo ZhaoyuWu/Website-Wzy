@@ -1,19 +1,18 @@
-import { CommonModule } from '@angular/common';
 import { Component, ElementRef, HostListener, inject } from '@angular/core';
 import { I18nService, Lang } from '../core/i18n.service';
 
-type Option = { code: Lang; short: string; labelKey: string };
+interface Option { code: Lang; short: string; labelKey: string }
 
 const OPTIONS: Option[] = [
   { code: 'en', short: 'EN', labelKey: 'lang.en' },
   { code: 'de', short: 'DE', labelKey: 'lang.de' },
-  { code: 'zh', short: 'ZH', labelKey: 'lang.zh' }
+  { code: 'zh', short: 'ZH', labelKey: 'lang.zh' },
 ];
 
 @Component({
   selector: 'app-language-picker',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   template: `
     <div class="picker-root">
       <button
@@ -27,29 +26,39 @@ const OPTIONS: Option[] = [
       >
         <span class="code">{{ currentShort }}</span>
         <svg class="caret" viewBox="0 0 10 6" aria-hidden="true">
-          <path d="M1 1 L5 5 L9 1" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          <path
+            d="M1 1 L5 5 L9 1"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
         </svg>
       </button>
 
-      <ul
-        class="menu"
-        *ngIf="isOpen"
-        role="listbox"
-        [attr.aria-label]="i18n.t('lang.picker.aria')"
-      >
-        <li
-          *ngFor="let option of options"
-          role="option"
-          class="menu-item"
-          [class.active]="option.code === i18n.lang()"
-          [attr.aria-selected]="option.code === i18n.lang()"
-          (click)="pick(option.code)"
-        >
-          <span class="item-short">{{ option.short }}</span>
-          <span class="item-label">{{ i18n.t(option.labelKey) }}</span>
-          <span class="item-check" aria-hidden="true" *ngIf="option.code === i18n.lang()">✓</span>
-        </li>
-      </ul>
+      @if (isOpen) {
+        <ul class="menu" role="listbox" [attr.aria-label]="i18n.t('lang.picker.aria')">
+          @for (option of options; track option) {
+            <li
+              role="option"
+              class="menu-item"
+              tabindex="0"
+              [class.active]="option.code === i18n.lang()"
+              [attr.aria-selected]="option.code === i18n.lang()"
+              (click)="pick(option.code)"
+              (keydown.enter)="pick(option.code)"
+              (keydown.space)="pick(option.code); $event.preventDefault()"
+            >
+              <span class="item-short">{{ option.short }}</span>
+              <span class="item-label">{{ i18n.t(option.labelKey) }}</span>
+              @if (option.code === i18n.lang()) {
+                <span class="item-check" aria-hidden="true">✓</span>
+              }
+            </li>
+          }
+        </ul>
+      }
     </div>
   `,
   styles: `
@@ -78,7 +87,11 @@ const OPTIONS: Option[] = [
       letter-spacing: 0.04em;
       cursor: pointer;
       line-height: 1;
-      transition: background 120ms ease, color 120ms ease, border-color 120ms ease, transform 120ms ease;
+      transition:
+        background 120ms ease,
+        color 120ms ease,
+        border-color 120ms ease,
+        transform 120ms ease;
     }
 
     .picker-btn:hover {
@@ -191,7 +204,7 @@ const OPTIONS: Option[] = [
         height: 5px;
       }
     }
-  `
+  `,
 })
 export class LanguagePickerComponent {
   readonly i18n = inject(I18nService);

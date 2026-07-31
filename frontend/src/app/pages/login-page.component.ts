@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { ChangeDetectorRef, Component, ViewRef, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -9,7 +8,7 @@ import { LanguagePickerComponent } from '../components/language-picker.component
 @Component({
   selector: 'app-login-page',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink, LanguagePickerComponent],
+  imports: [ReactiveFormsModule, RouterLink, LanguagePickerComponent],
   template: `
     <main class="auth-layout">
       <section class="auth-card">
@@ -23,9 +22,11 @@ import { LanguagePickerComponent } from '../components/language-picker.component
         <form [formGroup]="form" (ngSubmit)="onSubmit()" novalidate>
           <label for="email">{{ i18n.t('login.field.email') }}</label>
           <input id="email" type="email" formControlName="email" autocomplete="email" />
-          <p class="field-error" *ngIf="showError('email')">
-            {{ i18n.t('login.error.email') }}
-          </p>
+          @if (showError('email')) {
+            <p class="field-error">
+              {{ i18n.t('login.error.email') }}
+            </p>
+          }
 
           <label for="password">{{ i18n.t('login.field.password') }}</label>
           <input
@@ -34,11 +35,15 @@ import { LanguagePickerComponent } from '../components/language-picker.component
             formControlName="password"
             autocomplete="current-password"
           />
-          <p class="field-error" *ngIf="showError('password')">
-            {{ i18n.t('login.error.password') }}
-          </p>
+          @if (showError('password')) {
+            <p class="field-error">
+              {{ i18n.t('login.error.password') }}
+            </p>
+          }
 
-          <p class="status-error" *ngIf="submitError">{{ submitError }}</p>
+          @if (submitError) {
+            <p class="status-error">{{ submitError }}</p>
+          }
 
           <button type="submit" [disabled]="isSubmitting">
             {{ isSubmitting ? i18n.t('login.submitting') : i18n.t('login.submit') }}
@@ -166,24 +171,39 @@ import { LanguagePickerComponent } from '../components/language-picker.component
     }
 
     @media (max-width: 428px) {
-      input { height: 44px; }
+      input {
+        height: 44px;
+      }
     }
 
     @media (max-width: 390px) {
-      .auth-layout { padding: 16px; }
-      .auth-card { padding: 20px; border-radius: 14px; }
-      h1 { font-size: 26px; }
-      button { height: 46px; }
+      .auth-layout {
+        padding: 16px;
+      }
+      .auth-card {
+        padding: 20px;
+        border-radius: 14px;
+      }
+      h1 {
+        font-size: 26px;
+      }
+      button {
+        height: 46px;
+      }
     }
 
     @media (max-width: 360px) {
-      .auth-card { padding: 16px; }
+      .auth-card {
+        padding: 16px;
+      }
     }
 
     @media (min-width: 1280px) {
-      .auth-card { padding: 32px; }
+      .auth-card {
+        padding: 32px;
+      }
     }
-  `
+  `,
 })
 export class LoginPageComponent {
   private readonly fb = inject(FormBuilder);
@@ -195,7 +215,7 @@ export class LoginPageComponent {
 
   readonly form = this.fb.nonNullable.group({
     email: ['', [Validators.required, Validators.email]],
-    password: ['', [Validators.required, Validators.minLength(8)]]
+    password: ['', [Validators.required, Validators.minLength(8)]],
   });
 
   submitError = '';
@@ -241,7 +261,3 @@ export class LoginPageComponent {
     }
   }
 }
-
-
-
-

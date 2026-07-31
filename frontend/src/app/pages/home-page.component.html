@@ -9,17 +9,35 @@
 
   <div class="cloud-back-layer" aria-hidden="true">
     <svg class="chalk-cloud cloud-b" viewBox="0 0 420 210" preserveAspectRatio="xMidYMid meet">
-      <path class="cloud-fill" d="M44 144 C 42 116, 62 96, 90 95 C 102 66, 129 53, 160 58 C 181 32, 218 31, 244 52 C 276 46, 307 62, 320 90 C 352 90, 377 110, 379 137 C 382 170, 355 186, 325 182 L 110 182 C 70 188, 50 173, 44 144 Z" />
-      <path class="cloud-outline" d="M44 144 C 42 116, 62 96, 90 95 C 102 66, 129 53, 160 58 C 181 32, 218 31, 244 52 C 276 46, 307 62, 320 90 C 352 90, 377 110, 379 137 C 382 170, 355 186, 325 182 L 110 182 C 70 188, 50 173, 44 144 Z" />
-      <path class="cloud-sketch" d="M88 138 C 94 117, 112 104, 140 106 M171 99 C 193 86, 224 87, 248 101 M276 104 C 300 97, 320 108, 334 126" />
+      <path
+        class="cloud-fill"
+        d="M44 144 C 42 116, 62 96, 90 95 C 102 66, 129 53, 160 58 C 181 32, 218 31, 244 52 C 276 46, 307 62, 320 90 C 352 90, 377 110, 379 137 C 382 170, 355 186, 325 182 L 110 182 C 70 188, 50 173, 44 144 Z"
+      />
+      <path
+        class="cloud-outline"
+        d="M44 144 C 42 116, 62 96, 90 95 C 102 66, 129 53, 160 58 C 181 32, 218 31, 244 52 C 276 46, 307 62, 320 90 C 352 90, 377 110, 379 137 C 382 170, 355 186, 325 182 L 110 182 C 70 188, 50 173, 44 144 Z"
+      />
+      <path
+        class="cloud-sketch"
+        d="M88 138 C 94 117, 112 104, 140 106 M171 99 C 193 86, 224 87, 248 101 M276 104 C 300 97, 320 108, 334 126"
+      />
     </svg>
   </div>
 
   <div class="cloud-overlay" aria-hidden="true">
     <svg class="chalk-cloud cloud-a" viewBox="0 0 420 210" preserveAspectRatio="xMidYMid meet">
-      <path class="cloud-fill" d="M58 150 C 48 112, 72 86, 110 84 C 121 58, 153 44, 188 50 C 214 28, 254 30, 281 52 C 321 42, 356 66, 360 102 C 390 108, 404 132, 394 156 C 382 184, 344 190, 312 181 L 106 181 C 78 188, 62 174, 58 150 Z" />
-      <path class="cloud-outline" d="M58 150 C 48 112, 72 86, 110 84 C 121 58, 153 44, 188 50 C 214 28, 254 30, 281 52 C 321 42, 356 66, 360 102 C 390 108, 404 132, 394 156 C 382 184, 344 190, 312 181 L 106 181 C 78 188, 62 174, 58 150 Z" />
-      <path class="cloud-sketch" d="M95 145 C 92 123, 108 106, 136 106 M165 99 C 188 83, 216 85, 238 100 M272 102 C 296 92, 320 102, 333 122" />
+      <path
+        class="cloud-fill"
+        d="M58 150 C 48 112, 72 86, 110 84 C 121 58, 153 44, 188 50 C 214 28, 254 30, 281 52 C 321 42, 356 66, 360 102 C 390 108, 404 132, 394 156 C 382 184, 344 190, 312 181 L 106 181 C 78 188, 62 174, 58 150 Z"
+      />
+      <path
+        class="cloud-outline"
+        d="M58 150 C 48 112, 72 86, 110 84 C 121 58, 153 44, 188 50 C 214 28, 254 30, 281 52 C 321 42, 356 66, 360 102 C 390 108, 404 132, 394 156 C 382 184, 344 190, 312 181 L 106 181 C 78 188, 62 174, 58 150 Z"
+      />
+      <path
+        class="cloud-sketch"
+        d="M95 145 C 92 123, 108 106, 136 106 M165 99 C 188 83, 216 85, 238 100 M272 102 C 296 92, 320 102, 333 122"
+      />
     </svg>
   </div>
 
@@ -30,23 +48,21 @@
     </a>
     <nav>
       <a [routerLink]="['/tech']">{{ i18n.t('nav.tech') }}</a>
-      <ng-container *ngIf="!auth.isAuthenticated">
+      @if (!auth.isAuthenticated) {
         <a [routerLink]="['/register']">{{ i18n.t('nav.register') }}</a>
         <a [routerLink]="['/login']">{{ i18n.t('nav.login') }}</a>
-      </ng-container>
-      <ng-container *ngIf="auth.isAuthenticated">
-        <a *ngIf="auth.isPublisherOrAdmin" [routerLink]="['/admin']">{{ i18n.t('nav.settings') }}</a>
-      </ng-container>
+      }
+      @if (auth.isAuthenticated) {
+        @if (auth.isPublisherOrAdmin) {
+          <a [routerLink]="['/admin']">{{ i18n.t('nav.settings') }}</a>
+        }
+      }
       <app-language-picker></app-language-picker>
-      <button
-        type="button"
-        class="nav-logout"
-        *ngIf="auth.isAuthenticated"
-        (click)="logout()"
-        [disabled]="isLoggingOut"
-      >
-        {{ isLoggingOut ? i18n.t('nav.logout.pending') : i18n.t('nav.logout') }}
-      </button>
+      @if (auth.isAuthenticated) {
+        <button type="button" class="nav-logout" (click)="logout()" [disabled]="isLoggingOut">
+          {{ isLoggingOut ? i18n.t('nav.logout.pending') : i18n.t('nav.logout') }}
+        </button>
+      }
     </nav>
   </header>
 
@@ -56,35 +72,55 @@
     [class.hero-enter-ready]="heroEntranceReady"
     [class.hero-reduced-motion]="prefersReducedMotion"
   >
-    <img class="doodle doodle-sun" [src]="theme === 'night' ? '月亮.png' : '太阳.png'" alt="" aria-hidden="true" [class.is-moon]="theme === 'night'" />
+    <img
+      class="doodle doodle-sun"
+      [src]="theme === 'night' ? 'moon.png' : 'sun.png'"
+      alt=""
+      aria-hidden="true"
+      [class.is-moon]="theme === 'night'"
+    />
 
     <svg class="doodle doodle-paw" viewBox="0 0 60 60" aria-hidden="true">
-      <ellipse cx="15" cy="20" rx="5" ry="7" fill="currentColor"/>
-      <ellipse cx="28" cy="12" rx="5" ry="7" fill="currentColor"/>
-      <ellipse cx="42" cy="16" rx="5" ry="7" fill="currentColor"/>
-      <ellipse cx="50" cy="30" rx="4.5" ry="6" fill="currentColor"/>
-      <path d="M18 35 Q 30 28 44 36 Q 48 46 32 50 Q 16 46 18 35 Z" fill="currentColor"/>
+      <ellipse cx="15" cy="20" rx="5" ry="7" fill="currentColor" />
+      <ellipse cx="28" cy="12" rx="5" ry="7" fill="currentColor" />
+      <ellipse cx="42" cy="16" rx="5" ry="7" fill="currentColor" />
+      <ellipse cx="50" cy="30" rx="4.5" ry="6" fill="currentColor" />
+      <path d="M18 35 Q 30 28 44 36 Q 48 46 32 50 Q 16 46 18 35 Z" fill="currentColor" />
     </svg>
 
     <svg class="doodle doodle-grass" viewBox="0 0 120 40" aria-hidden="true">
       <path
         d="M6 38 L10 14 L14 38 M22 38 L26 20 L30 38 M38 38 L42 10 L46 38 M54 38 L58 18 L62 38 M70 38 L74 14 L78 38 M86 38 L90 22 L94 38 M102 38 L106 12 L110 38"
-        fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
     </svg>
 
     <svg class="doodle doodle-heart" viewBox="0 0 48 48" aria-hidden="true">
       <path
         d="M24 40 C 8 28, 6 14, 16 10 C 22 8, 24 14, 24 16 C 24 14, 26 8, 32 10 C 42 14, 40 28, 24 40 Z"
-        fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+        fill="none"
+        stroke="currentColor"
+        stroke-width="3"
+        stroke-linejoin="round"
+        stroke-linecap="round"
+      />
     </svg>
 
     <svg class="doodle doodle-scribble" viewBox="0 0 90 30" aria-hidden="true">
       <path
         d="M4 24 C 14 4, 22 28, 34 8 S 56 26, 68 10 S 86 22, 88 14"
-        fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.5"
+        stroke-linecap="round"
+      />
     </svg>
 
-    <ng-container *ngIf="currentHeroMedia as item">
+    @if (currentHeroMedia; as item) {
       <div
         class="kite-frame"
         [attr.data-kite-frame]="kiteFrame"
@@ -100,25 +136,44 @@
         (pointerup)="onHeroPointerUp($event)"
         (pointercancel)="onHeroPointerCancel()"
       >
-        <img class="kite-bg" [class.is-active]="kiteFrame === 1" src="走路1.png" alt="" aria-hidden="true" />
-        <img class="kite-bg" [class.is-active]="kiteFrame === 2" src="走路2.png" alt="" aria-hidden="true" />
-        <img class="kite-bg" [class.is-active]="kiteFrame === 3" src="走路3.png" alt="" aria-hidden="true" />
-        <img class="kite-bg" [class.is-active]="kiteFrame === 4" src="走路4.png" alt="" aria-hidden="true" />
         <img
-          *ngIf="item.type === 'image'"
-          class="kite-photo"
-          [src]="item.mediaUrl"
-          [alt]="item.title || settings.profileName"
+          class="kite-bg"
+          [class.is-active]="kiteFrame === 1"
+          src="walk-1.png"
+          alt=""
+          aria-hidden="true"
         />
-        <video
-          *ngIf="item.type === 'video'"
-          class="kite-photo"
-          [src]="item.mediaUrl"
-          muted
-          playsinline
-          autoplay
-          loop
-        ></video>
+        <img
+          class="kite-bg"
+          [class.is-active]="kiteFrame === 2"
+          src="walk-2.png"
+          alt=""
+          aria-hidden="true"
+        />
+        <img
+          class="kite-bg"
+          [class.is-active]="kiteFrame === 3"
+          src="walk-3.png"
+          alt=""
+          aria-hidden="true"
+        />
+        <img
+          class="kite-bg"
+          [class.is-active]="kiteFrame === 4"
+          src="walk-4.png"
+          alt=""
+          aria-hidden="true"
+        />
+        @if (item.type === 'image') {
+          <img
+            class="kite-photo"
+            [src]="item.mediaUrl"
+            [alt]="item.title || settings.profileName"
+          />
+        }
+        @if (item.type === 'video') {
+          <video class="kite-photo" [src]="item.mediaUrl" muted playsinline autoplay loop></video>
+        }
         <div class="kite-caption">{{ item.title || settings.profileName }}</div>
         <div
           class="date-stack"
@@ -131,144 +186,186 @@
           <div class="date-item date-prev">{{ formatMediaDate(prevMedia) }}</div>
         </div>
       </div>
-    </ng-container>
+    }
   </section>
 
-  <div
-    class="media-modal-mask"
-    *ngIf="selectedMedia as item"
-    role="dialog"
-    aria-modal="true"
-    (click)="closeMediaDetail()"
-  >
-    <section class="media-modal" (click)="$event.stopPropagation()">
-      <button
-        type="button"
-        class="media-modal-close"
-        (click)="closeMediaDetail()"
-        [attr.aria-label]="i18n.t('story.comment.modal.close')"
-      >×</button>
-      <div class="media-modal-image">
-        <img *ngIf="item.type === 'image'" [src]="item.mediaUrl" [alt]="item.title" />
-        <video *ngIf="item.type === 'video'" [src]="item.mediaUrl" controls playsinline></video>
-      </div>
-      <aside class="media-modal-info">
-        <h2 class="media-modal-title">{{ item.title || settings.profileName }}</h2>
-        <p class="media-modal-date" *ngIf="item.displayDate">{{ item.displayDate }}</p>
-        <p class="media-modal-desc" *ngIf="item.description">{{ item.description }}</p>
-
-        <div class="media-actions">
-          <button
-            type="button"
-            class="like-button"
-            [class.is-liked]="isLiked(item)"
-            [disabled]="isLikePending(item)"
-            (click)="toggleLike(item)"
-            [attr.aria-pressed]="isLiked(item)"
-            [attr.aria-label]="i18n.t(isLiked(item) ? 'story.like.unlike' : 'story.like.like', { title: item.title || settings.profileName })"
-          >
-            <span class="like-heart" aria-hidden="true">{{ isLiked(item) ? '♥' : '♡' }}</span>
-            <span class="like-count">{{ item.likesCount }}</span>
-          </button>
-          <span class="comment-count" [attr.aria-label]="i18n.t('story.comment.label')">
-            <span aria-hidden="true">💬</span>
-            <span>{{ mediaComments.length || item.commentsCount }}</span>
-          </span>
+  @if (selectedMedia; as item) {
+    <div
+      class="media-modal-mask"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="onMediaMaskClick($event)"
+      (keydown.escape)="closeMediaDetail()"
+    >
+      <section class="media-modal">
+        <button
+          type="button"
+          class="media-modal-close"
+          (click)="closeMediaDetail()"
+          [attr.aria-label]="i18n.t('story.comment.modal.close')"
+        >
+          ×
+        </button>
+        <div class="media-modal-image">
+          @if (item.type === 'image') {
+            <img [src]="item.mediaUrl" [alt]="item.title" />
+          }
+          @if (item.type === 'video') {
+            <video [src]="item.mediaUrl" controls playsinline></video>
+          }
         </div>
-
-        <section class="media-comments">
-          <h3 class="media-comments-heading">{{ i18n.t('story.comment.modal.title') }}</h3>
-          <p class="comments-state" *ngIf="isLoadingComments">{{ i18n.t('story.comment.modal.loading') }}</p>
-          <p class="comments-state" *ngIf="commentsLoadError && !isLoadingComments">{{ commentsLoadError }}</p>
-          <ul
-            class="media-comment-list"
-            *ngIf="!isLoadingComments && mediaComments.length > 0"
-          >
-            <li *ngFor="let c of mediaComments">
-              <div class="comment-meta">
-                <strong>{{ c.author_name }}</strong>
-                <span>{{ c.created_at }}</span>
+        <aside class="media-modal-info">
+          <h2 class="media-modal-title">{{ item.title || settings.profileName }}</h2>
+          @if (item.displayDate) {
+            <p class="media-modal-date">{{ item.displayDate }}</p>
+          }
+          @if (item.description) {
+            <p class="media-modal-desc">{{ item.description }}</p>
+          }
+          <div class="media-actions">
+            <button
+              type="button"
+              class="like-button"
+              [class.is-liked]="isLiked(item)"
+              [disabled]="isLikePending(item)"
+              (click)="toggleLike(item)"
+              [attr.aria-pressed]="isLiked(item)"
+              [attr.aria-label]="
+                i18n.t(isLiked(item) ? 'story.like.unlike' : 'story.like.like', {
+                  title: item.title || settings.profileName,
+                })
+              "
+            >
+              <span class="like-heart" aria-hidden="true">{{ isLiked(item) ? '♥' : '♡' }}</span>
+              <span class="like-count">{{ item.likesCount }}</span>
+            </button>
+            <span class="comment-count" [attr.aria-label]="i18n.t('story.comment.label')">
+              <span aria-hidden="true">💬</span>
+              <span>{{ mediaComments.length || item.commentsCount }}</span>
+            </span>
+          </div>
+          <section class="media-comments">
+            <h3 class="media-comments-heading">{{ i18n.t('story.comment.modal.title') }}</h3>
+            @if (isLoadingComments) {
+              <p class="comments-state">{{ i18n.t('story.comment.modal.loading') }}</p>
+            }
+            @if (commentsLoadError && !isLoadingComments) {
+              <p class="comments-state">{{ commentsLoadError }}</p>
+            }
+            @if (!isLoadingComments && mediaComments.length > 0) {
+              <ul class="media-comment-list">
+                @for (c of mediaComments; track c) {
+                  <li>
+                    <div class="comment-meta">
+                      <strong>{{ c.author_name }}</strong>
+                      <span>{{ c.created_at }}</span>
+                    </div>
+                    <p class="comment-message">{{ c.message }}</p>
+                  </li>
+                }
+              </ul>
+            }
+            @if (!isLoadingComments && !commentsLoadError && mediaComments.length === 0) {
+              <p class="comments-state comments-empty">{{ i18n.t('story.comment.modal.empty') }}</p>
+            }
+            <form class="media-comment-form" (ngSubmit)="submitMediaComment()">
+              @if (!auth.isAuthenticated) {
+                <input
+                  type="text"
+                  class="comment-author"
+                  [(ngModel)]="mediaCommentAuthor"
+                  name="author"
+                  maxlength="60"
+                  [placeholder]="i18n.t('story.comment.modal.authorPlaceholder')"
+                  [disabled]="isSubmittingComment"
+                />
+              }
+              <textarea
+                class="comment-textarea"
+                [(ngModel)]="mediaCommentDraft"
+                name="message"
+                rows="3"
+                maxlength="800"
+                [placeholder]="i18n.t('story.comment.modal.placeholder')"
+                [disabled]="isSubmittingComment"
+              ></textarea>
+              @if (mediaCommentError) {
+                <p class="comment-error">{{ mediaCommentError }}</p>
+              }
+              @if (mediaCommentSuccess) {
+                <p class="comment-success">{{ mediaCommentSuccess }}</p>
+              }
+              <div class="comment-form-actions">
+                <button type="submit" [disabled]="isSubmittingComment">
+                  {{
+                    isSubmittingComment
+                      ? i18n.t('story.comment.modal.submitting')
+                      : i18n.t('story.comment.modal.submit')
+                  }}
+                </button>
               </div>
-              <p class="comment-message">{{ c.message }}</p>
-            </li>
-          </ul>
-          <p
-            class="comments-state comments-empty"
-            *ngIf="!isLoadingComments && !commentsLoadError && mediaComments.length === 0"
-          >{{ i18n.t('story.comment.modal.empty') }}</p>
-
-          <form class="media-comment-form" (ngSubmit)="submitMediaComment()">
-            <input
-              *ngIf="!auth.isAuthenticated"
-              type="text"
-              class="comment-author"
-              [(ngModel)]="mediaCommentAuthor"
-              name="author"
-              maxlength="60"
-              [placeholder]="i18n.t('story.comment.modal.authorPlaceholder')"
-              [disabled]="isSubmittingComment"
-            />
-            <textarea
-              class="comment-textarea"
-              [(ngModel)]="mediaCommentDraft"
-              name="message"
-              rows="3"
-              maxlength="800"
-              [placeholder]="i18n.t('story.comment.modal.placeholder')"
-              [disabled]="isSubmittingComment"
-            ></textarea>
-            <p class="comment-error" *ngIf="mediaCommentError">{{ mediaCommentError }}</p>
-            <p class="comment-success" *ngIf="mediaCommentSuccess">{{ mediaCommentSuccess }}</p>
-            <div class="comment-form-actions">
-              <button type="submit" [disabled]="isSubmittingComment">
-                {{ isSubmittingComment ? i18n.t('story.comment.modal.submitting') : i18n.t('story.comment.modal.submit') }}
-              </button>
-            </div>
-          </form>
-        </section>
-      </aside>
-    </section>
-  </div>
+            </form>
+          </section>
+        </aside>
+      </section>
+    </div>
+  }
 
   <div class="street-ring-section" aria-hidden="true">
     <div class="street-ring-viewport">
       <img
-        [src]="theme === 'night' ? '晚上建筑.png' : '白天建筑.png'"
+        [src]="theme === 'night' ? 'building-night.png' : 'building-day.png'"
         alt=""
         class="ring-layer ring-buildings"
         [class.ring-wheel-animating]="ringStepDirection !== null"
-        [style.transform]="'translate(-50%, 50%) rotate(' + (ringRotationDeg * 0.5) + 'deg)'"
+        [style.transform]="'translate(-50%, 50%) rotate(' + ringRotationDeg * 0.5 + 'deg)'"
       />
       <img
-        [src]="theme === 'night' ? '晚上商店.png' : '白天商店.png'"
+        [src]="theme === 'night' ? 'shop-night.png' : 'shop-day.png'"
         alt=""
         class="ring-layer ring-shops"
         [class.ring-wheel-animating]="ringStepDirection !== null"
         [style.transform]="'translate(-50%, 50%) rotate(' + ringRotationDeg + 'deg)'"
       />
       <img
-        src="街道.png"
+        src="street.png"
         alt=""
         class="ring-layer ring-streets"
         [class.ring-wheel-animating]="ringStepDirection !== null"
-        [style.transform]="'translate(-50%, 50%) rotate(' + (ringRotationDeg * 1.6) + 'deg)'"
+        [style.transform]="'translate(-50%, 50%) rotate(' + ringRotationDeg * 1.6 + 'deg)'"
         (transitionend)="onRingStepAnimationEnd()"
       />
     </div>
   </div>
 
   <div class="hero-stage-actions" aria-label="Carousel controls">
-    <button type="button" (click)="showOlderMedia()" [disabled]="!canShowOlderMedia()" aria-label="Older">‹</button>
-    <button type="button" (click)="showNewerMedia()" [disabled]="!canShowNewerMedia()" aria-label="Newer">›</button>
+    <button
+      type="button"
+      (click)="showOlderMedia()"
+      [disabled]="!canShowOlderMedia()"
+      aria-label="Older"
+    >
+      ‹
+    </button>
+    <button
+      type="button"
+      (click)="showNewerMedia()"
+      [disabled]="!canShowNewerMedia()"
+      aria-label="Newer"
+    >
+      ›
+    </button>
   </div>
 
-  <a
-    *ngIf="auth.isPublisherOrAdmin"
-    class="floating-create"
-    [routerLink]="['/manage-media']"
-    [attr.aria-label]="i18n.t('media.upload.submit')"
-  >
-    <span class="plus" aria-hidden="true">+</span>
-    <span>{{ i18n.t('media.upload.submit') }}</span>
-  </a>
+  @if (auth.isPublisherOrAdmin) {
+    <a
+      class="floating-create"
+      [routerLink]="['/manage-media']"
+      [attr.aria-label]="i18n.t('media.upload.submit')"
+    >
+      <span class="plus" aria-hidden="true">+</span>
+      <span>{{ i18n.t('media.upload.submit') }}</span>
+    </a>
+  }
 </main>

@@ -13,18 +13,22 @@
     </div>
   </section>
 
-  <section class="tech-card" *ngFor="let section of sections; trackBy: trackBySection">
-    <h2>{{ i18n.t(section.titleKey) }}</h2>
-    <ul class="tech-list">
-      <li class="tech-row" *ngFor="let item of section.items; trackBy: trackByItem">
-        <div class="tech-name">
-          <strong>{{ item.name }}</strong>
-          <span class="version-badge">{{ item.version }}</span>
-        </div>
-        <p class="tech-desc">{{ i18n.t(item.descKey) }}</p>
-      </li>
-    </ul>
-  </section>
+  @for (section of sections; track trackBySection($index, section)) {
+    <section class="tech-card">
+      <h2>{{ i18n.t(section.titleKey) }}</h2>
+      <ul class="tech-list">
+        @for (item of section.items; track trackByItem($index, item)) {
+          <li class="tech-row">
+            <div class="tech-name">
+              <strong>{{ item.name }}</strong>
+              <span class="version-badge">{{ item.version }}</span>
+            </div>
+            <p class="tech-desc">{{ i18n.t(item.descKey) }}</p>
+          </li>
+        }
+      </ul>
+    </section>
+  }
 
   <section class="tech-card creator-card">
     <h2>{{ i18n.t('tech.section.creator') }}</h2>

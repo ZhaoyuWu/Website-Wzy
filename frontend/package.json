@@ -1,6 +1,6 @@
 {
-  "name": "frontend",
-  "version": "0.0.0",
+  "name": "nanami-frontend",
+  "version": "1.0.0",
   "scripts": {
     "ng": "ng",
     "config:runtime": "node ./scripts/write-runtime-config.mjs",
@@ -10,7 +10,8 @@
     "watch": "ng build --watch --configuration development",
     "test:runtime-config": "node ./scripts/write-runtime-config.test.mjs",
     "test": "ng test",
-    "test:ci": "npm run test:runtime-config && ng test --watch=false"
+    "test:ci": "npm run test:runtime-config && ng test --watch=false",
+    "lint": "ng lint"
   },
   "private": true,
   "packageManager": "npm@10.9.2",
@@ -29,9 +30,13 @@
     "@angular/build": "^21.2.7",
     "@angular/cli": "^21.2.7",
     "@angular/compiler-cli": "^21.2.0",
+    "@eslint/js": "^10.0.1",
+    "angular-eslint": "21.4.0",
+    "eslint": "^10.3.0",
     "jsdom": "^28.0.0",
     "prettier": "^3.8.1",
     "typescript": "~5.9.2",
+    "typescript-eslint": "8.59.2",
     "vitest": "^4.0.8"
   }
 }

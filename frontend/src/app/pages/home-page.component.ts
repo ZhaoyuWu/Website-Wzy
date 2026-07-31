@@ -1,5 +1,15 @@
-import { CommonModule } from '@angular/common';
-import { AfterViewInit, ChangeDetectorRef, Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, ViewRef, inject } from '@angular/core';
+import {
+  AfterViewInit,
+  ChangeDetectorRef,
+  Component,
+  ElementRef,
+  HostListener,
+  OnDestroy,
+  OnInit,
+  ViewChild,
+  ViewRef,
+  inject,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../core/auth.service';
@@ -7,15 +17,15 @@ import { I18nService } from '../core/i18n.service';
 import { resolveApiBaseUrl } from '../core/runtime-config';
 import { LanguagePickerComponent } from '../components/language-picker.component';
 
-type SiteSettings = {
+interface SiteSettings {
   profileName: string;
   heroTagline: string;
   aboutText: string;
   contactEmail: string;
   showContactEmail: boolean;
-};
+}
 
-type TimelineMediaItem = {
+interface TimelineMediaItem {
   id: string | number;
   type: 'image' | 'video';
   title: string;
@@ -25,31 +35,32 @@ type TimelineMediaItem = {
   createdAt: string | null;
   likesCount: number;
   commentsCount: number;
-};
+}
 
 const LIKED_STORAGE_KEY = 'nanami.story.likes';
 
-type MediaComment = {
+interface MediaComment {
   id: string | number;
   author_name: string;
   message: string;
   created_at: string;
-};
+}
 
 const DEFAULT_SITE_SETTINGS: SiteSettings = {
   profileName: 'Nanami',
   heroTagline: 'Nanami, the sunshine of every walk.',
-  aboutText: "This page shares Nanami's personality, daily routine, and favorite places in a warm timeline style.",
+  aboutText:
+    "This page shares Nanami's personality, daily routine, and favorite places in a warm timeline style.",
   contactEmail: '',
-  showContactEmail: false
+  showContactEmail: false,
 };
 
 @Component({
   selector: 'app-home-page',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, LanguagePickerComponent],
+  imports: [FormsModule, RouterLink, LanguagePickerComponent],
   templateUrl: './home-page.component.html',
-  styleUrl: './home-page.component.scss'
+  styleUrl: './home-page.component.scss',
 })
 export class HomePageComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('heroRoot') private heroRoot?: ElementRef<HTMLElement>;
@@ -200,9 +211,7 @@ export class HomePageComponent implements OnInit, AfterViewInit, OnDestroy {
     try {
       const rows = Array.from(this.likedKeys).map((key) => {
         const sep = key.indexOf(':');
-        return sep > 0
-          ? { type: key.slice(0, sep), id: key.slice(sep + 1) }
-          : null;
+        return sep > 0 ? { type: key.slice(0, sep), id: key.slice(sep + 1) } : null;
       });
       localStorage.setItem(LIKED_STORAGE_KEY, JSON.stringify(rows.filter(Boolean)));
     } catch {
@@ -315,9 +324,11 @@ export class HomePageComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private checkPrefersReducedMotion(): boolean {
-    return typeof window !== 'undefined' &&
+    return (
+      typeof window !== 'undefined' &&
       typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    );
   }
 
   private scheduleHeroParallaxUpdate(): void {
@@ -452,9 +463,9 @@ export class HomePageComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private stepKiteFrame(direction: 'forward' | 'backward'): void {
     if (direction === 'forward') {
-      this.kiteFrame = (((this.kiteFrame % 4) + 1) as 1 | 2 | 3 | 4);
+      this.kiteFrame = ((this.kiteFrame % 4) + 1) as 1 | 2 | 3 | 4;
     } else {
-      this.kiteFrame = (((this.kiteFrame + 2) % 4 + 1) as 1 | 2 | 3 | 4);
+      this.kiteFrame = (((this.kiteFrame + 2) % 4) + 1) as 1 | 2 | 3 | 4;
     }
   }
 
@@ -515,6 +526,14 @@ export class HomePageComponent implements OnInit, AfterViewInit, OnDestroy {
     await this.loadMediaComments(item);
   }
 
+  onMediaMaskClick(event: MouseEvent): void {
+    // Only a click on the backdrop itself dismisses; clicks inside the modal
+    // bubble up with a different target.
+    if (event.target === event.currentTarget) {
+      this.closeMediaDetail();
+    }
+  }
+
   closeMediaDetail(): void {
     this.selectedMedia = null;
     this.mediaComments = [];
@@ -525,7 +544,10 @@ export class HomePageComponent implements OnInit, AfterViewInit, OnDestroy {
     this.safeDetectChanges();
   }
 
-  private async loadMediaComments(item: TimelineMediaItem, opts?: { silent?: boolean }): Promise<void> {
+  private async loadMediaComments(
+    item: TimelineMediaItem,
+    opts?: { silent?: boolean },
+  ): Promise<void> {
     if (!opts?.silent) {
       this.isLoadingComments = true;
       this.commentsLoadError = '';
@@ -534,9 +556,11 @@ export class HomePageComponent implements OnInit, AfterViewInit, OnDestroy {
     try {
       const url = `${this.apiBaseUrl}/api/story/media/${encodeURIComponent(String(item.id))}/comments?_=${Date.now()}`;
       const response = await fetch(url, { cache: 'no-store' });
-      const payload = (await response.json().catch(() => null)) as
-        | { ok?: boolean; items?: MediaComment[]; message?: string }
-        | null;
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        items?: MediaComment[];
+        message?: string;
+      } | null;
       if (!response.ok || !payload?.ok) {
         this.commentsLoadError = payload?.message || this.i18n.t('story.comment.error.loadFailed');
         if (!opts?.silent) this.mediaComments = [];
@@ -583,11 +607,12 @@ export class HomePageComponent implements OnInit, AfterViewInit, OnDestroy {
       const response = await fetch(url, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ authorName, message })
+        body: JSON.stringify({ authorName, message }),
       });
-      const payload = (await response.json().catch(() => null)) as
-        | { ok?: boolean; message?: string }
-        | null;
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        message?: string;
+      } | null;
       if (!response.ok || !payload?.ok) {
         this.mediaCommentError = payload?.message || this.i18n.t('story.comment.error.postFailed');
         return;
@@ -597,7 +622,7 @@ export class HomePageComponent implements OnInit, AfterViewInit, OnDestroy {
         id: `local-${Date.now()}`,
         author_name: authorName,
         message,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
       };
       this.mediaComments = [optimistic, ...this.mediaComments];
       this.mediaCommentDraft = '';
@@ -622,7 +647,7 @@ export class HomePageComponent implements OnInit, AfterViewInit, OnDestroy {
     const response = await fetch(`${this.apiBaseUrl}/api/story/timeline?page=1`);
     const payload = (await response.json()) as {
       ok?: boolean;
-      items?: Array<{
+      items?: {
         id?: number | string;
         type?: string;
         title?: string;
@@ -632,7 +657,7 @@ export class HomePageComponent implements OnInit, AfterViewInit, OnDestroy {
         createdAt?: string | null;
         likesCount?: number | string;
         commentsCount?: number | string;
-      }>;
+      }[];
     };
 
     if (!response.ok || !payload.ok) {
@@ -648,17 +673,19 @@ export class HomePageComponent implements OnInit, AfterViewInit, OnDestroy {
     const sourceItems = Array.isArray(payload.items) ? payload.items : [];
     this.heroMediaItems = sourceItems
       .filter((item) => (item.type === 'image' || item.type === 'video') && Boolean(item.mediaUrl))
-      .map((item): TimelineMediaItem => ({
-        id: item.id ?? '',
-        type: item.type === 'video' ? 'video' : 'image',
-        title: String(item.title || ''),
-        description: String(item.description || ''),
-        mediaUrl: String(item.mediaUrl || ''),
-        displayDate: item.displayDate ?? null,
-        createdAt: item.createdAt ?? null,
-        likesCount: toCount(item.likesCount),
-        commentsCount: toCount(item.commentsCount)
-      }))
+      .map(
+        (item): TimelineMediaItem => ({
+          id: item.id ?? '',
+          type: item.type === 'video' ? 'video' : 'image',
+          title: String(item.title || ''),
+          description: String(item.description || ''),
+          mediaUrl: String(item.mediaUrl || ''),
+          displayDate: item.displayDate ?? null,
+          createdAt: item.createdAt ?? null,
+          likesCount: toCount(item.likesCount),
+          commentsCount: toCount(item.commentsCount),
+        }),
+      )
       .sort((a, b) => {
         const dayA = Date.parse(`${a.displayDate ?? '1970-01-01'}T00:00:00Z`);
         const dayB = Date.parse(`${b.displayDate ?? '1970-01-01'}T00:00:00Z`);
@@ -698,7 +725,7 @@ export class HomePageComponent implements OnInit, AfterViewInit, OnDestroy {
       heroTagline: this.pickSafeText(source.heroTagline, DEFAULT_SITE_SETTINGS.heroTagline, 180),
       aboutText: this.pickSafeText(source.aboutText, DEFAULT_SITE_SETTINGS.aboutText, 1200),
       contactEmail: this.pickSafeText(source.contactEmail, '', 120),
-      showContactEmail: Boolean(source.showContactEmail)
+      showContactEmail: Boolean(source.showContactEmail),
     };
   }
 
@@ -714,9 +741,4 @@ export class HomePageComponent implements OnInit, AfterViewInit, OnDestroy {
 
     return normalized;
   }
-
 }
-
-
-
-

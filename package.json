@@ -1,8 +1,10 @@
 {
-  "name": "website-1st-harness-commands",
+  "name": "nanami-harness-commands",
   "version": "1.0.0",
   "private": true,
-  "description": "Local command runner for Harness slash-command templates",
+  "license": "MIT",
+  "author": "Zhaoyu Wu",
+  "description": "Local command runner for the Nanami website Harness slash-command templates",
   "scripts": {
     "harness:help": "node scripts/harness-command.js --list",
     "generator": "node scripts/harness-command.js generator",

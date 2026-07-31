@@ -43,23 +43,6 @@ function startTestServer(options = {}) {
   });
 }
 
-async function postJson(baseUrl, path, body, headers = {}) {
-  const response = await fetch(`${baseUrl}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...headers },
-    body: JSON.stringify(body),
-  });
-
-  let payload = {};
-  try {
-    payload = await response.json();
-  } catch {
-    payload = {};
-  }
-
-  return { response, payload };
-}
-
 async function patchJson(baseUrl, path, body, headers = {}) {
   const response = await fetch(`${baseUrl}${path}`, {
     method: "PATCH",
@@ -67,7 +50,7 @@ async function patchJson(baseUrl, path, body, headers = {}) {
     body: JSON.stringify(body),
   });
 
-  let payload = {};
+  let payload;
   try {
     payload = await response.json();
   } catch {
@@ -83,7 +66,7 @@ async function getJson(baseUrl, path, headers = {}) {
     headers,
   });
 
-  let payload = {};
+  let payload;
   try {
     payload = await response.json();
   } catch {

@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { SwUpdate, VersionEvent } from '@angular/service-worker';
 import { Subscription, filter } from 'rxjs';
@@ -7,14 +6,16 @@ import { I18nService } from '../core/i18n.service';
 @Component({
   selector: 'app-update-prompt',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   template: `
-    <div *ngIf="updateAvailable" class="update-prompt" role="status">
-      <span class="msg">{{ i18n.t('app.update.available') }}</span>
-      <button type="button" class="btn" (click)="reload()">
-        {{ i18n.t('app.update.reload') }}
-      </button>
-    </div>
+    @if (updateAvailable) {
+      <div class="update-prompt" role="status">
+        <span class="msg">{{ i18n.t('app.update.available') }}</span>
+        <button type="button" class="btn" (click)="reload()">
+          {{ i18n.t('app.update.reload') }}
+        </button>
+      </div>
+    }
   `,
   styles: `
     .update-prompt {
@@ -46,12 +47,20 @@ import { I18nService } from '../core/i18n.service';
       border-radius: 999px;
       cursor: pointer;
     }
-    .btn:hover { background: var(--color-accent-soft); }
-    @keyframes update-prompt-pop {
-      from { opacity: 0; transform: translate(-50%, 8px); }
-      to   { opacity: 1; transform: translate(-50%, 0);   }
+    .btn:hover {
+      background: var(--color-accent-soft);
     }
-  `
+    @keyframes update-prompt-pop {
+      from {
+        opacity: 0;
+        transform: translate(-50%, 8px);
+      }
+      to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+      }
+    }
+  `,
 })
 export class UpdatePromptComponent implements OnInit, OnDestroy {
   private readonly swUpdate = inject(SwUpdate);
@@ -72,15 +81,22 @@ export class UpdatePromptComponent implements OnInit, OnDestroy {
       });
 
     // Background poll every 30 min so long-lived PWA tabs find updates.
-    this.pollTimer = setInterval(() => {
-      this.swUpdate.checkForUpdate().catch(() => {});
-    }, 30 * 60 * 1000);
+    this.pollTimer = setInterval(
+      () => {
+        this.swUpdate.checkForUpdate().catch(() => {
+          /* offline or SW disabled — a missed poll is fine */
+        });
+      },
+      30 * 60 * 1000,
+    );
   }
 
   reload(): void {
     this.swUpdate
       .activateUpdate()
-      .catch(() => {})
+      .catch(() => {
+        /* reload below still picks up the fetched version */
+      })
       .finally(() => location.reload());
   }
 

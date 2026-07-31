@@ -25,6 +25,17 @@ const TRANSLATIONS: Record<Lang, Dictionary> = {
     'nav.home': '← Home',
     'nav.tech': 'Tech',
 
+    'title.home': 'Home',
+    'title.login': 'Login',
+    'title.register': 'Register',
+    'title.admin': 'Settings',
+    'title.media': 'Media',
+    'title.tech': 'Tech',
+    'title.notFound': 'Page not found',
+
+    'notfound.heading': 'This path leads nowhere',
+    'notfound.text': 'Nanami sniffed around, but there is nothing at this address.',
+
     'tech.eyebrow': 'Colophon',
     'tech.heading': 'How this site is built',
     'tech.intro': 'The stack, platforms, and people behind the Nanami Journal.',
@@ -223,6 +234,17 @@ const TRANSLATIONS: Record<Lang, Dictionary> = {
     'nav.home': '← Startseite',
     'nav.tech': 'Technik',
 
+    'title.home': 'Startseite',
+    'title.login': 'Anmelden',
+    'title.register': 'Registrieren',
+    'title.admin': 'Einstellungen',
+    'title.media': 'Medien',
+    'title.tech': 'Technik',
+    'title.notFound': 'Seite nicht gefunden',
+
+    'notfound.heading': 'Dieser Weg führt ins Leere',
+    'notfound.text': 'Nanami hat überall geschnüffelt, aber unter dieser Adresse gibt es nichts.',
+
     'tech.eyebrow': 'Kolophon',
     'tech.heading': 'Wie diese Seite gebaut ist',
     'tech.intro': 'Stack, Plattformen und Menschen hinter dem Nanami-Tagebuch.',
@@ -419,6 +441,17 @@ const TRANSLATIONS: Record<Lang, Dictionary> = {
     'nav.home': '← 首页',
     'nav.tech': '技术',
 
+    'title.home': '首页',
+    'title.login': '登录',
+    'title.register': '注册',
+    'title.admin': '设置',
+    'title.media': '媒体',
+    'title.tech': '技术',
+    'title.notFound': '页面不存在',
+
+    'notfound.heading': '这条小路不通',
+    'notfound.text': '娜娜米到处闻了闻，这个地址下什么都没有。',
+
     'tech.eyebrow': '幕后',
     'tech.heading': '这个网站是怎么做的',
     'tech.intro': '娜娜米日记背后的技术栈、平台与创作者。',
@@ -603,13 +636,26 @@ export class I18nService {
   private readonly _lang = signal<Lang>(this.resolveInitialLang());
   readonly lang = this._lang.asReadonly();
 
+  constructor() {
+    this.applyDocumentLang(this._lang());
+  }
+
   setLang(next: Lang): void {
     if (!SUPPORTED_LANGS.includes(next)) return;
     this._lang.set(next);
+    this.applyDocumentLang(next);
     try {
       localStorage.setItem(STORAGE_KEY, next);
     } catch {
       // ignore — picker still works in-memory
+    }
+  }
+
+  // Keep <html lang> in sync so screen readers and search engines see the
+  // language the visitor is actually reading (WCAG 3.1.1).
+  private applyDocumentLang(lang: Lang): void {
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = lang;
     }
   }
 

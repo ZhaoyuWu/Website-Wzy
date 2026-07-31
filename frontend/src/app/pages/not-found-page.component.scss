@@ -1,0 +1,59 @@
+.notfound-layout {
+  min-height: 100vh;
+  padding: 20px;
+  display: grid;
+  place-items: center;
+  background: var(--color-app-bg);
+}
+
+.notfound-card {
+  width: min(520px, 100%);
+  border-radius: 18px;
+  border: 2px solid var(--color-ink);
+  background: var(--color-paper);
+  padding: 32px 26px;
+  box-shadow: 4px 4px 0 var(--color-ink);
+  text-align: center;
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+}
+
+.code {
+  margin: 0;
+  font-size: 64px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--color-ink);
+  letter-spacing: 0.06em;
+}
+
+h1 {
+  margin: 0;
+  color: var(--color-ink);
+}
+
+.desc {
+  margin: 0;
+  color: var(--color-ink-soft);
+}
+
+.back-home {
+  margin-top: 8px;
+  text-decoration: none;
+  color: var(--color-ink);
+  font-weight: 600;
+  font-size: 14px;
+  padding: 8px 14px;
+  border: 1px solid var(--color-ink);
+  border-radius: 10px;
+  background: var(--color-paper);
+  transition:
+    background var(--motion-duration-fast) var(--motion-ease-standard),
+    transform var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.back-home:hover {
+  background: var(--color-accent);
+  transform: translateY(-1px);
+}
