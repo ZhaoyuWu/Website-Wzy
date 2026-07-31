@@ -1,8 +1,8 @@
-type RuntimeAppConfig = {
+interface RuntimeAppConfig {
   apiBaseUrl?: string;
   supabaseUrl?: string;
   supabaseAnonKey?: string;
-};
+}
 
 declare global {
   interface Window {

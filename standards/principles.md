@@ -1,4 +1,4 @@
-# Website 1st Principles (Nanami Showcase)
+# Nanami Showcase Principles
 
 ## Principals
 

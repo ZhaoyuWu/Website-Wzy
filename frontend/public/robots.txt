@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /login
+Disallow: /register
+Disallow: /admin
+Disallow: /manage-media
+
+Sitemap: https://nanami-live.vercel.app/sitemap.xml

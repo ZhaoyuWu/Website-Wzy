@@ -10,6 +10,7 @@ const IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "imag
 const VIDEO_MIME_TYPES = new Set(["video/mp4", "video/webm", "video/quicktime"]);
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
 const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
+// eslint-disable-next-line no-control-regex -- control chars are exactly what this strips from client-supplied names (R6)
 const UNSAFE_CONTROL_CHARS_REGEX = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/;
 const VALID_ROLES = new Set(["Admin", "Publisher", "Viewer"]);
 const DEFAULT_SITE_SETTINGS = Object.freeze({
@@ -249,7 +250,7 @@ function resolveStorageDeletePathFromPublicUrl(publicUrl, supabaseUrl, storageBu
     return null;
   }
 
-  let decodedSegments = null;
+  let decodedSegments;
   try {
     decodedSegments = encodedObjectPath.split("/").map((segment) => decodeURIComponent(segment));
   } catch {

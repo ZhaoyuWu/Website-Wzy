@@ -61,7 +61,7 @@ async function postJson(baseUrl, path, body, headers = {}) {
     body: JSON.stringify(body),
   });
 
-  let payload = {};
+  let payload;
   try {
     payload = await response.json();
   } catch {
@@ -78,7 +78,7 @@ async function patchJson(baseUrl, path, body, headers = {}) {
     body: JSON.stringify(body),
   });
 
-  let payload = {};
+  let payload;
   try {
     payload = await response.json();
   } catch {

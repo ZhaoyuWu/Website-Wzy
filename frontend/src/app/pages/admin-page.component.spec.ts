@@ -6,13 +6,8 @@ import { AuthService } from '../core/auth.service';
 class MockAuthService {
   role = 'Admin';
 
-  get isAuthenticated(): boolean {
-    return true;
-  }
-
-  get username(): string {
-    return 'admin';
-  }
+  readonly isAuthenticated = true;
+  readonly username = 'admin';
 
   get userRole(): string {
     return this.role;

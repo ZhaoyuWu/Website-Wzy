@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { ChangeDetectorRef, Component, ViewRef, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -9,7 +8,7 @@ import { LanguagePickerComponent } from '../components/language-picker.component
 @Component({
   selector: 'app-register-page',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink, LanguagePickerComponent],
+  imports: [ReactiveFormsModule, RouterLink, LanguagePickerComponent],
   template: `
     <main class="auth-layout">
       <section class="auth-card">
@@ -23,19 +22,30 @@ import { LanguagePickerComponent } from '../components/language-picker.component
         <form [formGroup]="form" (ngSubmit)="onSubmit()" novalidate>
           <label for="username">{{ i18n.t('register.field.username') }}</label>
           <input id="username" type="text" formControlName="username" autocomplete="username" />
-          <p class="field-error" *ngIf="showError('username')">
-            {{ i18n.t('register.error.username') }}
-          </p>
+          @if (showError('username')) {
+            <p class="field-error">
+              {{ i18n.t('register.error.username') }}
+            </p>
+          }
 
           <label for="email">{{ i18n.t('register.field.email') }}</label>
           <input id="email" type="email" formControlName="email" autocomplete="email" />
-          <p class="field-error" *ngIf="showError('email')">{{ i18n.t('register.error.email') }}</p>
+          @if (showError('email')) {
+            <p class="field-error">{{ i18n.t('register.error.email') }}</p>
+          }
 
           <label for="password">{{ i18n.t('register.field.password') }}</label>
-          <input id="password" type="password" formControlName="password" autocomplete="new-password" />
-          <p class="field-error" *ngIf="showError('password')">
-            {{ i18n.t('register.error.password') }}
-          </p>
+          <input
+            id="password"
+            type="password"
+            formControlName="password"
+            autocomplete="new-password"
+          />
+          @if (showError('password')) {
+            <p class="field-error">
+              {{ i18n.t('register.error.password') }}
+            </p>
+          }
 
           <label for="confirmPassword">{{ i18n.t('register.field.confirmPassword') }}</label>
           <input
@@ -44,11 +54,15 @@ import { LanguagePickerComponent } from '../components/language-picker.component
             formControlName="confirmPassword"
             autocomplete="new-password"
           />
-          <p class="field-error" *ngIf="passwordMismatch">
-            {{ i18n.t('register.error.confirm') }}
-          </p>
+          @if (passwordMismatch) {
+            <p class="field-error">
+              {{ i18n.t('register.error.confirm') }}
+            </p>
+          }
 
-          <p class="status-error" *ngIf="submitError">{{ submitError }}</p>
+          @if (submitError) {
+            <p class="status-error">{{ submitError }}</p>
+          }
 
           <button type="submit" [disabled]="isSubmitting">
             {{ isSubmitting ? i18n.t('register.submitting') : i18n.t('register.submit') }}
@@ -169,24 +183,39 @@ import { LanguagePickerComponent } from '../components/language-picker.component
     }
 
     @media (max-width: 428px) {
-      input { height: 44px; }
+      input {
+        height: 44px;
+      }
     }
 
     @media (max-width: 390px) {
-      .auth-layout { padding: 16px; }
-      .auth-card { padding: 20px; border-radius: 14px; }
-      h1 { font-size: 26px; }
-      button { height: 46px; }
+      .auth-layout {
+        padding: 16px;
+      }
+      .auth-card {
+        padding: 20px;
+        border-radius: 14px;
+      }
+      h1 {
+        font-size: 26px;
+      }
+      button {
+        height: 46px;
+      }
     }
 
     @media (max-width: 360px) {
-      .auth-card { padding: 16px; }
+      .auth-card {
+        padding: 16px;
+      }
     }
 
     @media (min-width: 1280px) {
-      .auth-card { padding: 32px; }
+      .auth-card {
+        padding: 32px;
+      }
     }
-  `
+  `,
 })
 export class RegisterPageComponent {
   private readonly fb = inject(FormBuilder);
@@ -199,7 +228,7 @@ export class RegisterPageComponent {
     username: ['', [Validators.required, Validators.pattern(/^[A-Za-z0-9_.-]{3,32}$/)]],
     email: ['', [Validators.required, Validators.email]],
     password: ['', [Validators.required, Validators.minLength(8)]],
-    confirmPassword: ['', [Validators.required]]
+    confirmPassword: ['', [Validators.required]],
   });
 
   submitError = '';
@@ -209,10 +238,7 @@ export class RegisterPageComponent {
     const { password, confirmPassword } = this.form.getRawValue();
     const confirmControl = this.form.controls.confirmPassword;
     return (
-      confirmControl.touched &&
-      !!confirmPassword &&
-      !!password &&
-      password !== confirmPassword
+      confirmControl.touched && !!confirmPassword && !!password && password !== confirmPassword
     );
   }
 
@@ -254,8 +280,3 @@ export class RegisterPageComponent {
     }
   }
 }
-
-
-
-
-

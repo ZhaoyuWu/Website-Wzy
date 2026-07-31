@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { resolveApiBaseUrl, resolveSupabaseAnonKey, resolveSupabaseUrl } from './runtime-config';
 
-type SessionSnapshot = {
+interface SessionSnapshot {
   accessToken: string;
   refreshToken: string;
   tokenType: string;
@@ -10,7 +10,7 @@ type SessionSnapshot = {
   email: string;
   role: string;
   expiresAt: string;
-};
+}
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -136,7 +136,7 @@ export class AuthService {
       body: JSON.stringify({ email, password })
     });
 
-    let payload: Record<string, unknown> = {};
+    let payload: Record<string, unknown>;
     try {
       payload = (await response.json()) as Record<string, unknown>;
     } catch {
@@ -172,7 +172,7 @@ export class AuthService {
       })
     });
 
-    let payload: Record<string, unknown> = {};
+    let payload: Record<string, unknown>;
     try {
       payload = (await response.json()) as Record<string, unknown>;
     } catch {

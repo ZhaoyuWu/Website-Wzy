@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -6,39 +5,40 @@ import { AuthService } from '../core/auth.service';
 import { I18nService } from '../core/i18n.service';
 import { LanguagePickerComponent } from '../components/language-picker.component';
 
-type SiteSettings = {
+interface SiteSettings {
   profileName: string;
   heroTagline: string;
   aboutText: string;
   contactEmail: string;
   showContactEmail: boolean;
   updatedAt?: string | null;
-};
+}
 
-type UserRow = {
+interface UserRow {
   id: string;
   email: string;
   role: string;
   created_at?: string;
-};
+}
 
 const ASSIGNABLE_ROLES = ['Admin', 'Publisher', 'Viewer'] as const;
 
 const DEFAULT_SITE_SETTINGS: SiteSettings = {
   profileName: 'Nanami',
   heroTagline: 'Nanami, the sunshine of every walk.',
-  aboutText: "This page shares Nanami's personality, daily routine, and favorite places in a warm timeline style.",
+  aboutText:
+    "This page shares Nanami's personality, daily routine, and favorite places in a warm timeline style.",
   contactEmail: '',
   showContactEmail: false,
-  updatedAt: null
+  updatedAt: null,
 };
 
 @Component({
   selector: 'app-admin-page',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, LanguagePickerComponent],
+  imports: [FormsModule, RouterLink, LanguagePickerComponent],
   templateUrl: './admin-page.component.html',
-  styleUrl: './admin-page.component.scss'
+  styleUrl: './admin-page.component.scss',
 })
 export class AdminPageComponent implements OnInit {
   readonly auth = inject(AuthService);
@@ -110,7 +110,11 @@ export class AdminPageComponent implements OnInit {
     this.usersError.set('');
     try {
       const response = await this.auth.apiFetch('/api/admin/users', {});
-      const payload = (await response.json()) as { ok?: boolean; users?: UserRow[]; message?: string };
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        users?: UserRow[];
+        message?: string;
+      };
       if (!response.ok || !payload.ok) {
         throw new Error(payload.message || 'Failed to load users.');
       }
@@ -128,21 +132,24 @@ export class AdminPageComponent implements OnInit {
     this.savingRoleId.set(user.id);
 
     try {
-      const response = await this.auth.apiFetch(`/api/admin/users/${encodeURIComponent(user.id)}/role`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
+      const response = await this.auth.apiFetch(
+        `/api/admin/users/${encodeURIComponent(user.id)}/role`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ role: newRole }),
         },
-        body: JSON.stringify({ role: newRole })
-      });
+      );
       const payload = (await response.json()) as { ok?: boolean; message?: string; user?: UserRow };
       if (!response.ok || !payload.ok || !payload.user) {
         throw new Error(payload.message || 'Failed to update role.');
       }
       this.users.update((users) =>
         users.map((current) =>
-          current.id === user.id ? { ...current, role: payload.user?.role || newRole } : current
-        )
+          current.id === user.id ? { ...current, role: payload.user?.role || newRole } : current,
+        ),
       );
       this.savedRoleId.set(user.id);
       setTimeout(() => {
@@ -190,7 +197,7 @@ export class AdminPageComponent implements OnInit {
       this.canClaimAdmin.set(false);
     } catch (error) {
       this.claimAdminError.set(
-        error instanceof Error ? error.message : 'Failed to claim admin role.'
+        error instanceof Error ? error.message : 'Failed to claim admin role.',
       );
     } finally {
       this.isClaimingAdmin.set(false);
@@ -264,8 +271,8 @@ export class AdminPageComponent implements OnInit {
           heroTagline,
           aboutText,
           contactEmail,
-          showContactEmail: Boolean(form.showContactEmail)
-        })
+          showContactEmail: Boolean(form.showContactEmail),
+        }),
       });
 
       const payload = (await response.json()) as {
@@ -313,7 +320,7 @@ export class AdminPageComponent implements OnInit {
       aboutText: this.pickSafeText(raw.aboutText, DEFAULT_SITE_SETTINGS.aboutText, 1200),
       contactEmail: this.pickSafeText(raw.contactEmail, '', 120),
       showContactEmail: Boolean(raw.showContactEmail),
-      updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : null
+      updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : null,
     };
   }
 
