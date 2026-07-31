@@ -25,7 +25,7 @@ export class TechPageComponent {
   readonly i18n = inject(I18nService);
 
   readonly creatorName = 'Zhaoyu Wu';
-  readonly repoUrl = 'https://github.com/ZhaoyuWu/Website-Wzy';
+  readonly repoUrl = 'https://github.com/ZhaoyuWu/Website-Nanami';
 
   readonly sections: TechSection[] = [
     {
