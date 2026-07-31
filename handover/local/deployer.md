@@ -276,4 +276,5 @@ effectively dead code — tech-debt to either remove the legacy endpoints
 - **Prebuilt deploys are dangerous here**: `vercel deploy --prebuilt` ships the locally generated `runtime-config.js` (localhost values). Always let Vercel build remotely so env vars are injected.
 - **Alias rebind still required** after every `vercel --prod` (unchanged from Session 3), plus `vercel alias rm frontend-six-snowy-32.vercel.app`.
 - **Credential status**: plaintext admin password redacted from this file 2026-07-24, but it remains in public git history — rotation by user still pending. Vercel CLI token expired once mid-session; user re-authenticated with `vercel login`.
-- **Open user actions**: apply migration row 8 (`entry_likes`); rotate admin password; rename repo to `nanami-website` (README badges point there); create Publisher demo account.
+- **Open user actions**: apply migration row 8 (`entry_likes`); rotate admin password; create Publisher demo account.
+- **Repo renamed** (2026-07-31): user renamed the GitHub repo to `Website-Nanami`; badges, tech-page source link, and the local `origin` remote were updated to match. Old URLs redirect.

@@ -4,8 +4,8 @@
 
 **A hand-drawn, interactive journal for Nanami the borzoi — built as a full-stack PWA and run entirely on free-tier cloud.**
 
-[![tests](https://github.com/ZhaoyuWu/nanami-website/actions/workflows/tests.yml/badge.svg)](https://github.com/ZhaoyuWu/nanami-website/actions/workflows/tests.yml)
-[![keep-alive](https://github.com/ZhaoyuWu/nanami-website/actions/workflows/keep-alive.yml/badge.svg)](https://github.com/ZhaoyuWu/nanami-website/actions/workflows/keep-alive.yml)
+[![tests](https://github.com/ZhaoyuWu/Website-Nanami/actions/workflows/tests.yml/badge.svg)](https://github.com/ZhaoyuWu/Website-Nanami/actions/workflows/tests.yml)
+[![keep-alive](https://github.com/ZhaoyuWu/Website-Nanami/actions/workflows/keep-alive.yml/badge.svg)](https://github.com/ZhaoyuWu/Website-Nanami/actions/workflows/keep-alive.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![Angular](https://img.shields.io/badge/Angular_21-zoneless_signals-dd0031)
 ![Supabase](https://img.shields.io/badge/Supabase-auth·db·storage-3ecf8e)

@@ -22,7 +22,7 @@ pass (audit-driven): work began from full-stack audit `A-006-1`; every change ma
 - Validation: backend `58/58`, frontend `64/64`, production build green, CI green on `main`; production probed after every deploy (routes 200, timeline serving data, removed endpoints 404).
 
 ## Final Status
-done (scoped) - open user actions: apply migration row 8 in Supabase SQL editor; rotate the admin password (old value remains in public git history); rename repo to `nanami-website`; create Publisher demo account for the README.
+done (scoped) - open user actions: apply migration row 8 in Supabase SQL editor; rotate the admin password (old value remains in public git history); create Publisher demo account for the README. (Repo rename done 2026-07-31: now `Website-Nanami`.)
 
 ## 2026-04-23 Scoped Update - Generator7 Style Budget Slimming (No Visual Regression)
 
